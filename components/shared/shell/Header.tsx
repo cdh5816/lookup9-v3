@@ -27,6 +27,20 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
 
   const { user } = data;
 
+  const handleLogout = async () => {
+    // DB 세션 정리 (database 전략일 경우)
+    try {
+      await fetch('/api/auth/custom-signout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (e) {
+      // 실패해도 클라이언트 세션은 정리 진행
+    }
+    // next-auth 클라이언트 세션 정리 + 로그인 페이지로 이동
+    await signOut({ callbackUrl: '/auth/login' });
+  };
+
   return (
     <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center border-b px-4 sm:gap-x-6 sm:px-6 lg:px-8 bg-white dark:bg-black dark:text-white">
       <button
@@ -91,7 +105,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                 <button
                   className="block px-2 py-1 text-sm leading-6 text-gray-900 dark:text-gray-50 cursor-pointer"
                   type="button"
-                  onClick={() => signOut({ callbackUrl: '/auth/login' })}
+                  onClick={handleLogout}
                 >
                   <div className="flex items-center">
                     <ArrowRightOnRectangleIcon className="w-5 h-5 mr-1" />

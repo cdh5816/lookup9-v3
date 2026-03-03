@@ -148,7 +148,7 @@
   "verify-account-link-sent": "Verification link sent. Please check your email.",
   "homepage-title": "Enterprise SaaS Starter Kit by BoxyHQ",
   "sign-up-title": "Sign Up | BoxyHQ ",
-  "login-title": "Login | BoxyHQ",
+  "login-title": "Login | LOOKUP9",
   "forgot-password-title": "Reset Password | BoxyHQ",
   "magic-link-title": "Login With Magic Link | BoxyHQ",
   "resend-token-title": "Resend Email Token | BoxyHQ",
@@ -247,4 +247,5 @@
   "unable-to-find": "We're unable to find out what's happening! We suggest you to",
   "try-again-later": "or visit here later.",
   "multiple-sso-teams": "User belongs to multiple teams with SSO enabled. Please enter your team slug to get started."
+  "login-welcome": "Welcome to LOOKUP9" 
 }

@@ -247,4 +247,5 @@
   "unable-to-find": "문제가 발생했습니다. 다음을 시도해 보세요:",
   "try-again-later": "또는 잠시 후 다시 방문해 주세요.",
   "multiple-sso-teams": "사용자가 SSO가 활성화된 여러 팀에 속해 있습니다. 시작하려면 팀 slug를 입력해 주세요."
+  "login-welcome": "LOOKUP9에 오신 걸 환영합니다."
 }

@@ -17,13 +17,10 @@ import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import env from '@/lib/env';
 import type { NextPageWithLayout } from 'types';
 import { AuthLayout } from '@/components/layouts';
-import GithubButton from '@/components/auth/GithubButton';
-import GoogleButton from '@/components/auth/GoogleButton';
 import { Alert, InputWithLabel, Loading } from '@/components/shared';
 import { authProviderEnabled } from '@/lib/auth';
 import Head from 'next/head';
 import TogglePasswordVisibility from '@/components/shared/TogglePasswordVisibility';
-import AgreeMessage from '@/components/auth/AgreeMessage';
 import GoogleReCAPTCHA from '@/components/shared/GoogleReCAPTCHA';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { maxLengthPolicies } from '@/lib/common';
@@ -109,8 +106,6 @@ const Login: NextPageWithLayout<
     router.push(redirectUrl);
   }
 
-  const params = token ? `?token=${token}` : '';
-
   return (
     <>
       <Head>
@@ -122,14 +117,6 @@ const Login: NextPageWithLayout<
         </Alert>
       )}
       <div className="rounded p-6 border">
-        <div className="flex gap-2 flex-wrap">
-          {authProviders.github && <GithubButton />}
-          {authProviders.google && <GoogleButton />}
-        </div>
-
-        {(authProviders.github || authProviders.google) &&
-          authProviders.credentials && <div className="divider">{t('or')}</div>}
-
         {authProviders.credentials && (
           <form onSubmit={formik.handleSubmit}>
             <div className="space-y-3">
@@ -188,41 +175,10 @@ const Login: NextPageWithLayout<
               >
                 {t('sign-in')}
               </Button>
-              <AgreeMessage text={t('sign-in')} />
             </div>
           </form>
         )}
-
-        {(authProviders.email || authProviders.saml) && (
-          <div className="divider"></div>
-        )}
-
-        <div className="space-y-3">
-          {authProviders.email && (
-            <Link
-              href={`/auth/magic-link${params}`}
-              className="btn btn-outline w-full"
-            >
-              &nbsp;{t('sign-in-with-email')}
-            </Link>
-          )}
-
-          {authProviders.saml && (
-            <Link href="/auth/sso" className="btn btn-outline w-full">
-              &nbsp;{t('continue-with-saml-sso')}
-            </Link>
-          )}
-        </div>
       </div>
-      <p className="text-center text-sm text-gray-600 mt-3">
-        {t('dont-have-an-account')}
-        <Link
-          href={`/auth/join${params}`}
-          className="font-medium text-primary hover:text-[color-mix(in_oklab,oklch(var(--p)),black_7%)]"
-        >
-          &nbsp;{t('create-a-free-account')}
-        </Link>
-      </p>
     </>
   );
 };

@@ -34,7 +34,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-    } catch (_) {
+    } catch {
       // 실패해도 클라이언트 세션은 정리 진행
     }
     // next-auth 클라이언트 세션 정리 + 로그인 페이지로 이동

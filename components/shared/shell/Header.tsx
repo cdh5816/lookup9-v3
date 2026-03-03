@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import React from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import {
   ArrowRightOnRectangleIcon,
   Bars3Icon,
@@ -11,7 +11,6 @@ import { ChevronDownIcon } from '@heroicons/react/20/solid';
 import useTheme from 'hooks/useTheme';
 import env from '@/lib/env';
 import { useTranslation } from 'next-i18next';
-import { useCustomSignOut } from 'hooks/useCustomSignout';
 
 interface HeaderProps {
   setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -21,7 +20,6 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
   const { toggleTheme } = useTheme();
   const { status, data } = useSession();
   const { t } = useTranslation('common');
-  const signOut = useCustomSignOut();
 
   if (status === 'loading' || !data) {
     return null;
@@ -39,8 +37,10 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
         <span className="sr-only">{t('open-sidebar')}</span>
         <Bars3Icon className="h-6 w-6" aria-hidden="true" />
       </button>
+
       <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
         <div className="relative flex flex-1"></div>
+
         <div className="flex items-center gap-x-4 lg:gap-x-6">
           <div className="dropdown dropdown-end">
             <div className="flex items-center cursor-pointer" tabIndex={0}>
@@ -57,17 +57,12 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                 />
               </span>
             </div>
+
             <ul
               tabIndex={0}
               className="dropdown-content z-[1] menu p-2 shadow bg-base-100 border rounded w-40 space-y-1"
             >
-              <li
-                onClick={() => {
-                  if (document.activeElement) {
-                    (document.activeElement as HTMLElement).blur();
-                  }
-                }}
-              >
+              <li>
                 <Link
                   href="/settings/account"
                   className="block px-2 py-1 text-sm leading-6 text-gray-900 dark:text-gray-50 cursor-pointer"
@@ -96,10 +91,10 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                 <button
                   className="block px-2 py-1 text-sm leading-6 text-gray-900 dark:text-gray-50 cursor-pointer"
                   type="button"
-                  onClick={signOut}
+                  onClick={() => signOut({ callbackUrl: '/auth/login' })}
                 >
                   <div className="flex items-center">
-                    <ArrowRightOnRectangleIcon className="w-5 h-5 mr-1" />{' '}
+                    <ArrowRightOnRectangleIcon className="w-5 h-5 mr-1" />
                     {t('logout')}
                   </div>
                 </button>

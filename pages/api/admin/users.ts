@@ -13,7 +13,6 @@ export default async function handler(
     return res.status(401).json({ error: { message: 'Unauthorized' } });
   }
 
-  // OWNER 권한 체크 (팀 내 역할)
   const teamMember = await prisma.teamMember.findFirst({
     where: {
       userId: session.user.id,
@@ -49,17 +48,12 @@ export default async function handler(
   }
 }
 
-// 전체 유저 목록
 const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
   const users = await prisma.user.findMany({
     select: {
       id: true,
       name: true,
       email: true,
-      company: true,
-      department: true,
-      position: true,
-      phone: true,
       createdAt: true,
       teamMembers: {
         select: {
@@ -78,9 +72,8 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
   return res.status(200).json({ data: users });
 };
 
-// 유저 생성
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
-  const { name, email, password, company, department, position, phone, role, teamId } = req.body;
+  const { name, email, password, role, teamId } = req.body;
 
   if (!name || !email || !password) {
     return res.status(400).json({
@@ -88,7 +81,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     });
   }
 
-  // 이메일 중복 체크
   const existingUser = await prisma.user.findUnique({
     where: { email },
   });
@@ -106,14 +98,9 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
       name,
       email,
       password: hashedPassword,
-      company: company || null,
-      department: department || null,
-      position: position || null,
-      phone: phone || null,
     },
   });
 
-  // 팀에 멤버로 추가
   if (teamId) {
     await prisma.teamMember.create({
       data: {
@@ -127,7 +114,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
   return res.status(201).json({ data: user });
 };
 
-// 유저 삭제
 const handleDELETE = async (req: NextApiRequest, res: NextApiResponse) => {
   const { userId } = req.body;
 

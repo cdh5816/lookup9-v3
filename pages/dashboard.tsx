@@ -1,45 +1,109 @@
 import { GetServerSidePropsContext } from 'next';
-import { getSession } from '@/lib/session';
-import { prisma } from '@/lib/prisma';
+import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
+import { useTranslation } from 'next-i18next';
+import Head from 'next/head';
+import {
+  BuildingOffice2Icon,
+  CogIcon,
+  TruckIcon,
+  WrenchScrewdriverIcon,
+  BellIcon,
+  CalendarDaysIcon,
+} from '@heroicons/react/24/outline';
 
-// 서버사이드에서 팀을 찾아 직접 리다이렉트
-export async function getServerSideProps(context: GetServerSidePropsContext) {
-  const { req, res } = context;
-  const session = await getSession(req, res);
+const Dashboard = () => {
+  const { t } = useTranslation('common');
 
-  if (!session) {
-    return {
-      redirect: {
-        destination: '/auth/login',
-        permanent: false,
-      },
-    };
-  }
+  const stats = [
+    {
+      name: t('dash-active-sites'),
+      value: '-',
+      icon: BuildingOffice2Icon,
+      color: 'text-blue-400',
+      bg: 'bg-blue-400/10',
+    },
+    {
+      name: t('dash-production'),
+      value: '-',
+      icon: CogIcon,
+      color: 'text-yellow-400',
+      bg: 'bg-yellow-400/10',
+    },
+    {
+      name: t('dash-shipping'),
+      value: '-',
+      icon: TruckIcon,
+      color: 'text-green-400',
+      bg: 'bg-green-400/10',
+    },
+    {
+      name: t('dash-construction'),
+      value: '-',
+      icon: WrenchScrewdriverIcon,
+      color: 'text-purple-400',
+      bg: 'bg-purple-400/10',
+    },
+  ];
 
-  // 유저의 팀 찾기
-  const teamMember = await prisma.teamMember.findFirst({
-    where: { userId: session.user.id },
-    include: { team: true },
-  });
+  return (
+    <>
+      <Head>
+        <title>{t('nav-dashboard')} | LOOKUP9</title>
+      </Head>
 
-  if (teamMember) {
-    return {
-      redirect: {
-        destination: `/teams/${teamMember.team.slug}/members`,
-        permanent: false,
-      },
-    };
-  }
+      <div className="space-y-8">
+        {/* 상단 통계 카드 */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat) => (
+            <div
+              key={stat.name}
+              className="rounded-lg border border-gray-800 p-5"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`rounded-lg p-2 ${stat.bg}`}>
+                  <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-400">{stat.name}</p>
+                  <p className="text-2xl font-bold">{stat.value}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
 
-  // 팀이 없으면 팀 목록으로
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* 오늘 일정 */}
+          <div className="rounded-lg border border-gray-800 p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <CalendarDaysIcon className="w-5 h-5 text-gray-400" />
+              <h3 className="font-semibold">{t('dash-today-schedule')}</h3>
+            </div>
+            <p className="text-sm text-gray-500">{t('dash-no-schedule')}</p>
+          </div>
+
+          {/* 최근 알림 */}
+          <div className="rounded-lg border border-gray-800 p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <BellIcon className="w-5 h-5 text-gray-400" />
+              <h3 className="font-semibold">{t('dash-recent-alerts')}</h3>
+            </div>
+            <p className="text-sm text-gray-500">{t('dash-no-alerts')}</p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+export async function getServerSideProps({
+  locale,
+}: GetServerSidePropsContext) {
   return {
-    redirect: {
-      destination: '/teams',
-      permanent: false,
+    props: {
+      ...(locale ? await serverSideTranslations(locale, ['common']) : {}),
     },
   };
 }
 
-// 이 페이지는 렌더링되지 않음 (항상 리다이렉트)
-const Dashboard = () => null;
 export default Dashboard;

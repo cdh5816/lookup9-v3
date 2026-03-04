@@ -54,15 +54,15 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
       id: true,
       name: true,
       email: true,
+      company: true,
+      department: true,
+      position: true,
+      phone: true,
       createdAt: true,
       teamMembers: {
         select: {
           role: true,
-          team: {
-            select: {
-              name: true,
-            },
-          },
+          team: { select: { name: true } },
         },
       },
     },
@@ -73,7 +73,7 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
 };
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
-  const { name, email, password, role, teamId } = req.body;
+  const { name, email, password, company, department, position, phone, role, teamId } = req.body;
 
   if (!name || !email || !password) {
     return res.status(400).json({
@@ -81,9 +81,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     });
   }
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
-  });
+  const existingUser = await prisma.user.findUnique({ where: { email } });
 
   if (existingUser) {
     return res.status(400).json({
@@ -98,6 +96,10 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
       name,
       email,
       password: hashedPassword,
+      company: company || null,
+      department: department || null,
+      position: position || null,
+      phone: phone || null,
     },
   });
 
@@ -123,9 +125,7 @@ const handleDELETE = async (req: NextApiRequest, res: NextApiResponse) => {
     });
   }
 
-  await prisma.user.delete({
-    where: { id: userId },
-  });
+  await prisma.user.delete({ where: { id: userId } });
 
   return res.status(200).json({ data: { message: 'User deleted' } });
 };

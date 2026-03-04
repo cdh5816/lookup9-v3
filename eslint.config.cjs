@@ -63,6 +63,7 @@ module.exports = [{
         "components/emailTemplates/**/*.tsx",
         "pages/index.tsx",
         "pages/admin/**/*.tsx",
+        "pages/dashboard.tsx",
     ],
 
     rules: {

@@ -1,9 +1,9 @@
 import React from 'react';
-import TeamDropdown from '../TeamDropdown';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import Brand from './Brand';
 import Navigation from './Navigation';
 import { useTranslation } from 'next-i18next';
+import { useSession } from 'next-auth/react';
 
 interface DrawerProps {
   sidebarOpen: boolean;
@@ -12,6 +12,7 @@ interface DrawerProps {
 
 const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
   const { t } = useTranslation('common');
+  const { data } = useSession();
 
   return (
     <>
@@ -33,9 +34,13 @@ const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
                   />
                 </button>
               </div>
-              <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white dark:bg-black px-6 pb-4">
+              <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-black px-6 pb-4 border-r border-gray-800">
                 <Brand />
-                <TeamDropdown />
+                {data?.user && (
+                  <div className="text-xs text-gray-500 -mt-3">
+                    {data.user.name}
+                  </div>
+                )}
                 <Navigation />
               </div>
             </div>
@@ -44,9 +49,13 @@ const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
       )}
 
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 px-6">
+        <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-800 bg-black px-6">
           <Brand />
-          <TeamDropdown />
+          {data?.user && (
+            <div className="text-xs text-gray-500 -mt-3">
+              {data.user.name}
+            </div>
+          )}
           <Navigation />
         </div>
       </div>

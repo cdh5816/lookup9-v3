@@ -4,16 +4,16 @@ import { useTranslation } from 'next-i18next';
 import { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import { Button } from 'react-daisyui';
-import {
-  PlusIcon,
-  TrashIcon,
-  XMarkIcon,
-} from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 interface UserData {
   id: string;
   name: string;
   email: string;
+  company: string | null;
+  department: string | null;
+  position: string | null;
+  phone: string | null;
   createdAt: string;
   teamMembers: { role: string; team: { name: string } }[];
 }
@@ -31,6 +31,10 @@ const AdminUsers = () => {
     name: '',
     email: '',
     password: '',
+    company: '',
+    department: '',
+    position: '',
+    phone: '',
     role: 'MEMBER',
   });
 
@@ -65,10 +69,8 @@ const AdminUsers = () => {
     if (res.ok) {
       setSuccess(t('admin-user-created'));
       setForm({
-        name: '',
-        email: '',
-        password: '',
-        role: 'MEMBER',
+        name: '', email: '', password: '', company: '',
+        department: '', position: '', phone: '', role: 'MEMBER',
       });
       setShowCreate(false);
       fetchUsers();
@@ -80,9 +82,7 @@ const AdminUsers = () => {
   };
 
   const handleDelete = async (userId: string, userName: string) => {
-    if (!confirm(`${userName} ${t('admin-delete-confirm')}`)) {
-      return;
-    }
+    if (!confirm(`${userName} ${t('admin-delete-confirm')}`)) return;
 
     const res = await fetch('/api/admin/users', {
       method: 'DELETE',
@@ -108,79 +108,58 @@ const AdminUsers = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold">{t('admin-users')}</h2>
-          <Button
-            color="primary"
-            size="sm"
-            onClick={() => setShowCreate(!showCreate)}
-          >
-            {showCreate ? (
-              <XMarkIcon className="w-4 h-4 mr-1" />
-            ) : (
-              <PlusIcon className="w-4 h-4 mr-1" />
-            )}
+          <Button color="primary" size="sm" onClick={() => setShowCreate(!showCreate)}>
+            {showCreate ? <XMarkIcon className="w-4 h-4 mr-1" /> : <PlusIcon className="w-4 h-4 mr-1" />}
             {showCreate ? t('cancel') : t('admin-create-user')}
           </Button>
         </div>
 
-        {error && (
-          <div className="alert alert-error text-sm">
-            <span>{error}</span>
-          </div>
-        )}
-        {success && (
-          <div className="alert alert-success text-sm">
-            <span>{success}</span>
-          </div>
-        )}
+        {error && <div className="alert alert-error text-sm"><span>{error}</span></div>}
+        {success && <div className="alert alert-success text-sm"><span>{success}</span></div>}
 
         {showCreate && (
-          <div className="border rounded-lg p-6 space-y-4">
+          <div className="border border-gray-700 rounded-lg p-6 space-y-4">
             <h3 className="text-lg font-semibold">{t('admin-create-user')}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="label">
-                  <span className="label-text">{t('name')} *</span>
-                </label>
-                <input
-                  type="text"
-                  className="input input-bordered w-full"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                />
+                <label className="label"><span className="label-text">{t('name')} *</span></label>
+                <input type="text" className="input input-bordered w-full" value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div>
-                <label className="label">
-                  <span className="label-text">{t('email')} *</span>
-                </label>
-                <input
-                  type="email"
-                  className="input input-bordered w-full"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                />
+                <label className="label"><span className="label-text">{t('email')} *</span></label>
+                <input type="email" className="input input-bordered w-full" value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div>
-                <label className="label">
-                  <span className="label-text">{t('password')} *</span>
-                </label>
-                <input
-                  type="password"
-                  className="input input-bordered w-full"
-                  value={form.password}
-                  onChange={(e) =>
-                    setForm({ ...form, password: e.target.value })
-                  }
-                />
+                <label className="label"><span className="label-text">{t('password')} *</span></label>
+                <input type="password" className="input input-bordered w-full" value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })} />
               </div>
               <div>
-                <label className="label">
-                  <span className="label-text">{t('role')}</span>
-                </label>
-                <select
-                  className="select select-bordered w-full"
-                  value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value })}
-                >
+                <label className="label"><span className="label-text">{t('admin-company')}</span></label>
+                <input type="text" className="input input-bordered w-full" value={form.company}
+                  onChange={(e) => setForm({ ...form, company: e.target.value })} />
+              </div>
+              <div>
+                <label className="label"><span className="label-text">{t('admin-department')}</span></label>
+                <input type="text" className="input input-bordered w-full" value={form.department}
+                  onChange={(e) => setForm({ ...form, department: e.target.value })} />
+              </div>
+              <div>
+                <label className="label"><span className="label-text">{t('admin-position')}</span></label>
+                <input type="text" className="input input-bordered w-full" value={form.position}
+                  onChange={(e) => setForm({ ...form, position: e.target.value })} />
+              </div>
+              <div>
+                <label className="label"><span className="label-text">{t('admin-phone')}</span></label>
+                <input type="text" className="input input-bordered w-full" value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              </div>
+              <div>
+                <label className="label"><span className="label-text">{t('role')}</span></label>
+                <select className="select select-bordered w-full" value={form.role}
+                  onChange={(e) => setForm({ ...form, role: e.target.value })}>
                   <option value="OWNER">OWNER</option>
                   <option value="ADMIN">ADMIN</option>
                   <option value="MEMBER">MEMBER</option>
@@ -188,11 +167,7 @@ const AdminUsers = () => {
               </div>
             </div>
             <div className="flex justify-end">
-              <Button
-                color="primary"
-                loading={creating}
-                onClick={handleCreate}
-              >
+              <Button color="primary" loading={creating} onClick={handleCreate}>
                 {t('create-account')}
               </Button>
             </div>
@@ -205,6 +180,10 @@ const AdminUsers = () => {
               <tr>
                 <th>{t('name')}</th>
                 <th>{t('email')}</th>
+                <th>{t('admin-company')}</th>
+                <th>{t('admin-department')}</th>
+                <th>{t('admin-position')}</th>
+                <th>{t('admin-phone')}</th>
                 <th>{t('role')}</th>
                 <th>{t('created-at')}</th>
                 <th>{t('actions')}</th>
@@ -212,35 +191,25 @@ const AdminUsers = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={5} className="text-center">
-                    <span className="loading loading-spinner loading-sm"></span>
-                  </td>
-                </tr>
+                <tr><td colSpan={9} className="text-center">
+                  <span className="loading loading-spinner loading-sm"></span>
+                </td></tr>
               ) : users.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="text-center text-gray-500">
-                    {t('admin-no-users')}
-                  </td>
-                </tr>
+                <tr><td colSpan={9} className="text-center text-gray-500">{t('admin-no-users')}</td></tr>
               ) : (
                 users.map((user) => (
                   <tr key={user.id}>
                     <td className="font-medium">{user.name}</td>
                     <td>{user.email}</td>
+                    <td>{user.company || '-'}</td>
+                    <td>{user.department || '-'}</td>
+                    <td>{user.position || '-'}</td>
+                    <td>{user.phone || '-'}</td>
+                    <td><span className="badge badge-sm">{user.teamMembers?.[0]?.role || '-'}</span></td>
+                    <td>{new Date(user.createdAt).toLocaleDateString('ko-KR')}</td>
                     <td>
-                      <span className="badge badge-sm">
-                        {user.teamMembers?.[0]?.role || '-'}
-                      </span>
-                    </td>
-                    <td>
-                      {new Date(user.createdAt).toLocaleDateString('ko-KR')}
-                    </td>
-                    <td>
-                      <button
-                        className="btn btn-ghost btn-xs text-error"
-                        onClick={() => handleDelete(user.id, user.name)}
-                      >
+                      <button className="btn btn-ghost btn-xs text-error"
+                        onClick={() => handleDelete(user.id, user.name)}>
                         <TrashIcon className="w-4 h-4" />
                       </button>
                     </td>
@@ -255,9 +224,7 @@ const AdminUsers = () => {
   );
 };
 
-export async function getServerSideProps({
-  locale,
-}: GetServerSidePropsContext) {
+export async function getServerSideProps({ locale }: GetServerSidePropsContext) {
   return {
     props: {
       ...(locale ? await serverSideTranslations(locale, ['common']) : {}),

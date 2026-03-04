@@ -58,6 +58,10 @@ model User {
   emailVerified          DateTime?
   password               String?
   image                  String?
+  company                String?
+  department             String?
+  position               String?
+  phone                  String?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @default(now())
   invalid_login_attempts Int       @default(0)

@@ -116,69 +116,67 @@ const Login: NextPageWithLayout<
           {t(message.text)}
         </Alert>
       )}
-      <div className="rounded p-6 border">
-        {authProviders.credentials && (
-          <form onSubmit={formik.handleSubmit}>
-            <div className="space-y-3">
+      {authProviders.credentials && (
+        <form onSubmit={formik.handleSubmit}>
+          <div className="space-y-5">
+            <InputWithLabel
+              type="email"
+              label="Email"
+              name="email"
+              placeholder={t('email')}
+              value={formik.values.email}
+              error={formik.touched.email ? formik.errors.email : undefined}
+              onChange={formik.handleChange}
+            />
+            <div className="relative flex">
               <InputWithLabel
-                type="email"
-                label="Email"
-                name="email"
-                placeholder={t('email')}
-                value={formik.values.email}
-                error={formik.touched.email ? formik.errors.email : undefined}
+                type={isPasswordVisible ? 'text' : 'password'}
+                name="password"
+                placeholder={t('password')}
+                value={formik.values.password}
+                label={
+                  <label className="label">
+                    <span className="label-text">{t('password')}</span>
+                    <span className="label-text-alt">
+                      <Link
+                        href="/auth/forgot-password"
+                        className="text-xs text-gray-400 hover:text-gray-200"
+                      >
+                        {t('forgot-password')}
+                      </Link>
+                    </span>
+                  </label>
+                }
+                error={
+                  formik.touched.password ? formik.errors.password : undefined
+                }
                 onChange={formik.handleChange}
               />
-              <div className="relative flex">
-                <InputWithLabel
-                  type={isPasswordVisible ? 'text' : 'password'}
-                  name="password"
-                  placeholder={t('password')}
-                  value={formik.values.password}
-                  label={
-                    <label className="label">
-                      <span className="label-text">{t('password')}</span>
-                      <span className="label-text-alt">
-                        <Link
-                          href="/auth/forgot-password"
-                          className="text-sm text-primary hover:text-[color-mix(in_oklab,oklch(var(--p)),black_7%)]"
-                        >
-                          {t('forgot-password')}
-                        </Link>
-                      </span>
-                    </label>
-                  }
-                  error={
-                    formik.touched.password ? formik.errors.password : undefined
-                  }
-                  onChange={formik.handleChange}
-                />
-                <TogglePasswordVisibility
-                  isPasswordVisible={isPasswordVisible}
-                  handlePasswordVisibility={handlePasswordVisibility}
-                />
-              </div>
-              <GoogleReCAPTCHA
-                recaptchaRef={recaptchaRef}
-                onChange={setRecaptchaToken}
-                siteKey={recaptchaSiteKey}
+              <TogglePasswordVisibility
+                isPasswordVisible={isPasswordVisible}
+                handlePasswordVisibility={handlePasswordVisibility}
               />
             </div>
-            <div className="mt-3 space-y-3">
-              <Button
-                type="submit"
-                color="primary"
-                loading={formik.isSubmitting}
-                active={formik.dirty}
-                fullWidth
-                size="md"
-              >
-                {t('sign-in')}
-              </Button>
-            </div>
-          </form>
-        )}
-      </div>
+            <GoogleReCAPTCHA
+              recaptchaRef={recaptchaRef}
+              onChange={setRecaptchaToken}
+              siteKey={recaptchaSiteKey}
+            />
+          </div>
+          <div className="mt-6">
+            <Button
+              type="submit"
+              color="primary"
+              loading={formik.isSubmitting}
+              active={formik.dirty}
+              fullWidth
+              size="md"
+            >
+              {t('sign-in')}
+            </Button>
+          </div>
+        </form>
+      )}
     </>
   );
 };

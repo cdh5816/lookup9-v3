@@ -62,6 +62,7 @@ module.exports = [{
         "components/defaultLanding/**/*.tsx",
         "components/emailTemplates/**/*.tsx",
         "pages/index.tsx",
+        "pages/admin/**/*.tsx",
     ],
 
     rules: {

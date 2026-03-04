@@ -2,6 +2,7 @@ import {
   RectangleStackIcon,
   ShieldCheckIcon,
   UserCircleIcon,
+  UsersIcon,
 } from '@heroicons/react/24/outline';
 import { useTranslation } from 'next-i18next';
 import NavigationItems from './NavigationItems';
@@ -16,6 +17,12 @@ const UserNavigation = ({ activePathname }: NavigationProps) => {
       href: '/teams',
       icon: RectangleStackIcon,
       active: activePathname === '/teams',
+    },
+    {
+      name: t('admin-users'),
+      href: '/admin/users',
+      icon: UsersIcon,
+      active: activePathname === '/admin/users',
     },
     {
       name: t('account'),

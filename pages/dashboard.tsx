@@ -1,36 +1,45 @@
-import { Loading } from '@/components/shared';
-import useTeams from 'hooks/useTeams';
 import { GetServerSidePropsContext } from 'next';
-import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
-import { useRouter } from 'next/router';
-import { useEffect } from 'react';
-import type { NextPageWithLayout } from 'types';
+import { getSession } from '@/lib/session';
+import { prisma } from '@/lib/prisma';
 
-const Dashboard: NextPageWithLayout = () => {
-  const router = useRouter();
-  const { teams, isLoading } = useTeams();
+// 서버사이드에서 팀을 찾아 직접 리다이렉트
+export async function getServerSideProps(context: GetServerSidePropsContext) {
+  const { req, res } = context;
+  const session = await getSession(req, res);
 
-  useEffect(() => {
-    if (isLoading || !teams) {
-      return;
-    }
+  if (!session) {
+    return {
+      redirect: {
+        destination: '/auth/login',
+        permanent: false,
+      },
+    };
+  }
 
-    if (teams.length > 0) {
-      router.push(`/teams/${teams[0].slug}/members`);
-    } else {
-      router.push('/teams');
-    }
-  }, [isLoading, router, teams]);
+  // 유저의 팀 찾기
+  const teamMember = await prisma.teamMember.findFirst({
+    where: { userId: session.user.id },
+    include: { team: true },
+  });
 
-  return <Loading />;
-};
+  if (teamMember) {
+    return {
+      redirect: {
+        destination: `/teams/${teamMember.team.slug}/members`,
+        permanent: false,
+      },
+    };
+  }
 
-export async function getStaticProps({ locale }: GetServerSidePropsContext) {
+  // 팀이 없으면 팀 목록으로
   return {
-    props: {
-      ...(locale ? await serverSideTranslations(locale, ['common']) : {}),
+    redirect: {
+      destination: '/teams',
+      permanent: false,
     },
   };
 }
 
+// 이 페이지는 렌더링되지 않음 (항상 리다이렉트)
+const Dashboard = () => null;
 export default Dashboard;

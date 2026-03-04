@@ -1,6 +1,5 @@
 import app from '@/lib/app';
 import { useTranslation } from 'next-i18next';
-import Image from 'next/image';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
@@ -16,29 +15,23 @@ export default function AuthLayout({
   const { t } = useTranslation('common');
 
   return (
-    <>
-      <div className="flex min-h-full flex-1 flex-col justify-center px-6 py-20 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-sm">
-          <Image
-            src={app.logoUrl}
-            className="mx-auto h-12"
-            alt={app.name}
-            width={48}
-            height={48}
-          />
-          {heading && (
-            <h2 className="mt-6 text-center text-2xl font-bold leading-9 tracking-tight text-gray-900">
-              {t(heading)}
-            </h2>
-          )}
-          {description && (
-            <p className="text-center text-gray-600 dark:text-white">
-              {t(description)}
-            </p>
-          )}
-        </div>
-        <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">{children}</div>
+    <div className="flex min-h-screen flex-1 flex-col justify-center px-6 py-12 lg:px-8 bg-base-100">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <h1 className="text-center text-4xl font-extrabold tracking-tight">
+          {app.name}
+        </h1>
+        {heading && (
+          <p className="mt-4 text-center text-sm text-gray-400">
+            {t(heading)}
+          </p>
+        )}
+        {description && (
+          <p className="text-center text-xs text-gray-500 mt-1">
+            {t(description)}
+          </p>
+        )}
       </div>
-    </>
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">{children}</div>
+    </div>
   );
 }

@@ -14,10 +14,6 @@ interface UserData {
   id: string;
   name: string;
   email: string;
-  company: string | null;
-  department: string | null;
-  position: string | null;
-  phone: string | null;
   createdAt: string;
   teamMembers: { role: string; team: { name: string } }[];
 }
@@ -35,10 +31,6 @@ const AdminUsers = () => {
     name: '',
     email: '',
     password: '',
-    company: '',
-    department: '',
-    position: '',
-    phone: '',
     role: 'MEMBER',
   });
 
@@ -60,7 +52,6 @@ const AdminUsers = () => {
     setError('');
     setSuccess('');
 
-    // 첫 번째 팀 ID 가져오기
     const teamsRes = await fetch('/api/teams');
     const teamsData = await teamsRes.json();
     const teamId = teamsData.data?.[0]?.id || null;
@@ -77,10 +68,6 @@ const AdminUsers = () => {
         name: '',
         email: '',
         password: '',
-        company: '',
-        department: '',
-        position: '',
-        phone: '',
         role: 'MEMBER',
       });
       setShowCreate(false);
@@ -146,7 +133,6 @@ const AdminUsers = () => {
           </div>
         )}
 
-        {/* 계정 생성 폼 */}
         {showCreate && (
           <div className="border rounded-lg p-6 space-y-4">
             <h3 className="text-lg font-semibold">{t('admin-create-user')}</h3>
@@ -188,56 +174,6 @@ const AdminUsers = () => {
               </div>
               <div>
                 <label className="label">
-                  <span className="label-text">{t('admin-company')}</span>
-                </label>
-                <input
-                  type="text"
-                  className="input input-bordered w-full"
-                  value={form.company}
-                  onChange={(e) =>
-                    setForm({ ...form, company: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <label className="label">
-                  <span className="label-text">{t('admin-department')}</span>
-                </label>
-                <input
-                  type="text"
-                  className="input input-bordered w-full"
-                  value={form.department}
-                  onChange={(e) =>
-                    setForm({ ...form, department: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <label className="label">
-                  <span className="label-text">{t('admin-position')}</span>
-                </label>
-                <input
-                  type="text"
-                  className="input input-bordered w-full"
-                  value={form.position}
-                  onChange={(e) =>
-                    setForm({ ...form, position: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <label className="label">
-                  <span className="label-text">{t('admin-phone')}</span>
-                </label>
-                <input
-                  type="text"
-                  className="input input-bordered w-full"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="label">
                   <span className="label-text">{t('role')}</span>
                 </label>
                 <select
@@ -263,16 +199,12 @@ const AdminUsers = () => {
           </div>
         )}
 
-        {/* 유저 목록 테이블 */}
         <div className="overflow-x-auto">
           <table className="table w-full">
             <thead>
               <tr>
                 <th>{t('name')}</th>
                 <th>{t('email')}</th>
-                <th>{t('admin-company')}</th>
-                <th>{t('admin-department')}</th>
-                <th>{t('admin-position')}</th>
                 <th>{t('role')}</th>
                 <th>{t('created-at')}</th>
                 <th>{t('actions')}</th>
@@ -281,13 +213,13 @@ const AdminUsers = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center">
+                  <td colSpan={5} className="text-center">
                     <span className="loading loading-spinner loading-sm"></span>
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center text-gray-500">
+                  <td colSpan={5} className="text-center text-gray-500">
                     {t('admin-no-users')}
                   </td>
                 </tr>
@@ -296,9 +228,6 @@ const AdminUsers = () => {
                   <tr key={user.id}>
                     <td className="font-medium">{user.name}</td>
                     <td>{user.email}</td>
-                    <td>{user.company || '-'}</td>
-                    <td>{user.department || '-'}</td>
-                    <td>{user.position || '-'}</td>
                     <td>
                       <span className="badge badge-sm">
                         {user.teamMembers?.[0]?.role || '-'}

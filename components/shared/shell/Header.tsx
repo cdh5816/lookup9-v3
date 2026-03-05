@@ -12,6 +12,7 @@ import useTheme from 'hooks/useTheme';
 import env from '@/lib/env';
 import { useTranslation } from 'next-i18next';
 import Link from 'next/link';
+import app from '@/lib/app';
 
 interface HeaderProps {
   setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -35,16 +36,20 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
 
   return (
     <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center border-b border-gray-800 px-4 sm:px-6 lg:px-8 bg-black text-white">
-      <button
-        type="button"
-        className="-m-2.5 p-2.5 text-gray-400 lg:hidden"
-        onClick={() => setSidebarOpen(true)}
-      >
-        <span className="sr-only">{t('open-sidebar')}</span>
-        <Bars3Icon className="h-6 w-6" aria-hidden="true" />
-      </button>
-      <div className="flex flex-1 items-center justify-between">
-        <div className="flex-1" />
+      {/* 모바일: 사이드바 토글 + LOOKUP9 */}
+      <div className="flex items-center gap-3 lg:hidden">
+        <button
+          type="button"
+          className="-m-2.5 p-2.5 text-gray-400"
+          onClick={() => setSidebarOpen(true)}
+        >
+          <span className="sr-only">{t('open-sidebar')}</span>
+          <Bars3Icon className="h-6 w-6" aria-hidden="true" />
+        </button>
+        <span className="text-lg font-bold">{app.name}</span>
+      </div>
+
+      <div className="flex flex-1 items-center justify-end">
         <div className="flex items-center gap-x-1">
           <button className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800">
             <MagnifyingGlassIcon className="w-5 h-5" />

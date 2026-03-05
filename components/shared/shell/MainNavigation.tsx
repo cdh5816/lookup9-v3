@@ -34,7 +34,6 @@ const MainNavigation = ({ activePathname }: NavigationProps) => {
   const isSuperAdmin = userRole === 'SUPER_ADMIN' || userRole === 'OWNER';
   const isAdminHR = userRole === 'ADMIN_HR' || isSuperAdmin;
   const isManager = userRole === 'MANAGER' || isAdminHR;
-  const isUser = userRole === 'USER' || isManager;
   const isPartner = userRole === 'PARTNER';
   const isGuest = userRole === 'GUEST';
 

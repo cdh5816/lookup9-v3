@@ -43,7 +43,6 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
         <span className="sr-only">{t('open-sidebar')}</span>
         <Bars3Icon className="h-6 w-6" aria-hidden="true" />
       </button>
-
       <div className="flex flex-1 items-center justify-between">
         <div className="flex-1" />
         <div className="flex items-center gap-x-1">

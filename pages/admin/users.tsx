@@ -28,14 +28,8 @@ const AdminUsers = () => {
   const [success, setSuccess] = useState('');
 
   const [form, setForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-    company: '',
-    department: '',
-    position: '',
-    phone: '',
-    role: 'MEMBER',
+    name: '', email: '', password: '', company: '',
+    department: '', position: '', phone: '', role: 'USER',
   });
 
   const fetchUsers = useCallback(async () => {
@@ -47,15 +41,12 @@ const AdminUsers = () => {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+  useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
   const handleCreate = async () => {
     setCreating(true);
     setError('');
     setSuccess('');
-
     const teamsRes = await fetch('/api/teams');
     const teamsData = await teamsRes.json();
     const teamId = teamsData.data?.[0]?.id || null;
@@ -68,10 +59,7 @@ const AdminUsers = () => {
 
     if (res.ok) {
       setSuccess(t('admin-user-created'));
-      setForm({
-        name: '', email: '', password: '', company: '',
-        department: '', position: '', phone: '', role: 'MEMBER',
-      });
+      setForm({ name: '', email: '', password: '', company: '', department: '', position: '', phone: '', role: 'USER' });
       setShowCreate(false);
       fetchUsers();
     } else {
@@ -83,28 +71,41 @@ const AdminUsers = () => {
 
   const handleDelete = async (userId: string, userName: string) => {
     if (!confirm(`${userName} ${t('admin-delete-confirm')}`)) return;
-
     const res = await fetch('/api/admin/users', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId }),
     });
-
-    if (res.ok) {
-      setSuccess(t('admin-user-deleted'));
-      fetchUsers();
-    } else {
-      const data = await res.json();
-      setError(data.error?.message || t('unknown-error'));
-    }
+    if (res.ok) { setSuccess(t('admin-user-deleted')); fetchUsers(); }
+    else { const data = await res.json(); setError(data.error?.message || t('unknown-error')); }
   };
+
+  const departments = [
+    { value: '', label: '-' },
+    { value: '경영진', label: '경영진' },
+    { value: '경영지원부', label: '경영지원부' },
+    { value: '영업부', label: '영업부' },
+    { value: '수주팀', label: '수주팀' },
+    { value: '생산관리팀', label: '생산관리팀' },
+    { value: '도장팀', label: '도장팀' },
+    { value: '출하팀', label: '출하팀' },
+    { value: '공사팀', label: '공사팀' },
+    { value: '협력사', label: '협력사' },
+  ];
+
+  const roles = [
+    { value: 'SUPER_ADMIN', label: 'SUPER_ADMIN (대표/시스템관리자)' },
+    { value: 'ADMIN_HR', label: 'ADMIN_HR (경영지원부)' },
+    { value: 'MANAGER', label: 'MANAGER (부서장)' },
+    { value: 'USER', label: 'USER (직원)' },
+    { value: 'PARTNER', label: 'PARTNER (협력사)' },
+    { value: 'GUEST', label: 'GUEST (외부고객)' },
+    { value: 'VIEWER', label: 'VIEWER (열람전용)' },
+  ];
 
   return (
     <>
-      <Head>
-        <title>{t('admin-users-title')}</title>
-      </Head>
-
+      <Head><title>{t('admin-users-title')}</title></Head>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold">{t('admin-users')}</h2>
@@ -143,8 +144,10 @@ const AdminUsers = () => {
               </div>
               <div>
                 <label className="label"><span className="label-text">{t('admin-department')}</span></label>
-                <input type="text" className="input input-bordered w-full" value={form.department}
-                  onChange={(e) => setForm({ ...form, department: e.target.value })} />
+                <select className="select select-bordered w-full" value={form.department}
+                  onChange={(e) => setForm({ ...form, department: e.target.value })}>
+                  {departments.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                </select>
               </div>
               <div>
                 <label className="label"><span className="label-text">{t('admin-position')}</span></label>
@@ -160,16 +163,12 @@ const AdminUsers = () => {
                 <label className="label"><span className="label-text">{t('role')}</span></label>
                 <select className="select select-bordered w-full" value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                  <option value="OWNER">OWNER</option>
-                  <option value="ADMIN">ADMIN</option>
-                  <option value="MEMBER">MEMBER</option>
+                  {roles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </div>
             </div>
             <div className="flex justify-end">
-              <Button color="primary" loading={creating} onClick={handleCreate}>
-                {t('create-account')}
-              </Button>
+              <Button color="primary" loading={creating} onClick={handleCreate}>{t('create-account')}</Button>
             </div>
           </div>
         )}
@@ -191,15 +190,13 @@ const AdminUsers = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="text-center">
-                  <span className="loading loading-spinner loading-sm"></span>
-                </td></tr>
+                <tr><td colSpan={9} className="text-center"><span className="loading loading-spinner loading-sm"></span></td></tr>
               ) : users.length === 0 ? (
                 <tr><td colSpan={9} className="text-center text-gray-500">{t('admin-no-users')}</td></tr>
               ) : (
                 users.map((user) => (
                   <tr key={user.id}>
-                    <td className="font-medium">{user.name}</td>
+                    <td className="font-medium">{user.position ? `${user.position} ${user.name}` : user.name}</td>
                     <td>{user.email}</td>
                     <td>{user.company || '-'}</td>
                     <td>{user.department || '-'}</td>
@@ -208,8 +205,7 @@ const AdminUsers = () => {
                     <td><span className="badge badge-sm">{user.teamMembers?.[0]?.role || '-'}</span></td>
                     <td>{new Date(user.createdAt).toLocaleDateString('ko-KR')}</td>
                     <td>
-                      <button className="btn btn-ghost btn-xs text-error"
-                        onClick={() => handleDelete(user.id, user.name)}>
+                      <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDelete(user.id, user.name)}>
                         <TrashIcon className="w-4 h-4" />
                       </button>
                     </td>
@@ -225,11 +221,7 @@ const AdminUsers = () => {
 };
 
 export async function getServerSideProps({ locale }: GetServerSidePropsContext) {
-  return {
-    props: {
-      ...(locale ? await serverSideTranslations(locale, ['common']) : {}),
-    },
-  };
+  return { props: { ...(locale ? await serverSideTranslations(locale, ['common']) : {}) } };
 }
 
 export default AdminUsers;

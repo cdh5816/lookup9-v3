@@ -277,5 +277,21 @@
   "dash-today-schedule": "오늘 일정",
   "dash-no-schedule": "오늘 예정된 일정이 없습니다.",
   "dash-recent-alerts": "최근 알림",
-  "dash-no-alerts": "새로운 알림이 없습니다."
+  "dash-no-alerts": "새로운 알림이 없습니다.",
+  "nav-admin-hr": "경영지원",
+  "nav-my-sites": "내 현장",
+  "nav-messages": "쪽지",
+  "my-page-title": "내 정보",
+  "my-leave-status": "연차 현황",
+  "my-leave-total": "총 연차",
+  "my-leave-used": "사용",
+  "my-leave-remaining": "잔여",
+  "my-leave-reset": "리셋일",
+  "my-leave-coming-soon": "연차 신청 기능은 준비 중입니다.",
+  "my-messages": "안 읽은 쪽지",
+  "my-no-messages": "새로운 쪽지가 없습니다.",
+  "my-sites": "내 현장",
+  "my-no-sites": "배정된 현장이 없습니다.",
+  "my-posts": "내가 작성한 글",
+  "my-no-posts": "작성한 글이 없습니다."
 }

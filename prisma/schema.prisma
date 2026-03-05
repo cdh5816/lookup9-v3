@@ -8,6 +8,13 @@ datasource db {
 }
 
 enum Role {
+  SUPER_ADMIN
+  ADMIN_HR
+  MANAGER
+  USER
+  PARTNER
+  GUEST
+  VIEWER
   ADMIN
   OWNER
   MEMBER

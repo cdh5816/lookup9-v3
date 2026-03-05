@@ -29,7 +29,7 @@ const MainNavigation = ({ activePathname }: NavigationProps) => {
   // 현재 유저의 팀 역할 가져오기
   const { data: teamsData } = useSWR('/api/teams', fetcher);
   const teams = teamsData?.data || [];
-  const userRole = teams[0]?.members?.[0]?.role || session?.user?.role || 'USER';
+  const userRole = teams[0]?.members?.[0]?.role || session?.user?.roles?.[0]?.role || 'USER';
 
   const isSuperAdmin = userRole === 'SUPER_ADMIN' || userRole === 'OWNER';
   const isAdminHR = userRole === 'ADMIN_HR' || isSuperAdmin;

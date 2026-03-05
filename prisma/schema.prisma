@@ -74,10 +74,18 @@ model User {
   invalid_login_attempts Int       @default(0)
   lockedAt               DateTime?
 
-  teamMembers TeamMember[]
-  accounts    Account[]
-  sessions    Session[]
-  invitations Invitation[]
+  teamMembers    TeamMember[]
+  accounts       Account[]
+  sessions       Session[]
+  invitations    Invitation[]
+  createdSites   Site[]           @relation("SiteCreator")
+  siteAssignments SiteAssignment[]
+  salesRecords   SalesRecord[]    @relation("SalesCreator")
+  contracts      Contract[]       @relation("ContractCreator")
+  documents      Document[]       @relation("DocumentUploader")
+  comments       Comment[]        @relation("CommentAuthor")
+  sentMessages   Message[]        @relation("MessageSender")
+  receivedMessages Message[]      @relation("MessageReceiver")
 }
 
 model Team {
@@ -228,4 +236,143 @@ model jackson_ttl {
 
   @@index([expiresAt], map: "_jackson_ttl_expires_at")
   @@ignore
+}
+
+// ============================================
+// LOOKUP9 업무 테이블
+// ============================================
+
+model Site {
+  id          String   @id @default(uuid())
+  name        String
+  address     String?
+  clientId    String?
+  status      String   @default("대기")
+  description String?  @db.Text
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  client      Client?          @relation(fields: [clientId], references: [id])
+  createdBy   User             @relation("SiteCreator", fields: [createdById], references: [id])
+  assignments SiteAssignment[]
+  sales       SalesRecord[]
+  contracts   Contract[]
+  documents   Document[]
+  comments    Comment[]
+
+  @@index([clientId])
+  @@index([createdById])
+  @@index([status])
+}
+
+model SiteAssignment {
+  id           String   @id @default(uuid())
+  siteId       String
+  userId       String
+  assignedRole String   @default("USER")
+  assignedAt   DateTime @default(now())
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, userId])
+  @@index([userId])
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  contact   String?
+  phone     String?
+  email     String?
+  address   String?
+  type      String   @default("발주처")
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  sites Site[]
+}
+
+model SalesRecord {
+  id             String   @id @default(uuid())
+  siteId         String
+  status         String   @default("영업접촉")
+  estimateAmount Decimal? @db.Decimal(15, 0)
+  meetingNotes   String?  @db.Text
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now())
+
+  site      Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User @relation("SalesCreator", fields: [createdById], references: [id])
+
+  @@index([siteId])
+}
+
+model Contract {
+  id             String   @id @default(uuid())
+  siteId         String
+  contractAmount Decimal? @db.Decimal(15, 0)
+  specialNotes   String?  @db.Text
+  status         String   @default("수주등록")
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now())
+
+  site      Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User @relation("ContractCreator", fields: [createdById], references: [id])
+
+  @@index([siteId])
+}
+
+model Document {
+  id           String   @id @default(uuid())
+  siteId       String?
+  type         String?
+  fileName     String
+  filePath     String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  site       Site? @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  uploadedBy User  @relation("DocumentUploader", fields: [uploadedById], references: [id])
+
+  @@index([siteId])
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  siteId     String
+  parentId   String?
+  content    String   @db.Text
+  authorId   String
+  isInternal Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
+
+  site   Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  author User     @relation("CommentAuthor", fields: [authorId], references: [id])
+  parent Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[] @relation("CommentReplies")
+
+  @@index([siteId])
+  @@index([parentId])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  title      String
+  content    String   @db.Text
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("MessageSender", fields: [senderId], references: [id])
+  receiver User @relation("MessageReceiver", fields: [receiverId], references: [id])
+
+  @@index([senderId])
+  @@index([receiverId])
 }

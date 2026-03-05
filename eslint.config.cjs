@@ -65,6 +65,8 @@ module.exports = [{
         "pages/admin/**/*.tsx",
         "pages/dashboard.tsx",
         "pages/my/**/*.tsx",
+        "pages/clients/**/*.tsx",
+        "pages/sites/**/*.tsx",
     ],
 
     rules: {

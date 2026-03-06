@@ -44,6 +44,12 @@ const SitesList = () => {
 
   useEffect(() => { fetchSites(); }, [fetchSites]);
 
+  // 30초 자동 갱신
+  useEffect(() => {
+    const interval = setInterval(() => { fetchSites(); }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchSites]);
+
   return (
     <>
       <Head><title>{t('nav-sites')} | LOOKUP9</title></Head>

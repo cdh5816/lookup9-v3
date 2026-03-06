@@ -348,5 +348,16 @@
   "tab-schedule": "일정",
   "production-total": "전체 현장",
   "production-active-sites": "진행중 현장",
-  "production-all-sites": "전체 현장 목록"
+  "production-all-sites": "전체 현장 목록",
+  "assign-add": "인원 배정",
+  "assign-search-placeholder": "이름 또는 이메일로 검색...",
+  "assign-remove-confirm": "배정을 해제하시겠습니까?",
+  "sales-add": "영업 등록",
+  "sales-status": "영업 상태",
+  "sales-notes": "미팅 메모",
+  "sales-delete-confirm": "이 영업 기록을 삭제하시겠습니까?",
+  "contract-add": "수주 등록",
+  "contract-status": "수주 상태",
+  "contract-notes": "특이사항",
+  "contract-delete-confirm": "이 수주 기록을 삭제하시겠습니까?"
 }

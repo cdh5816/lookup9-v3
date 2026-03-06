@@ -257,5 +257,16 @@
   "tab-schedule": "Schedule",
   "production-total": "Total Sites",
   "production-active-sites": "Active Sites",
-  "production-all-sites": "All Sites"
+  "production-all-sites": "All Sites",
+  "assign-add": "Assign",
+  "assign-search-placeholder": "Search by name or email...",
+  "assign-remove-confirm": "Remove this assignment?",
+  "sales-add": "Add Sales",
+  "sales-status": "Sales Status",
+  "sales-notes": "Meeting Notes",
+  "sales-delete-confirm": "Delete this sales record?",
+  "contract-add": "Add Contract",
+  "contract-status": "Contract Status",
+  "contract-notes": "Special Notes",
+  "contract-delete-confirm": "Delete this contract record?"
 }

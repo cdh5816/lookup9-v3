@@ -296,5 +296,12 @@
   "notice-title": "Title",
   "notice-content": "Content",
   "notice-pin": "Pin to top",
-  "notice-delete-confirm": "Delete this notice?"
+  "notice-delete-confirm": "Delete this notice?",
+  "hr-company-stats": "Company Stats",
+  "hr-leave-management": "Leave Management",
+  "hr-total-users": "Total Users",
+  "hr-total-depts": "Departments",
+  "hr-dept-breakdown": "By Department",
+  "search-placeholder": "Search sites, users, clients...",
+  "search-no-results": "No results found."
 }

@@ -387,5 +387,12 @@
   "notice-title": "제목",
   "notice-content": "내용",
   "notice-pin": "상단 고정",
-  "notice-delete-confirm": "이 공지를 삭제하시겠습니까?"
+  "notice-delete-confirm": "이 공지를 삭제하시겠습니까?",
+  "hr-company-stats": "회사 통계",
+  "hr-leave-management": "연차 관리",
+  "hr-total-users": "전체 인원",
+  "hr-total-depts": "부서 수",
+  "hr-dept-breakdown": "부서별 인원",
+  "search-placeholder": "현장, 인원, 거래처 검색...",
+  "search-no-results": "검색 결과가 없습니다."
 }

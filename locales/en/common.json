@@ -268,5 +268,21 @@
   "contract-add": "Add Contract",
   "contract-status": "Contract Status",
   "contract-notes": "Special Notes",
-  "contract-delete-confirm": "Delete this contract record?"
+  "contract-delete-confirm": "Delete this contract record?",
+  "msg-inbox": "Inbox",
+  "msg-sent": "Sent",
+  "msg-compose": "Compose",
+  "msg-to": "To",
+  "msg-from": "From",
+  "msg-title": "Subject",
+  "msg-content": "Content",
+  "msg-send": "Send",
+  "msg-empty": "No messages.",
+  "msg-delete-confirm": "Delete this message?",
+  "msg-fill-all": "Please fill in all fields.",
+  "msg-unread": "Unread",
+  "msg-unread-count": " unread messages.",
+  "dash-notice": "Announcements",
+  "dash-no-notice": "No announcements.",
+  "dash-recent-comments": "Recent Comments"
 }

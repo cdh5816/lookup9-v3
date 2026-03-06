@@ -359,5 +359,21 @@
   "contract-add": "수주 등록",
   "contract-status": "수주 상태",
   "contract-notes": "특이사항",
-  "contract-delete-confirm": "이 수주 기록을 삭제하시겠습니까?"
+  "contract-delete-confirm": "이 수주 기록을 삭제하시겠습니까?",
+  "msg-inbox": "받은 쪽지",
+  "msg-sent": "보낸 쪽지",
+  "msg-compose": "쪽지 쓰기",
+  "msg-to": "받는사람",
+  "msg-from": "보낸사람",
+  "msg-title": "제목",
+  "msg-content": "내용",
+  "msg-send": "보내기",
+  "msg-empty": "쪽지가 없습니다.",
+  "msg-delete-confirm": "이 쪽지를 삭제하시겠습니까?",
+  "msg-fill-all": "받는사람, 제목, 내용을 모두 입력해주세요.",
+  "msg-unread": "안 읽은 쪽지",
+  "msg-unread-count": "개의 안 읽은 쪽지가 있습니다.",
+  "dash-notice": "공지사항",
+  "dash-no-notice": "등록된 공지가 없습니다.",
+  "dash-recent-comments": "최근 댓글"
 }

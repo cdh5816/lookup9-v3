@@ -8,7 +8,14 @@ import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 import { Button } from 'react-daisyui';
 
-const tabs = ['overview', 'sales', 'contract', 'production', 'shipping', 'documents', 'comments'];
+// 전체 탭 목록 (설계서 최종안)
+const allTabs = ['overview', 'sales', 'contract', 'production', 'painting', 'shipping', 'documents', 'memo', 'schedule', 'comments'];
+
+// Role별 숨길 탭
+const hiddenTabsByRole: Record<string, string[]> = {
+  PARTNER: ['sales', 'contract'],
+  GUEST: ['sales', 'contract', 'production', 'painting', 'shipping', 'memo', 'schedule'],
+};
 
 const SiteDetail = () => {
   const { t } = useTranslation('common');
@@ -18,8 +25,19 @@ const SiteDetail = () => {
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const { data, mutate } = useSWR(id ? `/api/sites/${id}` : null, fetcher);
+  // 현장 데이터 (30초 폴링)
+  const { data, mutate } = useSWR(id ? `/api/sites/${id}` : null, fetcher, {
+    refreshInterval: 30000,
+  });
   const site = data?.data;
+
+  // 유저 프로필 (Role 확인용)
+  const { data: profileData } = useSWR('/api/my/profile', fetcher);
+  const userRole = profileData?.data?.teamMembers?.[0]?.role || 'USER';
+
+  // Role별 탭 필터
+  const hidden = hiddenTabsByRole[userRole] || [];
+  const tabs = allTabs.filter((tab) => !hidden.includes(tab));
 
   const handleAddComment = useCallback(async () => {
     if (!comment.trim() || !id) return;
@@ -41,6 +59,9 @@ const SiteDetail = () => {
 
   if (!site) return <div className="text-center py-10"><span className="loading loading-spinner loading-md"></span></div>;
 
+  // ADMIN_HR 이상만 삭제 가능
+  const canDelete = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN'].includes(userRole);
+
   return (
     <>
       <Head><title>{site.name} | LOOKUP9</title></Head>
@@ -59,7 +80,9 @@ const SiteDetail = () => {
             <span className={`badge ${site.status === '진행중' ? 'badge-info' : site.status === '완료' ? 'badge-success' : 'badge-ghost'}`}>
               {site.status}
             </span>
-            <Button color="error" size="xs" onClick={handleDeleteSite}>{t('delete')}</Button>
+            {canDelete && (
+              <Button color="error" size="xs" onClick={handleDeleteSite}>{t('delete')}</Button>
+            )}
           </div>
         </div>
 
@@ -119,7 +142,7 @@ const SiteDetail = () => {
 
         {activeTab === 'sales' && (
           <div className="rounded-lg border border-gray-800 p-6">
-            <h3 className="font-semibold mb-3">{t('nav-sales')}</h3>
+            <h3 className="font-semibold mb-3">{t('tab-sales')}</h3>
             {site.sales.length === 0 ? (
               <p className="text-sm text-gray-500">{t('site-no-data')}</p>
             ) : (
@@ -139,7 +162,7 @@ const SiteDetail = () => {
 
         {activeTab === 'contract' && (
           <div className="rounded-lg border border-gray-800 p-6">
-            <h3 className="font-semibold mb-3">{t('nav-orders')}</h3>
+            <h3 className="font-semibold mb-3">{t('tab-contract')}</h3>
             {site.contracts.length === 0 ? (
               <p className="text-sm text-gray-500">{t('site-no-data')}</p>
             ) : (
@@ -157,7 +180,13 @@ const SiteDetail = () => {
           </div>
         )}
 
-        {(activeTab === 'production' || activeTab === 'shipping') && (
+        {(activeTab === 'production' || activeTab === 'painting' || activeTab === 'shipping') && (
+          <div className="rounded-lg border border-gray-800 p-6 text-center">
+            <p className="text-gray-500">{t('coming-soon')}</p>
+          </div>
+        )}
+
+        {(activeTab === 'memo' || activeTab === 'schedule') && (
           <div className="rounded-lg border border-gray-800 p-6 text-center">
             <p className="text-gray-500">{t('coming-soon')}</p>
           </div>
@@ -165,7 +194,7 @@ const SiteDetail = () => {
 
         {activeTab === 'documents' && (
           <div className="rounded-lg border border-gray-800 p-6">
-            <h3 className="font-semibold mb-3">{t('nav-documents')}</h3>
+            <h3 className="font-semibold mb-3">{t('tab-documents')}</h3>
             <p className="text-sm text-gray-500">{site._count.documents} {t('site-documents-count')}</p>
             <p className="text-xs text-gray-500 mt-2">{t('coming-soon')}</p>
           </div>

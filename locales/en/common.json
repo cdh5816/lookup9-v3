@@ -284,5 +284,17 @@
   "msg-unread-count": " unread messages.",
   "dash-notice": "Announcements",
   "dash-no-notice": "No announcements.",
-  "dash-recent-comments": "Recent Comments"
+  "dash-recent-comments": "Recent Comments",
+  "doc-upload": "Upload",
+  "doc-filename": "File",
+  "doc-size": "Size",
+  "doc-uploader": "Uploaded by",
+  "doc-size-limit": "File size must be under 5MB.",
+  "doc-size-note": "Max 5MB, PDF/images/documents",
+  "doc-delete-confirm": "Delete this document?",
+  "notice-create": "New Notice",
+  "notice-title": "Title",
+  "notice-content": "Content",
+  "notice-pin": "Pin to top",
+  "notice-delete-confirm": "Delete this notice?"
 }

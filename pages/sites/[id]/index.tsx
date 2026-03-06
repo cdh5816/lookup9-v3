@@ -134,11 +134,7 @@ const SiteDetail = () => {
 
         {/* 문서 탭 */}
         {activeTab === 'documents' && (
-          <div className="rounded-lg border border-gray-800 p-6">
-            <h3 className="font-semibold mb-3">{t('tab-documents')}</h3>
-            <p className="text-sm text-gray-500">{site._count.documents} {t('site-documents-count')}</p>
-            <p className="text-xs text-gray-500 mt-2">{t('coming-soon')}</p>
-          </div>
+          <DocumentPanel siteId={id as string} canManage={canManage} />
         )}
 
         {/* 댓글 탭 */}
@@ -473,6 +469,107 @@ const ContractPanel = ({ siteId, contracts, canManage, onMutate }: {
             {c.specialNotes && <p className="text-sm text-gray-400 mt-1">{c.specialNotes}</p>}
           </div>
         ))
+      )}
+    </div>
+  );
+};
+
+// ========= 문서 패널 =========
+const DocumentPanel = ({ siteId, canManage }: { siteId: string; canManage: boolean }) => {
+  const { t } = useTranslation('common');
+  const [docs, setDocs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  const fetchDocs = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(`/api/sites/${siteId}/documents`);
+    if (res.ok) { const data = await res.json(); setDocs(data.data || []); }
+    setLoading(false);
+  }, [siteId]);
+
+  useState(() => { fetchDocs(); });
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert(t('doc-size-limit')); return; }
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = (reader.result as string).split(',')[1];
+      await fetch(`/api/sites/${siteId}/documents`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name, fileData: base64, mimeType: file.type }),
+      });
+      setUploading(false);
+      fetchDocs();
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleDelete = async (docId: string) => {
+    if (!confirm(t('doc-delete-confirm'))) return;
+    await fetch(`/api/sites/${siteId}/documents`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ documentId: docId }),
+    });
+    fetchDocs();
+  };
+
+  const formatSize = (bytes: number | null) => {
+    if (!bytes) return '-';
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  };
+
+  return (
+    <div className="rounded-lg border border-gray-800 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold">{t('tab-documents')} ({docs.length})</h3>
+        {canManage && (
+          <label className="btn btn-primary btn-sm cursor-pointer">
+            {uploading ? <span className="loading loading-spinner loading-xs"></span> : <PlusIcon className="w-4 h-4 mr-1" />}
+            {t('doc-upload')}
+            <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
+          </label>
+        )}
+      </div>
+      <p className="text-xs text-gray-500 mb-3">{t('doc-size-note')}</p>
+
+      {loading ? (
+        <div className="text-center py-4"><span className="loading loading-spinner loading-sm"></span></div>
+      ) : docs.length === 0 ? (
+        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="table w-full">
+            <thead><tr><th>{t('doc-filename')}</th><th>{t('doc-size')}</th><th>{t('doc-uploader')}</th><th>{t('created-at')}</th><th>{t('actions')}</th></tr></thead>
+            <tbody>
+              {docs.map((d: any) => (
+                <tr key={d.id}>
+                  <td>
+                    <a href={`/api/documents/${d.id}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline text-sm">
+                      {d.fileName}
+                    </a>
+                  </td>
+                  <td className="text-xs text-gray-500">{formatSize(d.fileSize)}</td>
+                  <td className="text-xs text-gray-500">{d.uploadedBy?.position ? `${d.uploadedBy.position} ` : ''}{d.uploadedBy?.name}</td>
+                  <td className="text-xs text-gray-500">{new Date(d.createdAt).toLocaleDateString('ko-KR')}</td>
+                  <td>
+                    {canManage && (
+                      <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDelete(d.id)}>
+                        <TrashIcon className="w-3 h-3" />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

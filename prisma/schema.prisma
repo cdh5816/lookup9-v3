@@ -86,6 +86,7 @@ model User {
   comments       Comment[]        @relation("CommentAuthor")
   sentMessages   Message[]        @relation("MessageSender")
   receivedMessages Message[]      @relation("MessageReceiver")
+  notices          Notice[]       @relation("NoticeAuthor")
 }
 
 model Team {
@@ -333,6 +334,9 @@ model Document {
   type         String?
   fileName     String
   filePath     String?
+  fileData     String?  @db.Text
+  fileSize     Int?
+  mimeType     String?
   uploadedById String
   createdAt    DateTime @default(now())
 
@@ -375,4 +379,18 @@ model Message {
 
   @@index([senderId])
   @@index([receiverId])
+}
+
+model Notice {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   @db.Text
+  isPinned  Boolean  @default(false)
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  author User @relation("NoticeAuthor", fields: [authorId], references: [id])
+
+  @@index([createdAt])
 }

@@ -21,6 +21,9 @@ const Dashboard = () => {
   const { data } = useSWR('/api/dashboard/stats', fetcher, { refreshInterval: 30000 });
   const stats = data?.data;
 
+  const { data: noticeData } = useSWR('/api/notices?limit=5', fetcher);
+  const notices = noticeData?.data || [];
+
   const cards = [
     {
       name: t('dash-active-sites'),
@@ -89,7 +92,24 @@ const Dashboard = () => {
               <MegaphoneIcon className="w-5 h-5 text-red-400" />
               <h3 className="font-semibold">{t('dash-notice')}</h3>
             </div>
-            <p className="text-sm text-gray-500">{t('dash-no-notice')}</p>
+            {notices.length === 0 ? (
+              <p className="text-sm text-gray-500">{t('dash-no-notice')}</p>
+            ) : (
+              <div className="space-y-2">
+                {notices.map((n: any) => (
+                  <div key={n.id} className="py-2 border-b border-gray-800 last:border-0">
+                    <div className="flex items-center gap-2">
+                      {n.isPinned && <span className="badge badge-xs badge-error">PIN</span>}
+                      <span className="text-sm font-medium">{n.title}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {n.author?.position ? `${n.author.position} ` : ''}{n.author?.name}
+                      {' · '}{new Date(n.createdAt).toLocaleDateString('ko-KR')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 오늘 일정 */}

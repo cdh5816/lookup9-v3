@@ -46,7 +46,6 @@ const departments = [
 ];
 
 const roles = [
-  { value: 'SUPER_ADMIN', label: 'SUPER_ADMIN (대표/시스템관리자)' },
   { value: 'ADMIN_HR', label: 'ADMIN_HR (경영지원부)' },
   { value: 'MANAGER', label: 'MANAGER (부서장)' },
   { value: 'USER', label: 'USER (직원)' },

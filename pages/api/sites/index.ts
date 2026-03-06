@@ -1,15 +1,19 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
+import { getTeamMemberByUserId } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: { message: 'Unauthorized' } });
 
+  const tm = await getTeamMemberByUserId(session.user.id);
+  if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
+
   try {
     switch (req.method) {
-      case 'GET': return await handleGET(req, res, session);
-      case 'POST': return await handlePOST(req, res, session);
+      case 'GET': return await handleGET(req, res, tm);
+      case 'POST': return await handlePOST(req, res, session, tm);
       default:
         res.setHeader('Allow', 'GET, POST');
         return res.status(405).json({ error: { message: `Method ${req.method} Not Allowed` } });
@@ -19,10 +23,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-const handleGET = async (req: NextApiRequest, res: NextApiResponse, session: any) => {
+const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => {
   const { status, search } = req.query;
 
-  const where: any = {};
+  const where: any = { teamId: tm.teamId };
   if (status && status !== 'all') where.status = status;
   if (search) {
     where.OR = [
@@ -31,13 +35,9 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, session: any
     ];
   }
 
-  // PARTNER는 배정된 현장만
-  const teamMember = await prisma.teamMember.findFirst({
-    where: { userId: session.user.id },
-  });
-
-  if (teamMember?.role === 'PARTNER' || teamMember?.role === 'GUEST') {
-    where.assignments = { some: { userId: session.user.id } };
+  // PARTNER/GUEST는 배정된 현장만
+  if (tm.role === 'PARTNER' || tm.role === 'GUEST') {
+    where.assignments = { some: { userId: tm.userId } };
   }
 
   const sites = await prisma.site.findMany({
@@ -53,9 +53,8 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, session: any
   return res.status(200).json({ data: sites });
 };
 
-const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: any) => {
+const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: any, tm: any) => {
   const { name, address, clientId, status, description } = req.body;
-
   if (!name) return res.status(400).json({ error: { message: 'Name is required' } });
 
   const site = await prisma.site.create({
@@ -63,6 +62,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
       name,
       address: address || null,
       clientId: clientId || null,
+      teamId: tm.teamId,
       status: status || '대기',
       description: description || null,
       createdById: session.user.id,

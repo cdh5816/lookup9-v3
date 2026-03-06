@@ -247,5 +247,15 @@
   "unable-to-find": "We're unable to find out what's happening! We suggest you to",
   "try-again-later": "or visit here later.",
   "multiple-sso-teams": "User belongs to multiple teams with SSO enabled. Please enter your team slug to get started.",
-  "login-welcome": "Welcome to LOOKUP9" 
+  "login-welcome": "Welcome to LOOKUP9",
+  "nav-production-dashboard": "Production",
+  "admin-tab-users": "Users",
+  "admin-tab-guests": "Guests/Partners",
+  "admin-tab-clients": "Clients",
+  "tab-painting": "Painting",
+  "tab-memo": "Memo",
+  "tab-schedule": "Schedule",
+  "production-total": "Total Sites",
+  "production-active-sites": "Active Sites",
+  "production-all-sites": "All Sites"
 }

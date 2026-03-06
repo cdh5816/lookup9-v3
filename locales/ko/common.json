@@ -338,5 +338,15 @@
   "client-deleted": "거래처가 삭제되었습니다.",
   "client-delete-confirm": "거래처를 삭제하시겠습니까?",
   "client-none": "등록된 거래처가 없습니다.",
-  "site-count": "현장 수"
+  "site-count": "현장 수",
+  "nav-production-dashboard": "생산관리",
+  "admin-tab-users": "유저 관리",
+  "admin-tab-guests": "게스트/협력사",
+  "admin-tab-clients": "거래처 관리",
+  "tab-painting": "도장",
+  "tab-memo": "메모",
+  "tab-schedule": "일정",
+  "production-total": "전체 현장",
+  "production-active-sites": "진행중 현장",
+  "production-all-sites": "전체 현장 목록"
 }

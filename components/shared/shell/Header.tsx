@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { signOut } from 'next-auth/react';
 import {
   ArrowRightOnRectangleIcon,
@@ -45,12 +45,17 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
     await signOut({ callbackUrl: '/auth/login' });
   };
 
-  const handleSearch = async (q: string) => {
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleSearch = useCallback((q: string) => {
     setQuery(q);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     if (q.length < 1) { setResults(null); return; }
-    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-    if (res.ok) { const data = await res.json(); setResults(data.data); }
-  };
+    debounceRef.current = setTimeout(async () => {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      if (res.ok) { const data = await res.json(); setResults(data.data); }
+    }, 300);
+  }, []);
 
   // 외부 클릭 시 닫기
   useEffect(() => {

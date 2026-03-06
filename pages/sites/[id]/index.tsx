@@ -1,7 +1,7 @@
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import useSWR from 'swr';
@@ -93,26 +93,7 @@ const SiteDetail = () => {
 
         {/* 개요 탭 */}
         {activeTab === 'overview' && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-lg border border-gray-800 p-4">
-                <p className="text-xs text-gray-500 mb-1">{t('site-client')}</p>
-                <p className="font-medium">{site.client?.name || '-'}</p>
-              </div>
-              <div className="rounded-lg border border-gray-800 p-4">
-                <p className="text-xs text-gray-500 mb-1">{t('site-status-label')}</p>
-                <p className="font-medium">{site.status}</p>
-              </div>
-            </div>
-            {site.description && (
-              <div className="rounded-lg border border-gray-800 p-4">
-                <p className="text-xs text-gray-500 mb-1">{t('site-description')}</p>
-                <p className="text-sm whitespace-pre-wrap">{site.description}</p>
-              </div>
-            )}
-            {/* 배정 인원 */}
-            <AssignmentPanel siteId={id as string} assignments={site.assignments} canManage={canManage} onMutate={mutate} />
-          </div>
+          <OverviewPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />
         )}
 
         {/* 영업 탭 */}
@@ -177,6 +158,73 @@ const SiteDetail = () => {
         )}
       </div>
     </>
+  );
+};
+
+// ========= 개요 패널 =========
+const siteStatuses = ['대기', '진행중', '부분완료', '완료', '보류'];
+
+const OverviewPanel = ({ site, siteId, canManage, onMutate }: {
+  site: any; siteId: string; canManage: boolean; onMutate: () => void;
+}) => {
+  const { t } = useTranslation('common');
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ status: site.status, description: site.description || '' });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await fetch(`/api/sites/${siteId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: form.status, description: form.description }),
+    });
+    setSaving(false); setEditing(false);
+    onMutate();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-lg border border-gray-800 p-4">
+          <p className="text-xs text-gray-500 mb-1">{t('site-client')}</p>
+          <p className="font-medium">{site.client?.name || '-'}</p>
+        </div>
+        <div className="rounded-lg border border-gray-800 p-4">
+          <p className="text-xs text-gray-500 mb-1">{t('site-status-label')}</p>
+          {editing ? (
+            <select className="select select-bordered select-sm w-full" value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              {siteStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          ) : (
+            <p className="font-medium">{site.status}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-gray-800 p-4">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-xs text-gray-500">{t('site-description')}</p>
+          {canManage && !editing && (
+            <button className="btn btn-ghost btn-xs" onClick={() => setEditing(true)}>{t('edit')}</button>
+          )}
+        </div>
+        {editing ? (
+          <div className="space-y-2">
+            <textarea className="textarea textarea-bordered w-full text-sm" rows={3} value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <div className="flex gap-2 justify-end">
+              <Button size="xs" onClick={() => setEditing(false)}>{t('cancel')}</Button>
+              <Button size="xs" color="primary" loading={saving} onClick={handleSave}>{t('save-changes')}</Button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm whitespace-pre-wrap">{site.description || '-'}</p>
+        )}
+      </div>
+
+      <AssignmentPanel siteId={siteId} assignments={site.assignments} canManage={canManage} onMutate={onMutate} />
+    </div>
   );
 };
 
@@ -488,7 +536,7 @@ const DocumentPanel = ({ siteId, canManage }: { siteId: string; canManage: boole
     setLoading(false);
   }, [siteId]);
 
-  useState(() => { fetchDocs(); });
+  useEffect(() => { fetchDocs(); }, [fetchDocs]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

@@ -41,11 +41,7 @@ const AdminHrPage = () => {
 
         {activeTab === 'notices' && <NoticePanel />}
         {activeTab === 'stats' && <StatsPanel />}
-        {activeTab === 'leave' && (
-          <div className="rounded-lg border border-gray-800 p-6 text-center">
-            <p className="text-gray-500">{t('coming-soon')}</p>
-          </div>
-        )}
+        {activeTab === 'leave' && <LeaveAdminPanel />}
       </div>
     </>
   );
@@ -208,6 +204,80 @@ const StatsPanel = () => {
           ))}
         </div>
       </div>
+    </div>
+  );
+};
+
+// ========= 연차 관리 (ADMIN_HR) =========
+const LeaveAdminPanel = () => {
+  const { t } = useTranslation('common');
+  const [tab, setTab] = useState<'pending' | 'all'>('pending');
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [noteInput, setNoteInput] = useState<Record<string, string>>({});
+
+  const fetchRequests = useCallback(async () => {
+    setLoading(true);
+    const filter = tab === 'pending' ? 'pending-admin' : 'all';
+    const res = await fetch(`/api/leave/requests?filter=${filter}`);
+    if (res.ok) { const d = await res.json(); setRequests(d.data || []); }
+    setLoading(false);
+  }, [tab]);
+
+  useEffect(() => { fetchRequests(); }, [fetchRequests]);
+
+  const handleAction = async (requestId: string, action: string) => {
+    await fetch('/api/leave/requests', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId, action, note: noteInput[requestId] || '' }),
+    });
+    fetchRequests();
+  };
+
+  const statusColors: Record<string, string> = {
+    '신청': 'badge-info', '승인': 'badge-success', '반려': 'badge-error',
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <button className={`btn btn-sm ${tab === 'pending' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('pending')}>{t('leave-pending')}</button>
+        <button className={`btn btn-sm ${tab === 'all' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('all')}>{t('leave-all')}</button>
+      </div>
+
+      {loading ? <div className="text-center py-10"><span className="loading loading-spinner loading-sm"></span></div> : requests.length === 0 ? (
+        <div className="text-center py-10 text-gray-500">{t('leave-no-requests')}</div>
+      ) : (
+        <div className="space-y-3">
+          {requests.map((r: any) => (
+            <div key={r.id} className="rounded-lg border border-gray-800 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm">{r.user?.position ? `${r.user.position} ` : ''}{r.user?.name}</span>
+                  <span className="text-xs text-gray-500">{r.user?.department}</span>
+                  <span className="text-sm">{r.type} {Number(r.days)}일</span>
+                  <span className={`badge badge-xs ${statusColors[r.status] || 'badge-ghost'}`}>{r.status}</span>
+                </div>
+                <span className="text-xs text-gray-500">{r.currentStep}</span>
+              </div>
+              <p className="text-sm text-gray-400">
+                {new Date(r.startDate).toLocaleDateString('ko-KR')} ~ {new Date(r.endDate).toLocaleDateString('ko-KR')}
+                {r.reason && ` · ${r.reason}`}
+              </p>
+              {r.manager && <p className="text-xs text-gray-500 mt-1">{t('leave-manager-action')}: {r.managerAction} ({r.manager.position ? `${r.manager.position} ` : ''}{r.manager.name})</p>}
+
+              {r.currentStep === '최종승인대기' && (
+                <div className="mt-3 flex items-center gap-2">
+                  <input type="text" className="input input-bordered input-xs flex-1" placeholder={t('leave-note-placeholder')}
+                    value={noteInput[r.id] || ''} onChange={(e) => setNoteInput({ ...noteInput, [r.id]: e.target.value })} />
+                  <button className="btn btn-xs btn-success" onClick={() => handleAction(r.id, '승인')}>{t('v2-approve')}</button>
+                  <button className="btn btn-xs btn-error" onClick={() => handleAction(r.id, '반려')}>{t('v2-reject')}</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

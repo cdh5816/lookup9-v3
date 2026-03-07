@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useState, useCallback, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { UserCircleIcon, CalendarDaysIcon, EnvelopeIcon, BuildingOffice2Icon, PencilSquareIcon } from '@heroicons/react/24/outline';
+import { UserCircleIcon, EnvelopeIcon, BuildingOffice2Icon, PencilSquareIcon, PlusIcon } from '@heroicons/react/24/outline';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 import { Button } from 'react-daisyui';
@@ -15,7 +15,7 @@ const STATUS_DOT: Record<string, string> = {
   '진행중': 'bg-green-500', '부분완료': 'bg-green-300', '완료': 'bg-gray-400', '보류': 'bg-gray-600',
 };
 
-type MyTab = 'profile' | 'worklog' | 'sites' | 'activity';
+type MyTab = 'profile' | 'leave' | 'worklog' | 'sites' | 'activity';
 
 const MyPage = () => {
   const { t } = useTranslation('common');
@@ -27,6 +27,7 @@ const MyPage = () => {
 
   const tabs: { key: MyTab; label: string }[] = [
     { key: 'profile', label: t('my-tab-profile') },
+    { key: 'leave', label: t('my-leave-status') },
     { key: 'worklog', label: t('my-tab-worklog') },
     { key: 'sites', label: t('my-sites') },
     { key: 'activity', label: t('my-tab-activity') },
@@ -71,6 +72,7 @@ const MyPage = () => {
         </div>
 
         {activeTab === 'profile' && <ProfileTab profile={profile} />}
+        {activeTab === 'leave' && <LeaveTab />}
         {activeTab === 'worklog' && <WorkLogTab />}
         {activeTab === 'sites' && <MySitesTab sites={profile.mySites || []} />}
         {activeTab === 'activity' && <ActivityTab comments={profile.myComments || []} />}
@@ -97,21 +99,135 @@ const ProfileTab = ({ profile }: { profile: any }) => {
           </div>
         ))}
       </div>
-      {/* 연차 (placeholder) */}
-      <div className="rounded-lg border border-gray-800 p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <CalendarDaysIcon className="w-5 h-5 text-blue-400" />
-          <h3 className="font-semibold text-sm">{t('my-leave-status')}</h3>
+    </div>
+  );
+};
+
+// ========= 연차 탭 =========
+const leaveTypes = ['연차', '반차(오전)', '반차(오후)', '병가', '경조', '기타'];
+const LeaveTab = () => {
+  const { t } = useTranslation('common');
+  const [balance, setBalance] = useState<any>(null);
+  const [requests, setRequests] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ type: '연차', startDate: '', endDate: '', days: '1', reason: '' });
+  const [sub, setSub] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchData = useCallback(async () => {
+    const [bRes, rRes] = await Promise.all([
+      fetch('/api/leave/balance'),
+      fetch('/api/leave/requests'),
+    ]);
+    if (bRes.ok) { const d = await bRes.json(); setBalance(d.data); }
+    if (rRes.ok) { const d = await rRes.json(); setRequests(d.data || []); }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleSubmit = async () => {
+    if (!form.startDate || !form.endDate) { setError(t('leave-fill-dates')); return; }
+    setSub(true); setError('');
+    const res = await fetch('/api/leave/requests', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    });
+    if (res.ok) {
+      setForm({ type: '연차', startDate: '', endDate: '', days: '1', reason: '' });
+      setShowForm(false); fetchData();
+    } else { const d = await res.json(); setError(d.error?.message || ''); }
+    setSub(false);
+  };
+
+  const total = balance ? Number(balance.totalDays) : 0;
+  const used = balance ? Number(balance.usedDays) : 0;
+  const remaining = total - used;
+
+  const statusColors: Record<string, string> = {
+    '신청': 'badge-info', '승인': 'badge-success', '반려': 'badge-error',
+  };
+  const stepLabels: Record<string, string> = {
+    '부서장승인대기': t('leave-step-manager'),
+    '최종승인대기': t('leave-step-admin'),
+    '완료': t('leave-step-done'),
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* 잔여 현황 */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="rounded-lg border border-blue-800 bg-blue-900/10 p-4 text-center">
+          <p className="text-2xl font-bold text-blue-400">{total}</p>
+          <p className="text-xs text-gray-500 mt-1">{t('my-leave-total')}</p>
         </div>
-        <div className="grid grid-cols-4 gap-3">
-          {['my-leave-total', 'my-leave-used', 'my-leave-remaining', 'my-leave-reset'].map((key) => (
-            <div key={key} className="text-center p-3 rounded bg-gray-800/30">
-              <p className="text-xl font-bold text-gray-400">-</p>
-              <p className="text-xs text-gray-500 mt-1">{t(key)}</p>
-            </div>
-          ))}
+        <div className="rounded-lg border border-yellow-800 bg-yellow-900/10 p-4 text-center">
+          <p className="text-2xl font-bold text-yellow-400">{used}</p>
+          <p className="text-xs text-gray-500 mt-1">{t('my-leave-used')}</p>
         </div>
-        <p className="text-xs text-gray-600 mt-2">{t('my-leave-coming-soon')}</p>
+        <div className="rounded-lg border border-green-800 bg-green-900/10 p-4 text-center">
+          <p className="text-2xl font-bold text-green-400">{remaining}</p>
+          <p className="text-xs text-gray-500 mt-1">{t('my-leave-remaining')}</p>
+        </div>
+      </div>
+
+      {/* 신청 버튼 */}
+      <div className="flex justify-end">
+        <Button size="sm" color="primary" onClick={() => setShowForm(!showForm)}>
+          {showForm ? t('cancel') : <><PlusIcon className="w-4 h-4 mr-1" />{t('leave-apply')}</>}
+        </Button>
+      </div>
+
+      {error && <div className="alert alert-error text-sm"><span>{error}</span></div>}
+
+      {/* 신청 폼 */}
+      {showForm && (
+        <div className="border border-gray-700 rounded-lg p-5 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div><label className="label"><span className="label-text text-xs">{t('leave-type')}</span></label>
+              <select className="select select-bordered select-sm w-full" value={form.type} onChange={(e) => {
+                const t = e.target.value;
+                setForm({ ...form, type: t, days: t.includes('반차') ? '0.5' : '1' });
+              }}>{leaveTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+            <div><label className="label"><span className="label-text text-xs">{t('start-date')} *</span></label>
+              <input type="date" className="input input-bordered input-sm w-full" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
+            <div><label className="label"><span className="label-text text-xs">{t('end-date')} *</span></label>
+              <input type="date" className="input input-bordered input-sm w-full" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>
+            <div><label className="label"><span className="label-text text-xs">{t('leave-days')}</span></label>
+              <input type="number" step="0.5" className="input input-bordered input-sm w-full" value={form.days} onChange={(e) => setForm({ ...form, days: e.target.value })} /></div>
+          </div>
+          <div><label className="label"><span className="label-text text-xs">{t('leave-reason')}</span></label>
+            <textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} /></div>
+          <div className="flex justify-end"><Button size="sm" color="primary" loading={sub} onClick={handleSubmit}>{t('leave-submit')}</Button></div>
+        </div>
+      )}
+
+      {/* 신청 목록 */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-400 mb-3">{t('leave-my-list')}</h3>
+        {requests.length === 0 ? (
+          <p className="text-sm text-gray-600 text-center py-4">{t('leave-no-requests')}</p>
+        ) : (
+          <div className="space-y-2">
+            {requests.map((r: any) => (
+              <div key={r.id} className="rounded border border-gray-800 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{r.type}</span>
+                    <span className="text-sm">{Number(r.days)}일</span>
+                    <span className={`badge badge-xs ${statusColors[r.status] || 'badge-ghost'}`}>{r.status}</span>
+                  </div>
+                  <span className="text-xs text-gray-500">{stepLabels[r.currentStep] || r.currentStep}</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {new Date(r.startDate).toLocaleDateString('ko-KR')} ~ {new Date(r.endDate).toLocaleDateString('ko-KR')}
+                  {r.reason && ` · ${r.reason}`}
+                </p>
+                {r.managerAction === '반려' && r.managerNote && <p className="text-xs text-red-400 mt-1">{t('leave-reject-reason')}: {r.managerNote}</p>}
+                {r.adminAction === '반려' && r.adminNote && <p className="text-xs text-red-400 mt-1">{t('leave-reject-reason')}: {r.adminNote}</p>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

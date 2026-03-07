@@ -385,5 +385,21 @@
   "v2-schedule-title": "Title",
   "v2-schedule-type": "Type",
   "v2-schedule-delete-confirm": "Delete this schedule?",
-  "v2-overdue": "Overdue"
+  "v2-overdue": "Overdue",
+  "leave-apply": "Apply Leave",
+  "leave-type": "Leave Type",
+  "leave-days": "Days",
+  "leave-reason": "Reason",
+  "leave-submit": "Submit",
+  "leave-fill-dates": "Please enter start and end dates.",
+  "leave-my-list": "My Leave Requests",
+  "leave-no-requests": "No requests.",
+  "leave-step-manager": "Pending Manager",
+  "leave-step-admin": "Pending Final",
+  "leave-step-done": "Completed",
+  "leave-reject-reason": "Reject Reason",
+  "leave-pending": "Pending",
+  "leave-all": "All",
+  "leave-manager-action": "Manager",
+  "leave-note-placeholder": "Note (optional)"
 }

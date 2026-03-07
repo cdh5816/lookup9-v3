@@ -476,5 +476,21 @@
   "v2-schedule-title": "일정 제목",
   "v2-schedule-type": "일정 유형",
   "v2-schedule-delete-confirm": "이 일정을 삭제하시겠습니까?",
-  "v2-overdue": "지연"
+  "v2-overdue": "지연",
+  "leave-apply": "연차 신청",
+  "leave-type": "연차 유형",
+  "leave-days": "사용 일수",
+  "leave-reason": "사유",
+  "leave-submit": "신청",
+  "leave-fill-dates": "시작일과 종료일을 입력해주세요.",
+  "leave-my-list": "내 연차 신청 내역",
+  "leave-no-requests": "신청 내역이 없습니다.",
+  "leave-step-manager": "부서장 승인 대기",
+  "leave-step-admin": "최종 승인 대기",
+  "leave-step-done": "처리 완료",
+  "leave-reject-reason": "반려 사유",
+  "leave-pending": "승인 대기",
+  "leave-all": "전체 내역",
+  "leave-manager-action": "부서장",
+  "leave-note-placeholder": "메모 (선택)"
 }

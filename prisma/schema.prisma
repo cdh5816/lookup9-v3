@@ -99,6 +99,10 @@ model User {
   changeLogs       ChangeLog[]    @relation("ChangeRequester")
   changeApprovals  ChangeLog[]    @relation("ChangeApprover")
   schedules        Schedule[]     @relation("ScheduleOwner")
+  leaveBalances    LeaveBalance[] @relation("LeaveBalanceUser")
+  leaveRequests    LeaveRequest[] @relation("LeaveRequestUser")
+  leaveManaged     LeaveRequest[] @relation("LeaveManager")
+  leaveAdmined     LeaveRequest[] @relation("LeaveAdmin")
 }
 
 model Team {
@@ -621,4 +625,57 @@ model Schedule {
 
   @@index([siteId])
   @@index([startDate])
+}
+
+// ============================================
+// 연차 관리
+// ============================================
+
+model LeaveBalance {
+  id          String   @id @default(uuid())
+  userId      String
+  teamId      String?
+  year        Int
+  totalDays   Decimal  @default(15) @db.Decimal(4, 1)
+  usedDays    Decimal  @default(0)  @db.Decimal(4, 1)
+  resetDate   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  user User @relation("LeaveBalanceUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, year])
+  @@index([userId])
+  @@index([year])
+}
+
+model LeaveRequest {
+  id            String   @id @default(uuid())
+  userId        String
+  teamId        String?
+  type          String   @default("연차")
+  startDate     DateTime @db.Date
+  endDate       DateTime @db.Date
+  days          Decimal  @db.Decimal(4, 1)
+  reason        String?  @db.Text
+  status        String   @default("신청")
+  currentStep   String   @default("부서장승인대기")
+  managerId     String?
+  managerAction String?
+  managerAt     DateTime?
+  managerNote   String?
+  adminId       String?
+  adminAction   String?
+  adminAt       DateTime?
+  adminNote     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+
+  user    User  @relation("LeaveRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  manager User? @relation("LeaveManager", fields: [managerId], references: [id])
+  admin   User? @relation("LeaveAdmin", fields: [adminId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([currentStep])
 }

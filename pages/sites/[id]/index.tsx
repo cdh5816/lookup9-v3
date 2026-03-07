@@ -19,10 +19,10 @@ const StatusDot = ({ status }: { status: string }) => (
   <span className={`inline-block w-2.5 h-2.5 rounded-full mr-2 ${STATUS_DOT[status] || 'bg-gray-400'}`} />
 );
 
-const allTabs = ['overview', 'sales', 'contract', 'production', 'painting', 'shipping', 'documents', 'requests', 'history', 'comments'];
+const allTabs = ['overview', 'sales', 'contract', 'production', 'painting', 'shipping', 'documents', 'requests', 'issues', 'changes', 'schedule', 'history', 'comments'];
 const hiddenTabsByRole: Record<string, string[]> = {
   PARTNER: ['sales', 'contract'],
-  GUEST: ['sales', 'contract', 'production', 'painting', 'shipping', 'requests', 'history'],
+  GUEST: ['sales', 'contract', 'production', 'painting', 'shipping', 'requests', 'issues', 'changes', 'schedule', 'history'],
 };
 
 const SiteDetail = () => {
@@ -124,6 +124,9 @@ const SiteDetail = () => {
         {activeTab === 'shipping' && <ShipmentPanel siteId={id as string} shipments={site.shipments || []} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'documents' && <DocumentPanel siteId={id as string} canManage={canManage} />}
         {activeTab === 'requests' && <RequestPanel siteId={id as string} requests={site.requests || []} canManage={canManage} onMutate={mutate} />}
+        {activeTab === 'issues' && <IssuePanel siteId={id as string} issues={site.issues || []} canManage={canManage} onMutate={mutate} />}
+        {activeTab === 'changes' && <ChangePanel siteId={id as string} changes={site.changeLogs || []} canManage={canManage} onMutate={mutate} />}
+        {activeTab === 'schedule' && <SchedulePanel siteId={id as string} schedules={site.schedules || []} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'history' && <HistoryPanel history={site.statusHistory || []} />}
         {activeTab === 'comments' && (
           <div className="space-y-4">
@@ -405,6 +408,140 @@ const DocumentPanel = ({ siteId, canManage }: { siteId: string; canManage: boole
       <div className="flex items-center justify-between mb-4"><h3 className="font-semibold">{t('tab-documents')} ({docs.length})</h3>{canManage && <label className="btn btn-primary btn-sm cursor-pointer">{uploading ? <span className="loading loading-spinner loading-xs"></span> : <PlusIcon className="w-4 h-4 mr-1" />}{t('doc-upload')}<input type="file" className="hidden" onChange={handleUpload} disabled={uploading} /></label>}</div>
       {loading ? <div className="text-center py-4"><span className="loading loading-spinner loading-sm"></span></div> : docs.length === 0 ? <p className="text-sm text-gray-500">{t('site-no-data')}</p> : (
         <div className="overflow-x-auto"><table className="table w-full"><thead><tr><th>{t('doc-filename')}</th><th>{t('doc-size')}</th><th>{t('doc-uploader')}</th><th>{t('created-at')}</th><th>{t('actions')}</th></tr></thead><tbody>{docs.map((d: any) => <tr key={d.id}><td><a href={`/api/documents/${d.id}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline text-sm">{d.fileName}</a></td><td className="text-xs text-gray-500">{fmtSize(d.fileSize)}</td><td className="text-xs text-gray-500">{d.uploadedBy?.position ? `${d.uploadedBy.position} ` : ''}{d.uploadedBy?.name}</td><td className="text-xs text-gray-500">{new Date(d.createdAt).toLocaleDateString('ko-KR')}</td><td>{canManage && <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDel(d.id)}><TrashIcon className="w-3 h-3" /></button>}</td></tr>)}</tbody></table></div>
+      )}
+    </div>
+  );
+};
+
+// ========= 이슈/클레임 =========
+const issueTypes = ['누수', '손상', '색상 오류', '치수 불일치', '반입 문제', '재작업', '민원', '기타'];
+const issueStatuses = ['발생', '조사중', '조치중', '완료', '보류'];
+const IssuePanel = ({ siteId, issues, canManage, onMutate }: any) => {
+  const { t } = useTranslation('common');
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ title: '', type: '기타', occurredAt: '', location: '', description: '', responsibility: '' });
+  const [sub, setSub] = useState(false);
+  const handleSubmit = async () => { if (!form.title) return; setSub(true); await fetch(`/api/sites/${siteId}/issues`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }); setForm({ title: '', type: '기타', occurredAt: '', location: '', description: '', responsibility: '' }); setShowForm(false); setSub(false); onMutate(); };
+  const handleStatus = async (issueId: string, status: string) => { await fetch(`/api/sites/${siteId}/issues`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ issueId, status }) }); onMutate(); };
+  const handleDel = async (issueId: string) => { if (!confirm(t('v2-issue-delete-confirm'))) return; await fetch(`/api/sites/${siteId}/issues`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ issueId }) }); onMutate(); };
+  return (
+    <div className="rounded-lg border border-gray-800 p-6">
+      <div className="flex items-center justify-between mb-4"><h3 className="font-semibold">{t('tab-issues')}</h3>{canManage && <Button size="xs" color="primary" onClick={() => setShowForm(!showForm)}>{showForm ? t('cancel') : <><PlusIcon className="w-4 h-4 mr-1" />{t('v2-issue-add')}</>}</Button>}</div>
+      {showForm && (
+        <div className="border border-gray-700 rounded-lg p-4 mb-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div><label className="label"><span className="label-text text-xs">{t('v2-issue-title')} *</span></label><input type="text" className="input input-bordered input-sm w-full" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
+            <div><label className="label"><span className="label-text text-xs">{t('v2-issue-type')}</span></label><select className="select select-bordered select-sm w-full" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{issueTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+            <div><label className="label"><span className="label-text text-xs">{t('v2-issue-date')}</span></label><input type="date" className="input input-bordered input-sm w-full" value={form.occurredAt} onChange={(e) => setForm({ ...form, occurredAt: e.target.value })} /></div>
+            <div><label className="label"><span className="label-text text-xs">{t('v2-issue-location')}</span></label><input type="text" className="input input-bordered input-sm w-full" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></div>
+            <div><label className="label"><span className="label-text text-xs">{t('v2-issue-resp')}</span></label><input type="text" className="input input-bordered input-sm w-full" value={form.responsibility} onChange={(e) => setForm({ ...form, responsibility: e.target.value })} /></div>
+          </div>
+          <div><label className="label"><span className="label-text text-xs">{t('site-description')}</span></label><textarea className="textarea textarea-bordered w-full text-sm" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+          <div className="flex justify-end"><Button size="sm" color="primary" loading={sub} onClick={handleSubmit}>{t('save-changes')}</Button></div>
+        </div>
+      )}
+      {issues.length === 0 ? <p className="text-sm text-gray-500">{t('site-no-data')}</p> : (
+        <div className="space-y-2">{issues.map((i: any) => (
+          <div key={i.id} className="rounded border border-gray-800 p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2"><span className="badge badge-xs badge-error">{i.type}</span><span className="text-sm font-medium">{i.title}</span></div>
+              <div className="flex items-center gap-2">{canManage && <select className="select select-bordered select-xs" value={i.status} onChange={(e) => handleStatus(i.id, e.target.value)}>{issueStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>}{canManage && <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDel(i.id)}><TrashIcon className="w-3 h-3" /></button>}</div>
+            </div>
+            {i.description && <p className="text-sm text-gray-400 mt-1">{i.description}</p>}
+            <div className="flex gap-3 mt-1 text-xs text-gray-500">{i.location && <span>{t('v2-issue-location')}: {i.location}</span>}{i.occurredAt && <span>{new Date(i.occurredAt).toLocaleDateString('ko-KR')}</span>}<span>{i.createdBy?.position ? `${i.createdBy.position} ` : ''}{i.createdBy?.name}</span></div>
+          </div>
+        ))}</div>
+      )}
+    </div>
+  );
+};
+
+// ========= 변경관리 =========
+const changeTypes = ['설계변경', '물량증감', '색상변경', '일정변경', '출하변경', '기타'];
+const changeStatuses = ['요청', '검토중', '승인', '반려', '보류'];
+const ChangePanel = ({ siteId, changes, canManage, onMutate }: any) => {
+  const { t } = useTranslation('common');
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ type: '기타', beforeValue: '', afterValue: '', reason: '', impact: '' });
+  const [sub, setSub] = useState(false);
+  const handleSubmit = async () => { setSub(true); await fetch(`/api/sites/${siteId}/changes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }); setForm({ type: '기타', beforeValue: '', afterValue: '', reason: '', impact: '' }); setShowForm(false); setSub(false); onMutate(); };
+  const handleApprove = async (changeId: string, status: string) => { await fetch(`/api/sites/${siteId}/changes`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ changeId, status }) }); onMutate(); };
+  return (
+    <div className="rounded-lg border border-gray-800 p-6">
+      <div className="flex items-center justify-between mb-4"><h3 className="font-semibold">{t('tab-changes')}</h3><Button size="xs" color="primary" onClick={() => setShowForm(!showForm)}>{showForm ? t('cancel') : <><PlusIcon className="w-4 h-4 mr-1" />{t('v2-change-add')}</>}</Button></div>
+      {showForm && (
+        <div className="border border-gray-700 rounded-lg p-4 mb-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label className="label"><span className="label-text text-xs">{t('v2-change-type')} *</span></label><select className="select select-bordered select-sm w-full" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{changeTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label className="label"><span className="label-text text-xs">{t('v2-change-before')}</span></label><textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.beforeValue} onChange={(e) => setForm({ ...form, beforeValue: e.target.value })} /></div>
+            <div><label className="label"><span className="label-text text-xs">{t('v2-change-after')}</span></label><textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.afterValue} onChange={(e) => setForm({ ...form, afterValue: e.target.value })} /></div>
+          </div>
+          <div><label className="label"><span className="label-text text-xs">{t('v2-change-reason')}</span></label><textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} /></div>
+          <div><label className="label"><span className="label-text text-xs">{t('v2-change-impact')}</span></label><input type="text" className="input input-bordered input-sm w-full" value={form.impact} onChange={(e) => setForm({ ...form, impact: e.target.value })} /></div>
+          <div className="flex justify-end"><Button size="sm" color="primary" loading={sub} onClick={handleSubmit}>{t('save-changes')}</Button></div>
+        </div>
+      )}
+      {changes.length === 0 ? <p className="text-sm text-gray-500">{t('site-no-data')}</p> : (
+        <div className="space-y-2">{changes.map((c: any) => (
+          <div key={c.id} className="rounded border border-gray-800 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2"><span className="badge badge-sm badge-warning">{c.type}</span><span className={`badge badge-sm ${c.status === '승인' ? 'badge-success' : c.status === '반려' ? 'badge-error' : 'badge-ghost'}`}>{c.status}</span></div>
+              {canManage && c.status === '요청' && <div className="flex gap-1"><button className="btn btn-xs btn-success" onClick={() => handleApprove(c.id, '승인')}>{t('v2-approve')}</button><button className="btn btn-xs btn-error" onClick={() => handleApprove(c.id, '반려')}>{t('v2-reject')}</button></div>}
+            </div>
+            {c.beforeValue && <p className="text-sm"><span className="text-gray-500">{t('v2-change-before')}:</span> {c.beforeValue}</p>}
+            {c.afterValue && <p className="text-sm"><span className="text-gray-500">{t('v2-change-after')}:</span> {c.afterValue}</p>}
+            {c.reason && <p className="text-sm text-gray-400 mt-1">{c.reason}</p>}
+            <div className="flex gap-3 mt-2 text-xs text-gray-500"><span>{c.requester?.position ? `${c.requester.position} ` : ''}{c.requester?.name}</span>{c.approver && <span>{t('v2-approver')}: {c.approver.position ? `${c.approver.position} ` : ''}{c.approver.name}</span>}<span>{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span></div>
+          </div>
+        ))}</div>
+      )}
+    </div>
+  );
+};
+
+// ========= 일정 =========
+const scheduleTypes = ['미팅', '생산 시작', '도장 완료', '출하 예정', '현장 방문', '보고 마감', '기타'];
+const SchedulePanel = ({ siteId, schedules, canManage, onMutate }: any) => {
+  const { t } = useTranslation('common');
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ title: '', type: '기타', startDate: '', endDate: '', notes: '' });
+  const [sub, setSub] = useState(false);
+  const handleSubmit = async () => { if (!form.title || !form.startDate) return; setSub(true); await fetch(`/api/sites/${siteId}/schedules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }); setForm({ title: '', type: '기타', startDate: '', endDate: '', notes: '' }); setShowForm(false); setSub(false); onMutate(); };
+  const handleToggle = async (scheduleId: string, isDone: boolean) => { await fetch(`/api/sites/${siteId}/schedules`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scheduleId, isDone }) }); onMutate(); };
+  const handleDel = async (scheduleId: string) => { if (!confirm(t('v2-schedule-delete-confirm'))) return; await fetch(`/api/sites/${siteId}/schedules`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scheduleId }) }); onMutate(); };
+  const today = new Date().toISOString().split('T')[0];
+  return (
+    <div className="rounded-lg border border-gray-800 p-6">
+      <div className="flex items-center justify-between mb-4"><h3 className="font-semibold">{t('tab-schedule')}</h3>{canManage && <Button size="xs" color="primary" onClick={() => setShowForm(!showForm)}>{showForm ? t('cancel') : <><PlusIcon className="w-4 h-4 mr-1" />{t('v2-schedule-add')}</>}</Button>}</div>
+      {showForm && (
+        <div className="border border-gray-700 rounded-lg p-4 mb-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div><label className="label"><span className="label-text text-xs">{t('v2-schedule-title')} *</span></label><input type="text" className="input input-bordered input-sm w-full" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
+            <div><label className="label"><span className="label-text text-xs">{t('v2-schedule-type')}</span></label><select className="select select-bordered select-sm w-full" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{scheduleTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+            <div><label className="label"><span className="label-text text-xs">{t('start-date')} *</span></label><input type="date" className="input input-bordered input-sm w-full" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
+            <div><label className="label"><span className="label-text text-xs">{t('end-date')}</span></label><input type="date" className="input input-bordered input-sm w-full" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>
+          </div>
+          <div><label className="label"><span className="label-text text-xs">{t('client-notes')}</span></label><textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+          <div className="flex justify-end"><Button size="sm" color="primary" loading={sub} onClick={handleSubmit}>{t('save-changes')}</Button></div>
+        </div>
+      )}
+      {schedules.length === 0 ? <p className="text-sm text-gray-500">{t('site-no-data')}</p> : (
+        <div className="space-y-2">{schedules.map((s: any) => {
+          const start = s.startDate?.split('T')[0] || '';
+          const isOverdue = !s.isDone && start < today;
+          return (
+            <div key={s.id} className={`rounded border p-3 flex items-center gap-3 ${s.isDone ? 'border-gray-800 opacity-60' : isOverdue ? 'border-red-800 bg-red-900/10' : 'border-gray-800'}`}>
+              {canManage && <input type="checkbox" className="checkbox checkbox-sm" checked={s.isDone} onChange={() => handleToggle(s.id, !s.isDone)} />}
+              <div className="flex-1">
+                <div className="flex items-center gap-2"><span className="text-xs text-gray-500">{s.type}</span><span className={`text-sm font-medium ${s.isDone ? 'line-through' : ''}`}>{s.title}</span>{isOverdue && <span className="badge badge-xs badge-error">{t('v2-overdue')}</span>}</div>
+                <div className="text-xs text-gray-500 mt-1">{new Date(s.startDate).toLocaleDateString('ko-KR')}{s.endDate && ` ~ ${new Date(s.endDate).toLocaleDateString('ko-KR')}`}{s.assignee && ` · ${s.assignee.position ? `${s.assignee.position} ` : ''}${s.assignee.name}`}</div>
+              </div>
+              {canManage && <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDel(s.id)}><TrashIcon className="w-3 h-3" /></button>}
+            </div>
+          );
+        })}</div>
       )}
     </div>
   );

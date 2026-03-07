@@ -94,6 +94,11 @@ model User {
   requestsHandled  Request[]      @relation("RequestHandler")
   notifications    Notification[] @relation("NotifyUser")
   workLogs         WorkLog[]      @relation("WorkLogAuthor")
+  issues           Issue[]        @relation("IssueCreator")
+  issuesHandled    Issue[]        @relation("IssueHandler")
+  changeLogs       ChangeLog[]    @relation("ChangeRequester")
+  changeApprovals  ChangeLog[]    @relation("ChangeApprover")
+  schedules        Schedule[]     @relation("ScheduleOwner")
 }
 
 model Team {
@@ -278,6 +283,9 @@ model Site {
   shipments     ShippingRecord[]
   requests      Request[]
   notifications Notification[]
+  issues        Issue[]
+  changeLogs    ChangeLog[]
+  schedules     Schedule[]
 
   @@index([teamId])
   @@index([clientId])
@@ -546,4 +554,71 @@ model WorkLog {
   @@unique([userId, date])
   @@index([userId])
   @@index([date])
+}
+
+model Issue {
+  id           String   @id @default(uuid())
+  siteId       String
+  title        String
+  type         String   @default("기타")
+  occurredAt   DateTime?
+  location     String?
+  description  String?  @db.Text
+  responsibility String?
+  status       String   @default("발생")
+  handledById  String?
+  resolution   String?  @db.Text
+  prevention   String?  @db.Text
+  createdById  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+
+  site      Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("IssueCreator", fields: [createdById], references: [id])
+  handledBy User? @relation("IssueHandler", fields: [handledById], references: [id])
+
+  @@index([siteId])
+  @@index([status])
+}
+
+model ChangeLog {
+  id           String   @id @default(uuid())
+  siteId       String
+  type         String   @default("기타")
+  beforeValue  String?  @db.Text
+  afterValue   String?  @db.Text
+  reason       String?  @db.Text
+  impact       String?  @db.Text
+  requesterId  String
+  approverId   String?
+  approvedAt   DateTime?
+  status       String   @default("요청")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+
+  site      Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  requester User  @relation("ChangeRequester", fields: [requesterId], references: [id])
+  approver  User? @relation("ChangeApprover", fields: [approverId], references: [id])
+
+  @@index([siteId])
+}
+
+model Schedule {
+  id          String   @id @default(uuid())
+  siteId      String
+  title       String
+  type        String   @default("기타")
+  startDate   DateTime
+  endDate     DateTime?
+  assigneeId  String?
+  isDone      Boolean  @default(false)
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  site     Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  assignee User? @relation("ScheduleOwner", fields: [assigneeId], references: [id])
+
+  @@index([siteId])
+  @@index([startDate])
 }

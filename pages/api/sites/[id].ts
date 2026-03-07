@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
+import { notifySiteMembers } from '@/lib/notification-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -36,6 +37,9 @@ const handleGET = async (id: string, res: NextApiResponse) => {
       shipments: { include: { createdBy: { select: { name: true, position: true } } }, orderBy: [{ sequence: 'desc' }, { createdAt: 'desc' }] },
       requests: { include: { createdBy: { select: { name: true, position: true } }, handledBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
       statusHistory: { include: { changedBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' }, take: 20 },
+      issues: { include: { createdBy: { select: { name: true, position: true } }, handledBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
+      changeLogs: { include: { requester: { select: { name: true, position: true } }, approver: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
+      schedules: { include: { assignee: { select: { name: true, position: true } } }, orderBy: { startDate: 'asc' } },
       comments: {
         where: { parentId: null },
         include: {
@@ -44,7 +48,7 @@ const handleGET = async (id: string, res: NextApiResponse) => {
         },
         orderBy: { createdAt: 'desc' },
       },
-      _count: { select: { documents: true, requests: true } },
+      _count: { select: { documents: true, requests: true, issues: true, schedules: true } },
     },
   });
 
@@ -68,6 +72,8 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
           changedById: session.user.id,
         },
       });
+      // 알림 발송
+      await notifySiteMembers(id, session.user.id, 'SITE_STATUS_CHANGED', `현장 상태 변경: ${currentSite.status} → ${status}`);
     }
   }
 

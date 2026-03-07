@@ -263,14 +263,14 @@ model Site {
   name        String
   address     String?
   clientId    String?
-  teamId      String
+  teamId      String?
   status      String   @default("대기")
   description String?  @db.Text
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now())
 
-  team        Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team        Team?            @relation(fields: [teamId], references: [id], onDelete: Cascade)
   client      Client?          @relation(fields: [clientId], references: [id])
   createdBy   User             @relation("SiteCreator", fields: [createdById], references: [id])
   assignments SiteAssignment[]
@@ -315,12 +315,12 @@ model Client {
   email     String?
   address   String?
   type      String   @default("발주처")
-  teamId    String
+  teamId    String?
   notes     String?  @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
 
-  team  Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team  Team?  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   sites Site[]
 
   @@index([teamId])
@@ -416,12 +416,12 @@ model Notice {
   title     String
   content   String   @db.Text
   isPinned  Boolean  @default(false)
-  teamId    String
+  teamId    String?
   authorId  String
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
 
-  team   Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team   Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)
   author User @relation("NoticeAuthor", fields: [authorId], references: [id])
 
   @@index([teamId])

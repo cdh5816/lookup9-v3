@@ -87,6 +87,12 @@ model User {
   sentMessages   Message[]        @relation("MessageSender")
   receivedMessages Message[]      @relation("MessageReceiver")
   notices          Notice[]       @relation("NoticeAuthor")
+  statusChanges    SiteStatusHistory[] @relation("StatusChanger")
+  paintSpecs       PaintSpec[]    @relation("PaintConfirmer")
+  shippingRecords  ShippingRecord[] @relation("ShippingCreator")
+  requests         Request[]      @relation("RequestCreator")
+  requestsHandled  Request[]      @relation("RequestHandler")
+  notifications    Notification[] @relation("NotifyUser")
 }
 
 model Team {
@@ -266,6 +272,11 @@ model Site {
   contracts   Contract[]
   documents   Document[]
   comments    Comment[]
+  statusHistory SiteStatusHistory[]
+  paintSpecs    PaintSpec[]
+  shipments     ShippingRecord[]
+  requests      Request[]
+  notifications Notification[]
 
   @@index([teamId])
   @@index([clientId])
@@ -406,4 +417,117 @@ model Notice {
 
   @@index([teamId])
   @@index([createdAt])
+}
+
+// ============================================
+// LOOKUP9 v2 모델
+// ============================================
+
+model SiteStatusHistory {
+  id           String   @id @default(uuid())
+  siteId       String
+  fromStatus   String
+  toStatus     String
+  reason       String?  @db.Text
+  changedById  String
+  createdAt    DateTime @default(now())
+
+  site      Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  changedBy User @relation("StatusChanger", fields: [changedById], references: [id])
+
+  @@index([siteId])
+}
+
+model PaintSpec {
+  id            String   @id @default(uuid())
+  siteId        String
+  colorCode     String
+  colorName     String
+  manufacturer  String?
+  finishType    String?
+  area          String?
+  quantity      Decimal? @db.Decimal(15, 2)
+  isPrimary     Boolean  @default(false)
+  status        String   @default("임시")
+  confirmedById String?
+  confirmedAt   DateTime?
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+
+  site        Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  confirmedBy User? @relation("PaintConfirmer", fields: [confirmedById], references: [id])
+
+  @@index([siteId])
+}
+
+model ShippingRecord {
+  id            String   @id @default(uuid())
+  siteId        String
+  shipmentNo    String?
+  sequence      Int      @default(1)
+  shippedAt     DateTime?
+  shipmentType  String?
+  status        String   @default("출하예정")
+  quantity      Decimal? @db.Decimal(15, 2)
+  vehicleInfo   String?
+  driverInfo    String?
+  destination   String?
+  receivedBy    String?
+  notes         String?  @db.Text
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+
+  site      Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User @relation("ShippingCreator", fields: [createdById], references: [id])
+
+  @@index([siteId])
+  @@index([status])
+}
+
+model Request {
+  id              String   @id @default(uuid())
+  siteId          String
+  title           String
+  type            String   @default("내부 요청")
+  priority        String   @default("보통")
+  targetDept      String?
+  deadline        DateTime?
+  status          String   @default("등록")
+  description     String?  @db.Text
+  result          String?  @db.Text
+  createdById     String
+  handledById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now())
+
+  site      Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("RequestCreator", fields: [createdById], references: [id])
+  handledBy User? @relation("RequestHandler", fields: [handledById], references: [id])
+
+  @@index([siteId])
+  @@index([status])
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String
+  type       String
+  title      String
+  message    String?  @db.Text
+  link       String?
+  siteId     String?
+  entityType String?
+  entityId   String?
+  isRead     Boolean  @default(false)
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  user User  @relation("NotifyUser", fields: [userId], references: [id], onDelete: Cascade)
+  site Site? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([siteId])
 }

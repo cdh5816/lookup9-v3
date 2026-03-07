@@ -101,10 +101,11 @@ const SitesList = () => {
               <Link key={site.id} href={`/sites/${site.id}`}>
                 <div className="rounded-lg border border-gray-800 p-5 hover:border-gray-600 transition-colors cursor-pointer">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-bold text-lg">{site.name}</h3>
-                    <span className={`badge badge-sm ${statusColors[site.status] || 'badge-ghost'}`}>
-                      {site.status}
-                    </span>
+                    <div className="flex items-center">
+                      <span className={`inline-block w-2.5 h-2.5 rounded-full mr-2 ${site.status === '영업중' || site.status === '대기' ? 'bg-red-500' : site.status === '계약완료' ? 'bg-yellow-400' : site.status === '진행중' ? 'bg-green-500' : site.status === '완료' ? 'bg-gray-400' : 'bg-gray-600'}`} />
+                      <h3 className="font-bold text-lg">{site.name}</h3>
+                    </div>
+                    <span className="text-xs text-gray-400">{site.status}</span>
                   </div>
                   {site.address && <p className="text-sm text-gray-400 mb-1">{site.address}</p>}
                   {site.client && <p className="text-sm text-gray-500">{t('site-client')}: {site.client.name}</p>}

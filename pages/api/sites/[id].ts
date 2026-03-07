@@ -12,7 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     switch (req.method) {
       case 'GET': return await handleGET(id, res);
-      case 'PUT': return await handlePUT(id, req, res);
+      case 'PUT': return await handlePUT(id, req, res, session);
       case 'DELETE': return await handleDELETE(id, res);
       default:
         res.setHeader('Allow', 'GET, PUT, DELETE');
@@ -32,6 +32,10 @@ const handleGET = async (id: string, res: NextApiResponse) => {
       assignments: { include: { user: { select: { id: true, name: true, position: true, department: true } } } },
       sales: { include: { createdBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
       contracts: { include: { createdBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
+      paintSpecs: { include: { confirmedBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
+      shipments: { include: { createdBy: { select: { name: true, position: true } } }, orderBy: [{ sequence: 'desc' }, { createdAt: 'desc' }] },
+      requests: { include: { createdBy: { select: { name: true, position: true } }, handledBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
+      statusHistory: { include: { changedBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' }, take: 20 },
       comments: {
         where: { parentId: null },
         include: {
@@ -40,7 +44,7 @@ const handleGET = async (id: string, res: NextApiResponse) => {
         },
         orderBy: { createdAt: 'desc' },
       },
-      _count: { select: { documents: true } },
+      _count: { select: { documents: true, requests: true } },
     },
   });
 
@@ -48,8 +52,25 @@ const handleGET = async (id: string, res: NextApiResponse) => {
   return res.status(200).json({ data: site });
 };
 
-const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse) => {
-  const { name, address, clientId, status, description } = req.body;
+const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, session: any) => {
+  const { name, address, clientId, status, description, statusReason } = req.body;
+
+  // 상태 변경 시 이력 자동 저장
+  if (status) {
+    const currentSite = await prisma.site.findUnique({ where: { id }, select: { status: true } });
+    if (currentSite && currentSite.status !== status) {
+      await prisma.siteStatusHistory.create({
+        data: {
+          siteId: id,
+          fromStatus: currentSite.status,
+          toStatus: status,
+          reason: statusReason || null,
+          changedById: session.user.id,
+        },
+      });
+    }
+  }
+
   const site = await prisma.site.update({
     where: { id },
     data: {

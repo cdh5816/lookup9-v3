@@ -2,174 +2,256 @@ import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
 import { useSession } from 'next-auth/react';
+import { useState, useCallback, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import {
-  UserCircleIcon,
-  CalendarDaysIcon,
-  EnvelopeIcon,
-  BuildingOffice2Icon,
-  DocumentTextIcon,
-} from '@heroicons/react/24/outline';
+import { UserCircleIcon, CalendarDaysIcon, EnvelopeIcon, BuildingOffice2Icon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
+import { Button } from 'react-daisyui';
 
-const statusColors: Record<string, string> = {
-  '대기': 'badge-ghost',
-  '진행중': 'badge-info',
-  '부분완료': 'badge-warning',
-  '완료': 'badge-success',
-  '보류': 'badge-error',
+const STATUS_DOT: Record<string, string> = {
+  '영업중': 'bg-red-500', '대기': 'bg-red-400', '계약완료': 'bg-yellow-400',
+  '진행중': 'bg-green-500', '부분완료': 'bg-green-300', '완료': 'bg-gray-400', '보류': 'bg-gray-600',
 };
+
+type MyTab = 'profile' | 'worklog' | 'sites' | 'activity';
 
 const MyPage = () => {
   const { t } = useTranslation('common');
   const { data: session } = useSession();
   const user = session?.user;
-
   const { data: userData } = useSWR(user ? '/api/my/profile' : null, fetcher);
   const profile = userData?.data || {};
-  const mySites = profile.mySites || [];
-  const unreadMessages = profile.unreadMessages || 0;
-  const myComments = profile.myComments || [];
+  const [activeTab, setActiveTab] = useState<MyTab>('profile');
+
+  const tabs: { key: MyTab; label: string }[] = [
+    { key: 'profile', label: t('my-tab-profile') },
+    { key: 'worklog', label: t('my-tab-worklog') },
+    { key: 'sites', label: t('my-sites') },
+    { key: 'activity', label: t('my-tab-activity') },
+  ];
 
   return (
     <>
       <Head><title>{t('my-page-title')} | LOOKUP9</title></Head>
       <div className="space-y-6">
-        {/* 기본 정보 */}
-        <div className="rounded-lg border border-gray-800 p-6">
-          <div className="flex items-center gap-4 mb-4">
-            <UserCircleIcon className="w-12 h-12 text-gray-400" />
-            <div>
-              <h2 className="text-xl font-bold">
-                {profile.position && `${profile.position} `}{user?.name}
-              </h2>
-              <p className="text-sm text-gray-400">{user?.email}</p>
-              <p className="text-xs text-gray-500 mt-1">
-                {profile.teamMembers?.[0]?.role && (
-                  <span className="badge badge-sm mr-2">{profile.teamMembers[0].role}</span>
-                )}
-                {profile.teamMembers?.[0]?.team?.name}
-              </p>
+        {/* 헤더 카드 */}
+        <div className="rounded-lg border border-gray-800 p-5 flex items-center gap-4">
+          <UserCircleIcon className="w-14 h-14 text-gray-500 shrink-0" />
+          <div className="flex-1">
+            <h2 className="text-lg font-bold">{profile.position && `${profile.position} `}{user?.name}</h2>
+            <p className="text-sm text-gray-400">{user?.email}</p>
+            <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+              {profile.teamMembers?.[0]?.role && <span className="badge badge-sm badge-ghost">{profile.teamMembers[0].role}</span>}
+              {profile.department && <span>{profile.department}</span>}
+              {profile.company && <span>{profile.company}</span>}
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-            <div>
-              <p className="text-xs text-gray-500">{t('admin-company')}</p>
-              <p className="text-sm font-medium">{profile.company || '-'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">{t('admin-department')}</p>
-              <p className="text-sm font-medium">{profile.department || '-'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">{t('admin-position')}</p>
-              <p className="text-sm font-medium">{profile.position || '-'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">{t('admin-phone')}</p>
-              <p className="text-sm font-medium">{profile.phone || '-'}</p>
-            </div>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <Link href="/messages" className="flex items-center gap-1 text-sm text-gray-400 hover:text-white">
+              <EnvelopeIcon className="w-4 h-4" />
+              {(profile.unreadMessages || 0) > 0 && <span className="badge badge-xs badge-primary">{profile.unreadMessages}</span>}
+            </Link>
           </div>
         </div>
 
-        {/* 연차 현황 */}
-        <div className="rounded-lg border border-gray-800 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <CalendarDaysIcon className="w-5 h-5 text-blue-400" />
-            <h3 className="font-semibold">{t('my-leave-status')}</h3>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="rounded-lg bg-blue-400/10 p-4 text-center">
-              <p className="text-2xl font-bold text-blue-400">-</p>
-              <p className="text-xs text-gray-400 mt-1">{t('my-leave-total')}</p>
-            </div>
-            <div className="rounded-lg bg-yellow-400/10 p-4 text-center">
-              <p className="text-2xl font-bold text-yellow-400">-</p>
-              <p className="text-xs text-gray-400 mt-1">{t('my-leave-used')}</p>
-            </div>
-            <div className="rounded-lg bg-green-400/10 p-4 text-center">
-              <p className="text-2xl font-bold text-green-400">-</p>
-              <p className="text-xs text-gray-400 mt-1">{t('my-leave-remaining')}</p>
-            </div>
-            <div className="rounded-lg bg-gray-400/10 p-4 text-center">
-              <p className="text-sm font-bold text-gray-400">-</p>
-              <p className="text-xs text-gray-400 mt-1">{t('my-leave-reset')}</p>
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 mt-3">{t('my-leave-coming-soon')}</p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 안 읽은 쪽지 */}
-          <Link href="/messages">
-            <div className="rounded-lg border border-gray-800 p-6 hover:border-gray-600 transition-colors cursor-pointer">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <EnvelopeIcon className="w-5 h-5 text-purple-400" />
-                  <h3 className="font-semibold">{t('my-messages')}</h3>
-                </div>
-                {unreadMessages > 0 && (
-                  <span className="badge badge-sm badge-primary">{unreadMessages}</span>
-                )}
-              </div>
-              {unreadMessages === 0
-                ? <p className="text-sm text-gray-500">{t('my-no-messages')}</p>
-                : <p className="text-sm text-blue-400">{unreadMessages}{t('msg-unread-count')}</p>
-              }
-            </div>
-          </Link>
-
-          {/* 내 현장 */}
-          <div className="rounded-lg border border-gray-800 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <BuildingOffice2Icon className="w-5 h-5 text-green-400" />
-              <h3 className="font-semibold">{t('my-sites')} ({mySites.length})</h3>
-            </div>
-            {mySites.length === 0 ? (
-              <p className="text-sm text-gray-500">{t('my-no-sites')}</p>
-            ) : (
-              <div className="space-y-2">
-                {mySites.map((site: any) => (
-                  <Link key={site.id} href={`/sites/${site.id}`}>
-                    <div className="flex items-center justify-between py-1 hover:text-blue-400 transition-colors cursor-pointer">
-                      <span className="text-sm">{site.name}</span>
-                      <span className={`badge badge-xs ${statusColors[site.status] || 'badge-ghost'}`}>{site.status}</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 내 댓글 */}
-          <div className="rounded-lg border border-gray-800 p-6 lg:col-span-2">
-            <div className="flex items-center gap-2 mb-4">
-              <DocumentTextIcon className="w-5 h-5 text-orange-400" />
-              <h3 className="font-semibold">{t('my-posts')}</h3>
-            </div>
-            {myComments.length === 0 ? (
-              <p className="text-sm text-gray-500">{t('my-no-posts')}</p>
-            ) : (
-              <div className="space-y-2">
-                {myComments.map((c: any) => (
-                  <Link key={c.id} href={`/sites/${c.site?.id}`}>
-                    <div className="flex items-center justify-between py-1 hover:text-blue-400 transition-colors cursor-pointer">
-                      <p className="text-sm truncate flex-1">
-                        <span className="text-gray-500">[{c.site?.name}]</span>{' '}
-                        {c.content.length > 50 ? c.content.slice(0, 50) + '...' : c.content}
-                      </p>
-                      <span className="text-xs text-gray-500 shrink-0 ml-2">{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
+        {/* 탭 */}
+        <div className="border-b border-gray-800">
+          <div className="flex gap-1">
+            {tabs.map((tab) => (
+              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.key ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-200'
+                }`}>
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
+
+        {activeTab === 'profile' && <ProfileTab profile={profile} />}
+        {activeTab === 'worklog' && <WorkLogTab />}
+        {activeTab === 'sites' && <MySitesTab sites={profile.mySites || []} />}
+        {activeTab === 'activity' && <ActivityTab comments={profile.myComments || []} />}
       </div>
     </>
+  );
+};
+
+// ========= 내 정보 탭 =========
+const ProfileTab = ({ profile }: { profile: any }) => {
+  const { t } = useTranslation('common');
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: t('admin-company'), value: profile.company },
+          { label: t('admin-department'), value: profile.department },
+          { label: t('admin-position'), value: profile.position },
+          { label: t('admin-phone'), value: profile.phone },
+        ].map((item) => (
+          <div key={item.label} className="rounded-lg border border-gray-800 p-4">
+            <p className="text-xs text-gray-500 mb-1">{item.label}</p>
+            <p className="text-sm font-medium">{item.value || '-'}</p>
+          </div>
+        ))}
+      </div>
+      {/* 연차 (placeholder) */}
+      <div className="rounded-lg border border-gray-800 p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <CalendarDaysIcon className="w-5 h-5 text-blue-400" />
+          <h3 className="font-semibold text-sm">{t('my-leave-status')}</h3>
+        </div>
+        <div className="grid grid-cols-4 gap-3">
+          {['my-leave-total', 'my-leave-used', 'my-leave-remaining', 'my-leave-reset'].map((key) => (
+            <div key={key} className="text-center p-3 rounded bg-gray-800/30">
+              <p className="text-xl font-bold text-gray-400">-</p>
+              <p className="text-xs text-gray-500 mt-1">{t(key)}</p>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-gray-600 mt-2">{t('my-leave-coming-soon')}</p>
+      </div>
+    </div>
+  );
+};
+
+// ========= 업무일지 탭 =========
+const WorkLogTab = () => {
+  const { t } = useTranslation('common');
+  const today = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [content, setContent] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [logs, setLogs] = useState<any[]>([]);
+
+  // 오늘 날짜 로그 불러오기
+  const loadLog = useCallback(async (date: string) => {
+    setSelectedDate(date);
+    setSaved(false);
+    const res = await fetch(`/api/my/worklog?date=${date}`);
+    if (res.ok) {
+      const data = await res.json();
+      setContent(data.data?.content || '');
+    } else {
+      setContent('');
+    }
+  }, []);
+
+  // 월별 목록
+  const loadMonth = useCallback(async () => {
+    const month = selectedDate.substring(0, 7);
+    const res = await fetch(`/api/my/worklog?month=${month}`);
+    if (res.ok) { const data = await res.json(); setLogs(data.data || []); }
+  }, [selectedDate]);
+
+  useEffect(() => { loadLog(today); }, [loadLog, today]);
+  useEffect(() => { loadMonth(); }, [loadMonth]);
+
+  const handleSave = async () => {
+    if (!content.trim()) return;
+    setSaving(true);
+    await fetch('/api/my/worklog', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: selectedDate, content }),
+    });
+    setSaving(false); setSaved(true); loadMonth();
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* 작성 영역 */}
+      <div className="lg:col-span-2 space-y-3">
+        <div className="flex items-center gap-3">
+          <input type="date" className="input input-bordered input-sm" value={selectedDate}
+            onChange={(e) => loadLog(e.target.value)} />
+          <span className="text-sm text-gray-400">
+            {new Date(selectedDate).toLocaleDateString('ko-KR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </span>
+        </div>
+        <textarea className="textarea textarea-bordered w-full text-sm" rows={12} placeholder={t('worklog-placeholder')}
+          value={content} onChange={(e) => { setContent(e.target.value); setSaved(false); }} />
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-gray-500">
+            {saved && <span className="text-green-400">{t('worklog-saved')}</span>}
+          </p>
+          <Button size="sm" color="primary" loading={saving} onClick={handleSave}>
+            <PencilSquareIcon className="w-4 h-4 mr-1" />{t('worklog-save')}
+          </Button>
+        </div>
+      </div>
+
+      {/* 월별 목록 */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-gray-400">{t('worklog-history')}</h3>
+        {logs.length === 0 ? (
+          <p className="text-sm text-gray-600">{t('worklog-empty')}</p>
+        ) : (
+          <div className="space-y-1 max-h-96 overflow-y-auto">
+            {logs.map((log: any) => {
+              const d = new Date(log.date).toISOString().split('T')[0];
+              const isActive = d === selectedDate;
+              return (
+                <button key={log.id} onClick={() => loadLog(d)}
+                  className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${isActive ? 'bg-blue-900/30 border border-blue-800' : 'hover:bg-gray-800/50'}`}>
+                  <div className="flex justify-between">
+                    <span className={isActive ? 'text-blue-400 font-medium' : 'text-gray-300'}>
+                      {new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short' })}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 truncate mt-0.5">{log.content.substring(0, 40)}...</p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ========= 내 현장 탭 =========
+const MySitesTab = ({ sites }: { sites: any[] }) => {
+  const { t } = useTranslation('common');
+  if (sites.length === 0) return <p className="text-sm text-gray-500 py-10 text-center">{t('my-no-sites')}</p>;
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      {sites.map((site: any) => (
+        <Link key={site.id} href={`/sites/${site.id}`}>
+          <div className="rounded-lg border border-gray-800 p-4 hover:border-gray-600 transition-colors cursor-pointer">
+            <div className="flex items-center gap-2">
+              <span className={`inline-block w-2 h-2 rounded-full ${STATUS_DOT[site.status] || 'bg-gray-400'}`} />
+              <span className="font-medium text-sm">{site.name}</span>
+              <span className="text-xs text-gray-500 ml-auto">{site.status}</span>
+            </div>
+            {site.address && <p className="text-xs text-gray-500 mt-1 ml-4">{site.address}</p>}
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+};
+
+// ========= 내 활동 탭 =========
+const ActivityTab = ({ comments }: { comments: any[] }) => {
+  const { t } = useTranslation('common');
+  if (comments.length === 0) return <p className="text-sm text-gray-500 py-10 text-center">{t('my-no-posts')}</p>;
+  return (
+    <div className="space-y-2">
+      {comments.map((c: any) => (
+        <Link key={c.id} href={`/sites/${c.site?.id}`}>
+          <div className="flex items-center justify-between py-2 px-3 rounded hover:bg-gray-800/50 transition-colors cursor-pointer">
+            <p className="text-sm truncate flex-1">
+              <span className="text-gray-500">[{c.site?.name}]</span>{' '}
+              {c.content.length > 60 ? c.content.slice(0, 60) + '...' : c.content}
+            </p>
+            <span className="text-xs text-gray-500 shrink-0 ml-3">{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span>
+          </div>
+        </Link>
+      ))}
+    </div>
   );
 };
 

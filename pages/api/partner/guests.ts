@@ -1,0 +1,56 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { prisma } from '@/lib/prisma';
+import { hashPassword } from '@/lib/auth';
+import { getSession } from '@/lib/session';
+import { getTeamMemberByUserId } from '@/lib/team-helper';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const session = await getSession(req, res);
+  if (!session) return res.status(401).json({ error: { message: 'Unauthorized' } });
+
+  const tm = await getTeamMemberByUserId(session.user.id);
+  if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
+
+  // PARTNER 또는 MANAGER 이상만
+  const allowed = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'PARTNER'];
+  if (!allowed.includes(tm.role)) return res.status(403).json({ error: { message: 'Forbidden' } });
+
+  try {
+    switch (req.method) {
+      case 'GET': {
+        // PARTNER가 만든 게스트 목록 (같은 팀, GUEST 역할만)
+        const guests = await prisma.teamMember.findMany({
+          where: { teamId: tm.teamId, role: 'GUEST' },
+          include: { user: { select: { id: true, name: true, email: true, phone: true, company: true, createdAt: true } } },
+          orderBy: { createdAt: 'desc' },
+        });
+        return res.status(200).json({ data: guests.map((g) => ({ ...g.user, role: g.role })) });
+      }
+
+      case 'POST': {
+        const { name, email, password, phone, company } = req.body;
+        if (!name || !email || !password) return res.status(400).json({ error: { message: '이름, 이메일, 비밀번호는 필수입니다.' } });
+
+        const existing = await prisma.user.findUnique({ where: { email } });
+        if (existing) return res.status(400).json({ error: { message: '이미 등록된 이메일입니다.' } });
+
+        const hashedPassword = await hashPassword(password);
+        const user = await prisma.user.create({
+          data: { name, email, password: hashedPassword, phone: phone || null, company: company || null },
+        });
+
+        await prisma.teamMember.create({
+          data: { teamId: tm.teamId, userId: user.id, role: 'GUEST' },
+        });
+
+        return res.status(201).json({ data: user });
+      }
+
+      default:
+        res.setHeader('Allow', 'GET, POST');
+        return res.status(405).json({ error: { message: `Method ${req.method} Not Allowed` } });
+    }
+  } catch (error: any) {
+    return res.status(500).json({ error: { message: error.message || 'Internal server error' } });
+  }
+}

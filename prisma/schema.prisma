@@ -93,6 +93,7 @@ model User {
   requests         Request[]      @relation("RequestCreator")
   requestsHandled  Request[]      @relation("RequestHandler")
   notifications    Notification[] @relation("NotifyUser")
+  workLogs         WorkLog[]      @relation("WorkLogAuthor")
 }
 
 model Team {
@@ -530,4 +531,19 @@ model Notification {
   @@index([userId])
   @@index([isRead])
   @@index([siteId])
+}
+
+model WorkLog {
+  id        String   @id @default(uuid())
+  userId    String
+  date      DateTime @db.Date
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  user User @relation("WorkLogAuthor", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
 }

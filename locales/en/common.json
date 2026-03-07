@@ -332,5 +332,16 @@
   "v2-req-title": "Title",
   "v2-req-type": "Type",
   "v2-req-priority": "Priority",
-  "v2-req-deadline": "Deadline"
+  "v2-req-deadline": "Deadline",
+  "my-tab-profile": "Profile",
+  "my-tab-worklog": "Work Log",
+  "my-tab-activity": "Activity",
+  "worklog-placeholder": "Write your daily work log...",
+  "worklog-save": "Save",
+  "worklog-saved": "Saved.",
+  "worklog-history": "Log History",
+  "worklog-empty": "No logs yet.",
+  "nav-guest-manage": "Guest Management",
+  "guest-create": "Create Guest",
+  "guest-none": "No guests registered."
 }

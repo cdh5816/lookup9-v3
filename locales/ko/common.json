@@ -423,5 +423,16 @@
   "v2-req-title": "요청 제목",
   "v2-req-type": "요청 유형",
   "v2-req-priority": "우선순위",
-  "v2-req-deadline": "마감기한"
+  "v2-req-deadline": "마감기한",
+  "my-tab-profile": "내 정보",
+  "my-tab-worklog": "업무일지",
+  "my-tab-activity": "내 활동",
+  "worklog-placeholder": "오늘 업무 내용을 기록하세요...",
+  "worklog-save": "저장",
+  "worklog-saved": "저장되었습니다.",
+  "worklog-history": "기록 목록",
+  "worklog-empty": "기록이 없습니다.",
+  "nav-guest-manage": "게스트 관리",
+  "guest-create": "게스트 생성",
+  "guest-none": "등록된 게스트가 없습니다."
 }

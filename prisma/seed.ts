@@ -1,87 +1,93 @@
-const { PrismaClient } = require('@prisma/client');
-const { hash } = require('bcryptjs');
-const { randomUUID } = require('crypto');
+import { PrismaClient, Role } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 LOOKUP9 시드 시작...');
+console.log('🌱 LOOKUP9 시드 시작...');
 
-  // 1. SUPER_ADMIN 생성
-  const superAdminPassword = await hash('lookup9!@#', 12);
-  const superAdmin = await prisma.user.upsert({
-    where: { email: 'admin@lookup9.com' },
-    update: {},
-    create: {
-      id: randomUUID(),
-      name: '시스템관리자',
-      email: 'admin@lookup9.com',
-      password: superAdminPassword,
-      company: 'LOOKUP9',
-      department: '시스템',
-      position: '관리자',
-    },
-  });
-  console.log('✅ SUPER_ADMIN:', superAdmin.email);
+// SUPER ADMIN 생성
+const superAdmin = await prisma.user.upsert({
+where: { email: '[admin@lookup9.com](mailto:admin@lookup9.com)' },
+update: {},
+create: {
+email: '[admin@lookup9.com](mailto:admin@lookup9.com)',
+name: 'LOOKUP9 Super Admin',
+password: 'lookup9!@#',
+role: 'SUPER_ADMIN',
+},
+});
 
-  // 2. 덕인금속 팀 생성
-  const team = await prisma.team.upsert({
-    where: { slug: 'lookup9' },
-    update: {},
-    create: {
-      id: randomUUID(),
-      name: '덕인금속',
-      slug: 'lookup9',
-      defaultRole: 'USER',
-    },
-  });
-  console.log('✅ 팀:', team.name, '(slug:', team.slug, ')');
+console.log('✅ SUPER_ADMIN:', superAdmin.email);
 
-  // 3. SUPER_ADMIN을 팀에 연결
-  await prisma.teamMember.upsert({
-    where: { teamId_userId: { teamId: team.id, oduserId: superAdmin.id } },
-    update: { role: 'SUPER_ADMIN' },
-    create: {
-      teamId: team.id,
-      userId: superAdmin.id,
-      role: 'SUPER_ADMIN',
-    },
-  });
+// 팀 생성
+const team = await prisma.team.upsert({
+where: { slug: 'lookup9' },
+update: {},
+create: {
+name: '덕인금속',
+slug: 'lookup9',
+},
+});
 
-  // 4. ADMIN_HR 생성
-  const adminHrPassword = await hash('dukein!@#', 12);
-  const adminHr = await prisma.user.upsert({
-    where: { email: 'hr@dukein.co.kr' },
-    update: {},
-    create: {
-      id: randomUUID(),
-      name: '경영지원',
-      email: 'hr@dukein.co.kr',
-      password: adminHrPassword,
-      company: '덕인금속',
-      department: '경영지원부',
-      position: '부장',
-    },
-  });
+console.log('✅ 팀:', team.name, '(slug:', team.slug, ')');
 
-  await prisma.teamMember.upsert({
-    where: { teamId_userId: { teamId: team.id, userId: adminHr.id } },
-    update: { role: 'ADMIN_HR' },
-    create: {
-      teamId: team.id,
-      userId: adminHr.id,
-      role: 'ADMIN_HR',
-    },
-  });
-  console.log('✅ ADMIN_HR:', adminHr.email);
+// SUPER_ADMIN 팀 멤버 등록
+await prisma.teamMember.upsert({
+where: {
+teamId_userId: {
+teamId: team.id,
+userId: superAdmin.id,
+},
+},
+update: {
+role: 'SUPER_ADMIN',
+},
+create: {
+teamId: team.id,
+userId: superAdmin.id,
+role: 'SUPER_ADMIN',
+},
+});
 
-  console.log('🌱 LOOKUP9 시드 완료!');
-  console.log('');
-  console.log('=== 로그인 정보 ===');
-  console.log('SUPER_ADMIN: admin@lookup9.com / lookup9!@#');
-  console.log('ADMIN_HR: hr@dukein.co.kr / dukein!@#');
+// ADMIN HR 생성
+const adminHR = await prisma.user.upsert({
+where: { email: '[hr@dukein.co.kr](mailto:hr@dukein.co.kr)' },
+update: {},
+create: {
+email: '[hr@dukein.co.kr](mailto:hr@dukein.co.kr)',
+name: '덕인금속 HR',
+password: 'dukein!@#',
+role: 'ADMIN_HR',
+},
+});
+
+console.log('✅ ADMIN_HR:', adminHR.email);
+
+await prisma.teamMember.upsert({
+where: {
+teamId_userId: {
+teamId: team.id,
+userId: adminHR.id,
+},
+},
+update: {
+role: 'ADMIN_HR',
+},
+create: {
+teamId: team.id,
+userId: adminHR.id,
+role: 'ADMIN_HR',
+},
+});
+
+console.log('🌱 LOOKUP9 시드 완료!');
 }
 
 main()
-  .catch((e) => { console.error(e); process.exit(1); })
-  .finally(async () => { await prisma.$disconnect(); });
+.catch((e) => {
+console.error('❌ 시드 오류:', e);
+process.exit(1);
+})
+.finally(async () => {
+await prisma.$disconnect();
+});

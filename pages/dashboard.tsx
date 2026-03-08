@@ -24,16 +24,15 @@ const Dashboard = () => {
   const isGuest = userRole === 'GUEST';
   const isPartner = userRole === 'PARTNER';
 
-  // GUEST 대시보드
-  if (isGuest) return <GuestDashboard profile={profile} />;
-
-  // PARTNER/USER 이상 공통 데이터
+  // Hook은 조건 분기 전에 모두 호출
   const { data } = useSWR('/api/dashboard/stats', fetcher, { refreshInterval: 30000 });
   const stats = data?.data;
 
-  // PARTNER는 공지만 추가
   const { data: noticeData } = useSWR(!isGuest ? '/api/notices?limit=5' : null, fetcher);
   const notices = noticeData?.data || [];
+
+  // GUEST 대시보드
+  if (isGuest) return <GuestDashboard profile={profile} />;
 
   // PARTNER 대시보드
   if (isPartner) return <PartnerDashboard profile={profile} notices={notices} />;

@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(201).json({ data: log });
       }
       case 'PUT': {
-        const { changeId, status, approverId } = req.body;
+        const { changeId, status } = req.body;
         if (!changeId) return res.status(400).json({ error: { message: 'changeId is required' } });
         const data: any = { updatedAt: new Date() };
         if (status) data.status = status;

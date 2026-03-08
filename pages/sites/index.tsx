@@ -18,14 +18,6 @@ interface SiteData {
   _count: { assignments: number; comments: number };
 }
 
-const statusColors: Record<string, string> = {
-  '대기': 'badge-ghost',
-  '진행중': 'badge-info',
-  '부분완료': 'badge-warning',
-  '완료': 'badge-success',
-  '보류': 'badge-error',
-};
-
 const SitesList = () => {
   const { t } = useTranslation('common');
   const [sites, setSites] = useState<SiteData[]>([]);

@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useState, useCallback, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { UserCircleIcon, EnvelopeIcon, BuildingOffice2Icon, PencilSquareIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { UserCircleIcon, EnvelopeIcon, PencilSquareIcon, PlusIcon } from '@heroicons/react/24/outline';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 import { Button } from 'react-daisyui';

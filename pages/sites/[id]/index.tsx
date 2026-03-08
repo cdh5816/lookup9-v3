@@ -256,7 +256,6 @@ const ContractPanel = ({ siteId, contracts, canManage, onMutate }: any) => {
 };
 
 // ========= 도장 =========
-const paintStatuses = ['임시', '검토중', '확정', '변경됨'];
 const PaintPanel = ({ siteId, specs, canManage, onMutate }: any) => {
   const { t } = useTranslation('common');
   const [showForm, setShowForm] = useState(false);
@@ -458,7 +457,6 @@ const IssuePanel = ({ siteId, issues, canManage, onMutate }: any) => {
 
 // ========= 변경관리 =========
 const changeTypes = ['설계변경', '물량증감', '색상변경', '일정변경', '출하변경', '기타'];
-const changeStatuses = ['요청', '검토중', '승인', '반려', '보류'];
 const ChangePanel = ({ siteId, changes, canManage, onMutate }: any) => {
   const { t } = useTranslation('common');
   const [showForm, setShowForm] = useState(false);

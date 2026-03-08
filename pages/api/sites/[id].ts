@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { notifySiteMembers } from '@/lib/notification-helper';
+import { verifySiteAccess, hasMinRole } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -10,11 +11,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { id } = req.query;
   if (!id || typeof id !== 'string') return res.status(400).json({ error: { message: 'Invalid id' } });
 
+  // 현장 접근 검증 (팀 스코프 + PARTNER/GUEST 배정 체크)
+  const tm = await verifySiteAccess(session.user.id, id);
+  if (!tm) return res.status(403).json({ error: { message: 'Forbidden' } });
+
   try {
     switch (req.method) {
       case 'GET': return await handleGET(id, res);
       case 'PUT': return await handlePUT(id, req, res, session);
-      case 'DELETE': return await handleDELETE(id, res);
+      case 'DELETE': {
+        if (!hasMinRole(tm.role, 'ADMIN_HR')) return res.status(403).json({ error: { message: 'Forbidden' } });
+        return await handleDELETE(id, res);
+      }
       default:
         res.setHeader('Allow', 'GET, PUT, DELETE');
         return res.status(405).json({ error: { message: `Method ${req.method} Not Allowed` } });

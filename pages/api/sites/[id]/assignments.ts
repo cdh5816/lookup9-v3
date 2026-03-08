@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
+import { verifySiteAccess } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -9,11 +10,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { id } = req.query;
   if (!id || typeof id !== 'string') return res.status(400).json({ error: { message: 'Invalid site id' } });
 
-  const teamMember = await prisma.teamMember.findFirst({
-    where: { userId: session.user.id },
-  });
+  const tm = await verifySiteAccess(session.user.id, id);
+  if (!tm) return res.status(403).json({ error: { message: 'Forbidden' } });
+
+  // MANAGER 이상만 배정 가능
   const allowedRoles = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER'];
-  if (!teamMember || !allowedRoles.includes(teamMember.role)) {
+  if (!allowedRoles.includes(tm.role)) {
     return res.status(403).json({ error: { message: 'Forbidden' } });
   }
 

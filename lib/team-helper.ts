@@ -73,3 +73,31 @@ export function canAssignRole(actorRole: string, targetRole: string): boolean {
   if (getRoleLevel(targetRole) >= getRoleLevel(actorRole)) return false;
   return true;
 }
+
+/**
+ * 현장 접근 검증 — 같은 팀 소속인지 + PARTNER/GUEST는 배정 확인
+ * 모든 sites/[id]/* API에서 공통 사용
+ */
+export async function verifySiteAccess(userId: string, siteId: string) {
+  const tm = await getTeamMemberByUserId(userId);
+  if (!tm) return null;
+
+  const site = await prisma.site.findUnique({
+    where: { id: siteId },
+    select: { id: true, teamId: true },
+  });
+  if (!site) return null;
+
+  // teamId가 있으면 같은 팀인지 확인
+  if (site.teamId && site.teamId !== tm.teamId) return null;
+
+  // PARTNER/GUEST는 배정 확인
+  if (tm.role === 'PARTNER' || tm.role === 'GUEST') {
+    const assignment = await prisma.siteAssignment.findFirst({
+      where: { siteId, userId },
+    });
+    if (!assignment) return null;
+  }
+
+  return tm;
+}

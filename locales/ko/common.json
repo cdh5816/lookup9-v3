@@ -492,5 +492,8 @@
   "leave-pending": "승인 대기",
   "leave-all": "전체 내역",
   "leave-manager-action": "부서장",
-  "leave-note-placeholder": "메모 (선택)"
+  "leave-note-placeholder": "메모 (선택)",
+  "noti-title": "알림",
+  "noti-read-all": "모두 읽음",
+  "noti-empty": "알림이 없습니다."
 }

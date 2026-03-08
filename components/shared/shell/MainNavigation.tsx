@@ -8,6 +8,7 @@ import {
   WrenchScrewdriverIcon,
   UserCircleIcon,
   UserPlusIcon,
+  BellAlertIcon,
 } from '@heroicons/react/24/outline';
 import { useTranslation } from 'next-i18next';
 import NavigationItems from './NavigationItems';
@@ -66,7 +67,10 @@ const MainNavigation = ({ activePathname }: NavigationProps) => {
     menus.push({ name: t('nav-production-dashboard'), href: '/production', icon: WrenchScrewdriverIcon, active: activePathname?.startsWith('/production') || false });
   }
 
-  menus.push({ name: t('nav-messages'), href: '/messages', icon: EnvelopeIcon, active: activePathname?.startsWith('/messages') || false });
+  menus.push(
+    { name: t('nav-messages'), href: '/messages', icon: EnvelopeIcon, active: activePathname?.startsWith('/messages') || false },
+    { name: t('noti-title'), href: '/notifications', icon: BellAlertIcon, active: activePathname?.startsWith('/notifications') || false },
+  );
 
   if (isAdminHR) {
     menus.push({ name: t('admin-users'), href: '/admin/users', icon: UsersIcon, active: activePathname?.startsWith('/admin') || false });

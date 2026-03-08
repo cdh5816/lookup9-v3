@@ -73,6 +73,7 @@ module.exports = [{
         "pages/my/sites/**/*.tsx",
         "pages/partner/**/*.tsx",
         "pages/guest/**/*.tsx",
+        "pages/notifications/**/*.tsx",
     ],
 
     rules: {

@@ -401,5 +401,8 @@
   "leave-pending": "Pending",
   "leave-all": "All",
   "leave-manager-action": "Manager",
-  "leave-note-placeholder": "Note (optional)"
+  "leave-note-placeholder": "Note (optional)",
+  "noti-title": "Notifications",
+  "noti-read-all": "Mark all read",
+  "noti-empty": "No notifications."
 }

@@ -105,7 +105,6 @@ const AdminUsers = () => {
 
 // ========= Users Panel =========
 const UsersPanel = ({ filter }: { filter: 'internal' | 'guest' }) => {
-  const { t } = useTranslation('common');
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);

@@ -3,7 +3,7 @@ import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
 import { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
-import { getRoleDisplayName, isCompanyAdminRole } from '@/lib/lookup9-role';
+import { getRoleDisplayName } from '@/lib/lookup9-role';
 import { Button } from 'react-daisyui';
 import { PlusIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
@@ -70,13 +70,15 @@ const AdminUsers = () => {
 
   return (
     <>
-      <Head><title>{t('admin-users-title')}</title></Head>
+      <Head>
+        <title>{t('admin-users-title')}</title>
+      </Head>
+
       <div className="space-y-6">
         <h2 className="text-xl font-bold">{t('admin-users')}</h2>
 
-        {/* 탭 */}
         <div className="border-b border-gray-800">
-          <div className="flex gap-1">
+          <div className="flex gap-1 overflow-x-auto">
             {adminTabs.map((tab) => (
               <button
                 key={tab.key}
@@ -113,248 +115,418 @@ const UsersPanel = ({ filter }: { filter: 'internal' | 'guest' }) => {
 
   const defaultRole = filter === 'guest' ? 'GUEST' : 'USER';
   const [form, setForm] = useState({
-    name: '', email: '', password: '', company: '',
-    department: '', position: '', phone: '', role: defaultRole,
+    name: '',
+    email: '',
+    password: '',
+    company: '',
+    department: '',
+    position: '',
+    phone: '',
+    role: defaultRole,
   });
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/admin/users');
-    if (res.ok) {
-      const data = await res.json();
-      const filtered = (data.data || []).filter((u: UserData) => {
-        const role = u.teamMembers?.[0]?.role || 'USER';
-        if (filter === 'guest') return ['GUEST', 'PARTNER', 'VIEWER'].includes(role);
-        return !['GUEST', 'PARTNER', 'VIEWER', 'SUPER_ADMIN', 'OWNER'].includes(role);
-      });
-      setUsers(filtered);
+    setError('');
+
+    try {
+      const res = await fetch(`/api/admin/users?filter=${filter}`);
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json?.error || '사용자 목록을 불러오지 못했습니다.');
+      }
+
+      setUsers(json.data || []);
+    } catch (err: any) {
+      setError(err?.message || '사용자 목록을 불러오지 못했습니다.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [filter]);
 
-  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
-  const handleCreate = async () => {
-    setCreating(true); setError(''); setSuccess('');
-    const teamsRes = await fetch('/api/teams');
-    const teamsData = await teamsRes.json();
-    const teamId = teamsData.data?.[0]?.id || null;
-    const res = await fetch('/api/admin/users', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, teamId }),
+  useEffect(() => {
+    setForm((prev) => ({
+      ...prev,
+      role: filter === 'guest' ? 'GUEST' : 'USER',
+    }));
+  }, [filter]);
+
+  const resetForm = () => {
+    setForm({
+      name: '',
+      email: '',
+      password: '',
+      company: '',
+      department: '',
+      position: '',
+      phone: '',
+      role: filter === 'guest' ? 'GUEST' : 'USER',
     });
-    if (res.ok) {
-      setSuccess(t('admin-user-created'));
-      setForm({ name: '', email: '', password: '', company: '', department: '', position: '', phone: '', role: defaultRole });
-      setShowCreate(false); fetchUsers();
-    } else { const data = await res.json(); setError(data.error?.message || t('unknown-error')); }
-    setCreating(false);
   };
 
-  const handleDelete = async (userId: string, userName: string) => {
-    if (!confirm(`${userName} ${t('admin-delete-confirm')}`)) return;
-    const res = await fetch('/api/admin/users', {
-      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId }),
-    });
-    if (res.ok) { setSuccess(t('admin-user-deleted')); fetchUsers(); }
-    else { const data = await res.json(); setError(data.error?.message || t('unknown-error')); }
+  const onCreate = async () => {
+    setCreating(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json?.error || '계정 생성에 실패했습니다.');
+      }
+
+      setSuccess('계정이 생성되었습니다.');
+      setShowCreate(false);
+      resetForm();
+      await fetchUsers();
+    } catch (err: any) {
+      setError(err?.message || '계정 생성에 실패했습니다.');
+    } finally {
+      setCreating(false);
+    }
   };
 
-  // 게스트 탭에서는 GUEST/PARTNER만 선택 가능
-  const availableRoles = filter === 'guest'
-    ? roles.filter((r) => ['GUEST', 'PARTNER', 'VIEWER'].includes(r.value))
-    : roles.filter((r) => !['GUEST', 'PARTNER', 'VIEWER'].includes(r.value));
+  const onDelete = async (id: string) => {
+    const ok = window.confirm('정말 삭제하시겠습니까?');
+    if (!ok) return;
+
+    setError('');
+    setSuccess('');
+
+    try {
+      const res = await fetch(`/api/admin/users?id=${id}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json?.error || '삭제에 실패했습니다.');
+      }
+
+      setSuccess('삭제되었습니다.');
+      await fetchUsers();
+    } catch (err: any) {
+      setError(err?.message || '삭제에 실패했습니다.');
+    }
+  };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
-        <Button color="primary" size="sm" onClick={() => setShowCreate(!showCreate)}>
-          {showCreate ? <XMarkIcon className="w-4 h-4 mr-1" /> : <PlusIcon className="w-4 h-4 mr-1" />}
-          {showCreate ? t('cancel') : t('admin-create-user')}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-gray-400">
+            {filter === 'guest'
+              ? '외부 열람/게스트 계정을 관리합니다.'
+              : '내부 사용자 및 협력사 계정을 관리합니다.'}
+          </p>
+        </div>
+
+        <Button
+          color="primary"
+          className="gap-2"
+          onClick={() => {
+            setShowCreate(true);
+            setError('');
+            setSuccess('');
+          }}
+        >
+          <PlusIcon className="h-4 w-4" />
+          계정 생성
         </Button>
       </div>
-      {error && <div className="alert alert-error text-sm"><span>{error}</span></div>}
-      {success && <div className="alert alert-success text-sm"><span>{success}</span></div>}
-      {showCreate && (
-        <div className="border border-gray-700 rounded-lg p-6 space-y-4">
-          <h3 className="text-lg font-semibold">{t('admin-create-user')}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="label"><span className="label-text">{t('name')} *</span></label>
-              <input type="text" className="input input-bordered w-full" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+
+      {error ? (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      ) : null}
+
+      {success ? (
+        <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-300">
+          {success}
+        </div>
+      ) : null}
+
+      <div className="overflow-hidden rounded-2xl border border-gray-800 bg-black/30">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-900/70 text-gray-300">
+              <tr>
+                <th className="px-4 py-3 text-left">이름</th>
+                <th className="px-4 py-3 text-left">이메일</th>
+                <th className="px-4 py-3 text-left">부서</th>
+                <th className="px-4 py-3 text-left">직책</th>
+                <th className="px-4 py-3 text-left">권한</th>
+                <th className="px-4 py-3 text-left">생성일</th>
+                <th className="px-4 py-3 text-right">관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td className="px-4 py-6 text-center text-gray-400" colSpan={7}>
+                    불러오는 중...
+                  </td>
+                </tr>
+              ) : users.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-6 text-center text-gray-400" colSpan={7}>
+                    데이터가 없습니다.
+                  </td>
+                </tr>
+              ) : (
+                users.map((user) => {
+                  const role = user.teamMembers?.[0]?.role || '-';
+
+                  return (
+                    <tr key={user.id} className="border-t border-gray-800">
+                      <td className="px-4 py-3">{user.name}</td>
+                      <td className="px-4 py-3">{user.email}</td>
+                      <td className="px-4 py-3">{user.department || '-'}</td>
+                      <td className="px-4 py-3">{user.position || '-'}</td>
+                      <td className="px-4 py-3">{getRoleDisplayName(role)}</td>
+                      <td className="px-4 py-3">
+                        {user.createdAt ? new Date(user.createdAt).toLocaleDateString('ko-KR') : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => onDelete(user.id)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 px-3 py-1.5 text-red-300 hover:bg-red-500/10"
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                          삭제
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showCreate ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-gray-800 bg-[#111] p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold">계정 생성</h3>
+              <button
+                type="button"
+                onClick={() => setShowCreate(false)}
+                className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
             </div>
-            <div>
-              <label className="label"><span className="label-text">{t('email')} *</span></label>
-              <input type="email" className="input input-bordered w-full" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label className="form-control">
+                <span className="mb-1 text-sm text-gray-300">이름</span>
+                <input
+                  className="input input-bordered w-full bg-[#1a1a1a]"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+              </label>
+
+              <label className="form-control">
+                <span className="mb-1 text-sm text-gray-300">이메일</span>
+                <input
+                  className="input input-bordered w-full bg-[#1a1a1a]"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                />
+              </label>
+
+              <label className="form-control">
+                <span className="mb-1 text-sm text-gray-300">비밀번호</span>
+                <input
+                  type="password"
+                  className="input input-bordered w-full bg-[#1a1a1a]"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                />
+              </label>
+
+              <label className="form-control">
+                <span className="mb-1 text-sm text-gray-300">회사명</span>
+                <input
+                  className="input input-bordered w-full bg-[#1a1a1a]"
+                  value={form.company}
+                  onChange={(e) => setForm({ ...form, company: e.target.value })}
+                />
+              </label>
+
+              <label className="form-control">
+                <span className="mb-1 text-sm text-gray-300">부서</span>
+                <select
+                  className="select select-bordered w-full bg-[#1a1a1a]"
+                  value={form.department}
+                  onChange={(e) => setForm({ ...form, department: e.target.value })}
+                >
+                  {departments.map((d) => (
+                    <option key={d.value} value={d.value}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="form-control">
+                <span className="mb-1 text-sm text-gray-300">직책</span>
+                <input
+                  className="input input-bordered w-full bg-[#1a1a1a]"
+                  value={form.position}
+                  onChange={(e) => setForm({ ...form, position: e.target.value })}
+                />
+              </label>
+
+              <label className="form-control">
+                <span className="mb-1 text-sm text-gray-300">연락처</span>
+                <input
+                  className="input input-bordered w-full bg-[#1a1a1a]"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                />
+              </label>
+
+              <label className="form-control">
+                <span className="mb-1 text-sm text-gray-300">권한</span>
+                <select
+                  className="select select-bordered w-full bg-[#1a1a1a]"
+                  value={form.role}
+                  onChange={(e) => setForm({ ...form, role: e.target.value })}
+                >
+                  {roles
+                    .filter((r) => (filter === 'guest' ? ['GUEST', 'VIEWER'].includes(r.value) : !['GUEST', 'VIEWER'].includes(r.value)))
+                    .map((r) => (
+                      <option key={r.value} value={r.value}>
+                        {r.label}
+                      </option>
+                    ))}
+                </select>
+              </label>
             </div>
-            <div>
-              <label className="label"><span className="label-text">{t('password')} *</span></label>
-              <input type="password" className="input input-bordered w-full" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+
+            <div className="mt-6 flex justify-end gap-2">
+              <Button color="ghost" onClick={() => setShowCreate(false)}>
+                취소
+              </Button>
+              <Button color="primary" loading={creating} onClick={onCreate}>
+                생성
+              </Button>
             </div>
-            <div>
-              <label className="label"><span className="label-text">{t('admin-company')}</span></label>
-              <input type="text" className="input input-bordered w-full" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
-            </div>
-            <div>
-              <label className="label"><span className="label-text">{t('admin-department')}</span></label>
-              <select className="select select-bordered w-full" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
-                {departments.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label"><span className="label-text">{t('admin-position')}</span></label>
-              <input type="text" className="input input-bordered w-full" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} />
-            </div>
-            <div>
-              <label className="label"><span className="label-text">{t('admin-phone')}</span></label>
-              <input type="text" className="input input-bordered w-full" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            </div>
-            <div>
-              <label className="label"><span className="label-text">{t('role')}</span></label>
-              <select className="select select-bordered w-full" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {availableRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="flex justify-end">
-            <Button color="primary" loading={creating} onClick={handleCreate}>{t('create-account')}</Button>
           </div>
         </div>
-      )}
-      <div className="overflow-x-auto">
-        <table className="table w-full">
-          <thead>
-            <tr>
-              <th>{t('name')}</th><th>{t('email')}</th><th>{t('admin-company')}</th>
-              <th>{t('admin-department')}</th><th>{t('admin-position')}</th><th>{t('admin-phone')}</th>
-              <th>{t('role')}</th><th>{t('created-at')}</th><th>{t('actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={9} className="text-center"><span className="loading loading-spinner loading-sm"></span></td></tr>
-            ) : users.length === 0 ? (
-              <tr><td colSpan={9} className="text-center text-gray-500">{t('admin-no-users')}</td></tr>
-            ) : (
-              users.map((user) => (
-                <tr key={user.id}>
-                  <td className="font-medium">{user.position ? `${user.position} ${user.name}` : user.name}</td>
-                  <td>{user.email}</td>
-                  <td>{user.company || '-'}</td><td>{user.department || '-'}</td>
-                  <td>{user.position || '-'}</td><td>{user.phone || '-'}</td>
-                  <td><span className="badge badge-sm">{getRoleDisplayName(user.teamMembers?.[0]?.role || '-')}</span></td>
-                  <td>{new Date(user.createdAt).toLocaleDateString('ko-KR')}</td>
-                  <td><button className="btn btn-ghost btn-xs text-error" onClick={() => handleDelete(user.id, user.name)}><TrashIcon className="w-4 h-4" /></button></td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      ) : null}
     </div>
   );
 };
 
 // ========= Clients Panel =========
 const ClientsPanel = () => {
-  const { t } = useTranslation('common');
   const [clients, setClients] = useState<ClientData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [form, setForm] = useState({ name: '', contact: '', phone: '', email: '', address: '', type: '발주처', notes: '' });
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/clients');
-    if (res.ok) { const data = await res.json(); setClients(data.data); }
-    setLoading(false);
+    setError('');
+
+    try {
+      const res = await fetch('/api/admin/users?entity=clients');
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json?.error || '수요처 목록을 불러오지 못했습니다.');
+      }
+
+      setClients(json.data || []);
+    } catch (err: any) {
+      setError(err?.message || '수요처 목록을 불러오지 못했습니다.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { fetchClients(); }, [fetchClients]);
-
-  const handleCreate = async () => {
-    if (!form.name) { setError(t('client-name-required')); return; }
-    setCreating(true); setError(''); setSuccess('');
-    const res = await fetch('/api/clients', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
-    });
-    if (res.ok) {
-      setSuccess(t('client-created')); setForm({ name: '', contact: '', phone: '', email: '', address: '', type: '발주처', notes: '' });
-      setShowCreate(false); fetchClients();
-    } else { const data = await res.json(); setError(data.error?.message || t('unknown-error')); }
-    setCreating(false);
-  };
-
-  const handleDelete = async (clientId: string, clientName: string) => {
-    if (!confirm(`${clientName} ${t('client-delete-confirm')}`)) return;
-    const res = await fetch('/api/clients', {
-      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId }),
-    });
-    if (res.ok) { setSuccess(t('client-deleted')); fetchClients(); }
-  };
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
-        <Button color="primary" size="sm" onClick={() => setShowCreate(!showCreate)}>
-          {showCreate ? <XMarkIcon className="w-4 h-4 mr-1" /> : <PlusIcon className="w-4 h-4 mr-1" />}
-          {showCreate ? t('cancel') : t('client-create')}
-        </Button>
-      </div>
-      {error && <div className="alert alert-error text-sm"><span>{error}</span></div>}
-      {success && <div className="alert alert-success text-sm"><span>{success}</span></div>}
-      {showCreate && (
-        <div className="border border-gray-700 rounded-lg p-6 space-y-4">
-          <h3 className="text-lg font-semibold">{t('client-create')}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div><label className="label"><span className="label-text">{t('client-name')} *</span></label>
-              <input type="text" className="input input-bordered w-full" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-            <div><label className="label"><span className="label-text">{t('client-contact')}</span></label>
-              <input type="text" className="input input-bordered w-full" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} /></div>
-            <div><label className="label"><span className="label-text">{t('admin-phone')}</span></label>
-              <input type="text" className="input input-bordered w-full" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-            <div><label className="label"><span className="label-text">{t('email')}</span></label>
-              <input type="email" className="input input-bordered w-full" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-            <div><label className="label"><span className="label-text">{t('client-address')}</span></label>
-              <input type="text" className="input input-bordered w-full" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
-            <div><label className="label"><span className="label-text">{t('client-type')}</span></label>
-              <select className="select select-bordered w-full" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                <option value="발주처">발주처</option><option value="협력사">협력사</option><option value="기타">기타</option>
-              </select></div>
-          </div>
-          <div><label className="label"><span className="label-text">{t('client-notes')}</span></label>
-            <textarea className="textarea textarea-bordered w-full" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
-          <div className="flex justify-end"><Button color="primary" loading={creating} onClick={handleCreate}>{t('client-create')}</Button></div>
+      {error ? (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
         </div>
-      )}
-      <div className="overflow-x-auto">
-        <table className="table w-full">
-          <thead><tr><th>{t('client-name')}</th><th>{t('client-type')}</th><th>{t('client-contact')}</th><th>{t('admin-phone')}</th><th>{t('site-count')}</th><th>{t('actions')}</th></tr></thead>
-          <tbody>
-            {loading ? (<tr><td colSpan={6} className="text-center"><span className="loading loading-spinner loading-sm"></span></td></tr>
-            ) : clients.length === 0 ? (<tr><td colSpan={6} className="text-center text-gray-500">{t('client-none')}</td></tr>
-            ) : (clients.map((c) => (
-              <tr key={c.id}>
-                <td className="font-medium">{c.name}</td>
-                <td><span className="badge badge-sm">{c.type}</span></td>
-                <td>{c.contact || '-'}</td><td>{c.phone || '-'}</td>
-                <td>{c._count.sites}</td>
-                <td><button className="btn btn-ghost btn-xs text-error" onClick={() => handleDelete(c.id, c.name)}><TrashIcon className="w-4 h-4" /></button></td>
+      ) : null}
+
+      <div className="overflow-hidden rounded-2xl border border-gray-800 bg-black/30">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-900/70 text-gray-300">
+              <tr>
+                <th className="px-4 py-3 text-left">업체명</th>
+                <th className="px-4 py-3 text-left">담당자</th>
+                <th className="px-4 py-3 text-left">연락처</th>
+                <th className="px-4 py-3 text-left">이메일</th>
+                <th className="px-4 py-3 text-left">유형</th>
+                <th className="px-4 py-3 text-left">현장 수</th>
               </tr>
-            )))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td className="px-4 py-6 text-center text-gray-400" colSpan={6}>
+                    불러오는 중...
+                  </td>
+                </tr>
+              ) : clients.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-6 text-center text-gray-400" colSpan={6}>
+                    데이터가 없습니다.
+                  </td>
+                </tr>
+              ) : (
+                clients.map((client) => (
+                  <tr key={client.id} className="border-t border-gray-800">
+                    <td className="px-4 py-3">{client.name}</td>
+                    <td className="px-4 py-3">{client.contact || '-'}</td>
+                    <td className="px-4 py-3">{client.phone || '-'}</td>
+                    <td className="px-4 py-3">{client.email || '-'}</td>
+                    <td className="px-4 py-3">{client.type}</td>
+                    <td className="px-4 py-3">{client._count?.sites ?? 0}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
 };
 
-export async function getServerSideProps({ locale }: GetServerSidePropsContext) {
-  return { props: { ...(locale ? await serverSideTranslations(locale, ['common']) : {}) } };
-}
-
 export default AdminUsers;
+
+export async function getServerSideProps(context: GetServerSidePropsContext) {
+  return {
+    props: {
+      ...(await serverSideTranslations(context.locale ?? 'ko', ['common'])),
+    },
+  };
+}

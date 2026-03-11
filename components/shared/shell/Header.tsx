@@ -92,7 +92,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
 
   return (
     <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center border-b border-gray-800 bg-black px-4 text-white sm:px-6 lg:px-8">
-      <div className="min-w-0 items-center gap-3 lg:hidden flex">
+      <div className="flex min-w-0 items-center gap-3 lg:hidden">
         <button
           type="button"
           className="-m-2.5 p-2.5 text-gray-400"
@@ -101,9 +101,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
           <span className="sr-only">{t('open-sidebar')}</span>
           <Bars3Icon className="h-6 w-6" aria-hidden="true" />
         </button>
-        <span className="max-w-[180px] truncate text-base font-bold">
-          {companyDisplayName}
-        </span>
+        <span className="block max-w-[180px] truncate text-base font-bold">{companyDisplayName}</span>
       </div>
 
       <div className="flex flex-1 items-center justify-end">
@@ -119,7 +117,6 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                 <MagnifyingGlassIcon className="h-5 w-5" />
               )}
             </button>
-
             {showSearch && (
               <div className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-gray-700 bg-gray-900 shadow-xl">
                 <input
@@ -147,8 +144,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                             }}
                           >
                             <div className="cursor-pointer rounded px-3 py-2 text-sm hover:bg-gray-800">
-                              {s.name}{' '}
-                              <span className="text-xs text-gray-500">{s.status}</span>
+                              {s.name} <span className="text-xs text-gray-500">{s.status}</span>
                             </div>
                           </Link>
                         ))}
@@ -162,9 +158,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                           <div key={u.id} className="rounded px-3 py-2 text-sm hover:bg-gray-800">
                             {u.position ? `${u.position} ` : ''}
                             {u.name}
-                            <span className="ml-2 text-xs text-gray-500">
-                              {u.department || ''}
-                            </span>
+                            <span className="ml-2 text-xs text-gray-500">{u.department || ''}</span>
                           </div>
                         ))}
                       </div>
@@ -172,13 +166,10 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
 
                     {results.clients?.length > 0 && (
                       <div>
-                        <p className="px-2 py-1 text-xs text-gray-500">
-                          {t('admin-tab-clients')}
-                        </p>
+                        <p className="px-2 py-1 text-xs text-gray-500">{t('admin-tab-clients')}</p>
                         {results.clients.map((c: any) => (
                           <div key={c.id} className="rounded px-3 py-2 text-sm hover:bg-gray-800">
-                            {c.name}{' '}
-                            <span className="text-xs text-gray-500">{c.type}</span>
+                            {c.name} <span className="text-xs text-gray-500">{c.type}</span>
                           </div>
                         ))}
                       </div>
@@ -187,9 +178,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                     {results.sites?.length === 0 &&
                       results.users?.length === 0 &&
                       results.clients?.length === 0 && (
-                        <p className="px-3 py-4 text-center text-sm text-gray-500">
-                          {t('search-no-results')}
-                        </p>
+                        <p className="px-3 py-4 text-center text-sm text-gray-500">{t('search-no-results')}</p>
                       )}
                   </div>
                 )}
@@ -209,19 +198,18 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
             )}
           </Link>
 
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white"
-            title="테마 변경"
-          >
-            <SunIcon className="h-5 w-5" />
-          </button>
+          {env.darkModeEnabled && (
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white"
+              title="테마 변경"
+            >
+              <SunIcon className="h-5 w-5" />
+            </button>
+          )}
 
-          <Link
-            href="/my"
-            className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white"
-          >
+          <Link href="/my" className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white">
             <UserCircleIcon className="h-5 w-5" />
           </Link>
 
@@ -235,8 +223,6 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
           </button>
         </div>
       </div>
-
-      {!env.isSaasMode && <div className="hidden" />}
     </div>
   );
 };

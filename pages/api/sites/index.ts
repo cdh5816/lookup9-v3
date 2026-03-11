@@ -1,7 +1,13 @@
+/*
+ * AIRX (individual business) proprietary source.
+ * Owner: AIRX / choe DONGHYUN. All rights reserved.
+ */
+
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { getTeamMemberByUserId } from '@/lib/team-helper';
+import { isExternalRole, isInternalRole } from '@/lib/lookup9-role';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -12,8 +18,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     switch (req.method) {
-      case 'GET': return await handleGET(req, res, tm);
-      case 'POST': return await handlePOST(req, res, session, tm);
+      case 'GET':
+        return await handleGET(req, res, tm);
+      case 'POST':
+        return await handlePOST(req, res, session, tm);
       default:
         res.setHeader('Allow', 'GET, POST');
         return res.status(405).json({ error: { message: `Method ${req.method} Not Allowed` } });
@@ -25,8 +33,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => {
   const { status, search } = req.query;
-
   const where: any = { teamId: tm.teamId };
+
   if (status && status !== 'all') where.status = status;
   if (search) {
     where.OR = [
@@ -35,8 +43,7 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     ];
   }
 
-  // PARTNER/GUEST는 배정된 현장만
-  if (tm.role === 'PARTNER' || tm.role === 'GUEST') {
+  if (isExternalRole(tm.role)) {
     where.assignments = { some: { userId: tm.userId } };
   }
 
@@ -47,13 +54,17 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
       createdBy: { select: { name: true, position: true } },
       _count: { select: { assignments: true, comments: true } },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
   });
 
   return res.status(200).json({ data: sites });
 };
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: any, tm: any) => {
+  if (!isInternalRole(tm.role)) {
+    return res.status(403).json({ error: { message: '내부 사용자만 현장을 생성할 수 있습니다.' } });
+  }
+
   const { name, address, clientId, status, description } = req.body;
   if (!name) return res.status(400).json({ error: { message: 'Name is required' } });
 
@@ -66,6 +77,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
       status: status || '대기',
       description: description || null,
       createdById: session.user.id,
+      updatedAt: new Date(),
     },
   });
 

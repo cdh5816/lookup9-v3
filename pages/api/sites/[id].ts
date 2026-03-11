@@ -1,8 +1,14 @@
+/*
+ * AIRX (individual business) proprietary source.
+ * Owner: AIRX / choe DONGHYUN. All rights reserved.
+ */
+
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { notifySiteMembers } from '@/lib/notification-helper';
 import { verifySiteAccess, hasMinRole } from '@/lib/team-helper';
+import { canUpdateAssignedSite, isInternalRole } from '@/lib/lookup9-role';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -11,18 +17,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { id } = req.query;
   if (!id || typeof id !== 'string') return res.status(400).json({ error: { message: 'Invalid id' } });
 
-  // 현장 접근 검증 (팀 스코프 + PARTNER/GUEST 배정 체크)
   const tm = await verifySiteAccess(session.user.id, id);
   if (!tm) return res.status(403).json({ error: { message: 'Forbidden' } });
 
   try {
     switch (req.method) {
-      case 'GET': return await handleGET(id, res);
-      case 'PUT': return await handlePUT(id, req, res, session);
-      case 'DELETE': {
+      case 'GET':
+        return await handleGET(id, res);
+      case 'PUT':
+        if (!canUpdateAssignedSite(tm.role)) return res.status(403).json({ error: { message: 'Forbidden' } });
+        return await handlePUT(id, req, res, session, tm);
+      case 'DELETE':
         if (!hasMinRole(tm.role, 'ADMIN_HR')) return res.status(403).json({ error: { message: 'Forbidden' } });
         return await handleDELETE(id, res);
-      }
       default:
         res.setHeader('Allow', 'GET, PUT, DELETE');
         return res.status(405).json({ error: { message: `Method ${req.method} Not Allowed` } });
@@ -38,7 +45,7 @@ const handleGET = async (id: string, res: NextApiResponse) => {
     include: {
       client: true,
       createdBy: { select: { name: true, position: true, department: true } },
-      assignments: { include: { user: { select: { id: true, name: true, position: true, department: true } } } },
+      assignments: { include: { user: { select: { id: true, name: true, position: true, department: true, company: true } } } },
       sales: { include: { createdBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
       contracts: { include: { createdBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
       paintSpecs: { include: { confirmedBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
@@ -64,10 +71,16 @@ const handleGET = async (id: string, res: NextApiResponse) => {
   return res.status(200).json({ data: site });
 };
 
-const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, session: any) => {
+const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, session: any, tm: any) => {
   const { name, address, clientId, status, description, statusReason } = req.body;
 
-  // 상태 변경 시 이력 자동 저장
+  if (!isInternalRole(tm.role) && (name !== undefined || address !== undefined || clientId !== undefined || description !== undefined || status !== undefined)) {
+    // PARTNER는 제한적으로만 상태/메모를 업데이트하게 유지
+    if (name !== undefined || address !== undefined || clientId !== undefined) {
+      return res.status(403).json({ error: { message: '협력사는 기본 현장정보를 수정할 수 없습니다.' } });
+    }
+  }
+
   if (status) {
     const currentSite = await prisma.site.findUnique({ where: { id }, select: { status: true } });
     if (currentSite && currentSite.status !== status) {
@@ -80,7 +93,6 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
           changedById: session.user.id,
         },
       });
-      // 알림 발송
       await notifySiteMembers(id, session.user.id, 'SITE_STATUS_CHANGED', `현장 상태 변경: ${currentSite.status} → ${status}`);
     }
   }
@@ -88,14 +100,15 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
   const site = await prisma.site.update({
     where: { id },
     data: {
-      ...(name && { name }),
+      ...(name !== undefined && { name }),
       ...(address !== undefined && { address }),
       ...(clientId !== undefined && { clientId: clientId || null }),
-      ...(status && { status }),
+      ...(status !== undefined && { status }),
       ...(description !== undefined && { description }),
       updatedAt: new Date(),
     },
   });
+
   return res.status(200).json({ data: site });
 };
 

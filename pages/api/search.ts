@@ -1,7 +1,13 @@
+/*
+ * AIRX (individual business) proprietary source.
+ * Owner: AIRX / choe DONGHYUN. All rights reserved.
+ */
+
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { getTeamMemberByUserId } from '@/lib/team-helper';
+import { isExternalRole } from '@/lib/lookup9-role';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -17,35 +23,54 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const teamId = tm.teamId;
+  const siteWhere: any = {
+    teamId,
+    OR: [
+      { name: { contains: q, mode: 'insensitive' } },
+      { address: { contains: q, mode: 'insensitive' } },
+    ],
+  };
+
+  if (isExternalRole(tm.role)) {
+    siteWhere.assignments = { some: { userId: tm.userId } };
+  }
 
   const [sites, teamMembers, clients] = await Promise.all([
     prisma.site.findMany({
-      where: { teamId, OR: [
-        { name: { contains: q, mode: 'insensitive' } },
-        { address: { contains: q, mode: 'insensitive' } },
-      ]},
+      where: siteWhere,
       select: { id: true, name: true, status: true, address: true },
       take: 5,
     }),
-    prisma.teamMember.findMany({
-      where: { teamId, user: { OR: [
-        { name: { contains: q, mode: 'insensitive' } },
-        { email: { contains: q, mode: 'insensitive' } },
-      ]}},
-      select: { user: { select: { id: true, name: true, email: true, position: true, department: true } } },
-      take: 5,
-    }),
+    isExternalRole(tm.role)
+      ? Promise.resolve([])
+      : prisma.teamMember.findMany({
+          where: {
+            teamId,
+            role: { notIn: ['SUPER_ADMIN', 'OWNER'] },
+            user: {
+              OR: [
+                { name: { contains: q, mode: 'insensitive' } },
+                { email: { contains: q, mode: 'insensitive' } },
+              ],
+            },
+          },
+          select: { user: { select: { id: true, name: true, email: true, position: true, department: true } } },
+          take: 5,
+        }),
     prisma.client.findMany({
-      where: { teamId, OR: [
-        { name: { contains: q, mode: 'insensitive' } },
-        { contact: { contains: q, mode: 'insensitive' } },
-      ]},
+      where: {
+        teamId,
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { contact: { contains: q, mode: 'insensitive' } },
+        ],
+      },
       select: { id: true, name: true, type: true, contact: true },
       take: 5,
     }),
   ]);
 
   return res.status(200).json({
-    data: { sites, users: teamMembers.map((m) => m.user), clients },
+    data: { sites, users: teamMembers.map((m: any) => m.user), clients },
   });
 }

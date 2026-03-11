@@ -1,3 +1,8 @@
+/*
+ * AIRX (individual business) proprietary source.
+ * Owner: AIRX / choe DONGHYUN. All rights reserved.
+ */
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { signOut } from 'next-auth/react';
 import {
@@ -29,19 +34,14 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
   const [results, setResults] = useState<any>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // 안읽은 쪽지 카운트
   const { data: profileData } = useSWR('/api/my/profile', fetcher, { refreshInterval: 30000 });
   const unreadCount = profileData?.data?.unreadMessages || 0;
+  const companyDisplayName = profileData?.data?.companyDisplayName || app.name;
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/custom-signout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } catch {
-      // 실패해도 진행
-    }
+      await fetch('/api/auth/custom-signout', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    } catch {}
     await signOut({ callbackUrl: '/auth/login' });
   };
 
@@ -50,18 +50,25 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
   const handleSearch = useCallback((q: string) => {
     setQuery(q);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (q.length < 1) { setResults(null); return; }
+    if (q.length < 1) {
+      setResults(null);
+      return;
+    }
     debounceRef.current = setTimeout(async () => {
       const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-      if (res.ok) { const data = await res.json(); setResults(data.data); }
+      if (res.ok) {
+        const data = await res.json();
+        setResults(data.data);
+      }
     }, 300);
   }, []);
 
-  // 외부 클릭 시 닫기
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setShowSearch(false); setResults(null); setQuery('');
+        setShowSearch(false);
+        setResults(null);
+        setQuery('');
       }
     };
     document.addEventListener('mousedown', handler);
@@ -70,27 +77,30 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
 
   return (
     <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center border-b border-gray-800 px-4 sm:px-6 lg:px-8 bg-black text-white">
-      {/* 모바일: 사이드바 토글 + LOOKUP9 */}
-      <div className="flex items-center gap-3 lg:hidden">
+      <div className="flex items-center gap-3 lg:hidden min-w-0">
         <button type="button" className="-m-2.5 p-2.5 text-gray-400" onClick={() => setSidebarOpen(true)}>
           <span className="sr-only">{t('open-sidebar')}</span>
           <Bars3Icon className="h-6 w-6" aria-hidden="true" />
         </button>
-        <span className="text-lg font-bold">{app.name}</span>
+        <span className="text-base font-bold truncate max-w-[180px]">{companyDisplayName}</span>
       </div>
 
       <div className="flex flex-1 items-center justify-end">
         <div className="flex items-center gap-x-1">
-          {/* 검색 */}
           <div className="relative" ref={searchRef}>
-            <button className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800"
-              onClick={() => setShowSearch(!showSearch)}>
+            <button className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800" onClick={() => setShowSearch(!showSearch)}>
               {showSearch ? <XMarkIcon className="w-5 h-5" /> : <MagnifyingGlassIcon className="w-5 h-5" />}
             </button>
             {showSearch && (
-              <div className="absolute right-0 top-full mt-2 w-80 bg-gray-900 border border-gray-700 rounded-lg shadow-xl">
-                <input type="text" autoFocus className="w-full bg-transparent border-b border-gray-700 px-4 py-3 text-sm outline-none"
-                  placeholder={t('search-placeholder')} value={query} onChange={(e) => handleSearch(e.target.value)} />
+              <div className="absolute right-0 top-full mt-2 w-[20rem] max-w-[90vw] bg-gray-900 border border-gray-700 rounded-lg shadow-xl">
+                <input
+                  type="text"
+                  autoFocus
+                  className="w-full bg-transparent border-b border-gray-700 px-4 py-3 text-sm outline-none"
+                  placeholder={t('search-placeholder')}
+                  value={query}
+                  onChange={(e) => handleSearch(e.target.value)}
+                />
                 {results && (
                   <div className="max-h-72 overflow-y-auto p-2">
                     {results.sites?.length > 0 && (
@@ -98,7 +108,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                         <p className="text-xs text-gray-500 px-2 py-1">{t('nav-sites')}</p>
                         {results.sites.map((s: any) => (
                           <Link key={s.id} href={`/sites/${s.id}`} onClick={() => { setShowSearch(false); setResults(null); setQuery(''); }}>
-                            <div className="px-3 py-2 text-sm hover:bg-gray-800 rounded cursor-pointer">
+                            <div className="px-3 py-2 text-sm hover:bg-gray-800 rounded cursor-pointer break-keep">
                               {s.name} <span className="text-xs text-gray-500">{s.status}</span>
                             </div>
                           </Link>
@@ -109,7 +119,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                       <div className="mb-2">
                         <p className="text-xs text-gray-500 px-2 py-1">{t('members')}</p>
                         {results.users.map((u: any) => (
-                          <div key={u.id} className="px-3 py-2 text-sm hover:bg-gray-800 rounded">
+                          <div key={u.id} className="px-3 py-2 text-sm hover:bg-gray-800 rounded break-keep">
                             {u.position ? `${u.position} ` : ''}{u.name}
                             <span className="text-xs text-gray-500 ml-2">{u.department || ''}</span>
                           </div>
@@ -120,7 +130,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                       <div>
                         <p className="text-xs text-gray-500 px-2 py-1">{t('admin-tab-clients')}</p>
                         {results.clients.map((c: any) => (
-                          <div key={c.id} className="px-3 py-2 text-sm hover:bg-gray-800 rounded">
+                          <div key={c.id} className="px-3 py-2 text-sm hover:bg-gray-800 rounded break-keep">
                             {c.name} <span className="text-xs text-gray-500">{c.type}</span>
                           </div>
                         ))}
@@ -135,7 +145,6 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
             )}
           </div>
 
-          {/* 알림 */}
           <Link href="/notifications" className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 relative">
             <BellIcon className="w-5 h-5" />
             {unreadCount > 0 && (

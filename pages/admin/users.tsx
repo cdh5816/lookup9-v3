@@ -3,6 +3,7 @@ import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
 import { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
+import { getRoleDisplayName, isCompanyAdminRole } from '@/lib/lookup9-role';
 import { Button } from 'react-daisyui';
 import { PlusIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
@@ -46,12 +47,12 @@ const departments = [
 ];
 
 const roles = [
-  { value: 'ADMIN_HR', label: 'ADMIN_HR (경영지원부)' },
-  { value: 'MANAGER', label: 'MANAGER (부서장)' },
-  { value: 'USER', label: 'USER (직원)' },
+  { value: 'ADMIN_HR', label: 'COMPANY_ADMIN (회사 관리자)' },
+  { value: 'MANAGER', label: 'INTERNAL_MANAGER (팀장급 내부)' },
+  { value: 'USER', label: 'INTERNAL_USER (팀원급 내부)' },
   { value: 'PARTNER', label: 'PARTNER (협력사)' },
-  { value: 'GUEST', label: 'GUEST (외부고객)' },
-  { value: 'VIEWER', label: 'VIEWER (열람전용)' },
+  { value: 'GUEST', label: 'CLIENT/GUEST (외부 열람)' },
+  { value: 'VIEWER', label: 'CLIENT/GUEST VIEWER (열람전용)' },
 ];
 
 type AdminTab = 'users' | 'guests' | 'clients';
@@ -123,8 +124,8 @@ const UsersPanel = ({ filter }: { filter: 'internal' | 'guest' }) => {
       const data = await res.json();
       const filtered = (data.data || []).filter((u: UserData) => {
         const role = u.teamMembers?.[0]?.role || 'USER';
-        if (filter === 'guest') return role === 'GUEST' || role === 'PARTNER';
-        return role !== 'GUEST' && role !== 'PARTNER';
+        if (filter === 'guest') return ['GUEST', 'PARTNER', 'VIEWER'].includes(role);
+        return !['GUEST', 'PARTNER', 'VIEWER', 'SUPER_ADMIN', 'OWNER'].includes(role);
       });
       setUsers(filtered);
     }
@@ -162,8 +163,8 @@ const UsersPanel = ({ filter }: { filter: 'internal' | 'guest' }) => {
 
   // 게스트 탭에서는 GUEST/PARTNER만 선택 가능
   const availableRoles = filter === 'guest'
-    ? roles.filter((r) => ['GUEST', 'PARTNER'].includes(r.value))
-    : roles.filter((r) => !['GUEST', 'PARTNER'].includes(r.value));
+    ? roles.filter((r) => ['GUEST', 'PARTNER', 'VIEWER'].includes(r.value))
+    : roles.filter((r) => !['GUEST', 'PARTNER', 'VIEWER'].includes(r.value));
 
   return (
     <div className="space-y-4">
@@ -242,7 +243,7 @@ const UsersPanel = ({ filter }: { filter: 'internal' | 'guest' }) => {
                   <td>{user.email}</td>
                   <td>{user.company || '-'}</td><td>{user.department || '-'}</td>
                   <td>{user.position || '-'}</td><td>{user.phone || '-'}</td>
-                  <td><span className="badge badge-sm">{user.teamMembers?.[0]?.role || '-'}</span></td>
+                  <td><span className="badge badge-sm">{getRoleDisplayName(user.teamMembers?.[0]?.role || '-')}</span></td>
                   <td>{new Date(user.createdAt).toLocaleDateString('ko-KR')}</td>
                   <td><button className="btn btn-ghost btn-xs text-error" onClick={() => handleDelete(user.id, user.name)}><TrashIcon className="w-4 h-4" /></button></td>
                 </tr>

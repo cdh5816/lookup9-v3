@@ -27,6 +27,7 @@ export default async function handler(
         req,
         res,
       });
+
       const sessionDBEntry = await prisma.session.findFirst({
         where: {
           sessionToken: sessionToken,
@@ -53,7 +54,8 @@ export default async function handler(
     ]);
 
     return res.status(200).json({ success: true });
-  } catch {
+  } catch (error) {
+    void error;
     return res.status(200).json({ success: true });
   }
 }

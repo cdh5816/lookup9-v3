@@ -3,17 +3,17 @@
  * Owner: AIRX / choe DONGHYUN. All rights reserved.
  */
 
-import app from '@/lib/app';
 import useSWR from 'swr';
+import app from '@/lib/app';
 import fetcher from '@/lib/fetcher';
 
 const Brand = () => {
   const { data } = useSWR('/api/my/profile', fetcher);
-  const title = data?.data?.companyDisplayName || app.name;
+  const companyDisplayName = data?.data?.companyDisplayName || app.name;
 
   return (
-    <div className="flex min-h-[32px] items-center pt-6 shrink-0 text-xl font-bold tracking-tight text-gray-100 break-keep leading-6">
-      <span className="line-clamp-2">{title}</span>
+    <div className="flex min-w-0 shrink-0 items-center pt-6 text-xl font-bold tracking-tight dark:text-gray-100">
+      <span className="block max-w-[190px] truncate lg:max-w-[220px]">{companyDisplayName}</span>
     </div>
   );
 };

@@ -19,6 +19,79 @@ const StatusDot = ({ status }: { status: string }) => (
   <span className={`inline-block w-2.5 h-2.5 rounded-full mr-2 ${STATUS_DOT[status] || 'bg-gray-400'}`} />
 );
 
+const parseDescriptionField = (description: string | null | undefined, label: string) => {
+  if (!description) return null;
+  const escaped = label.replace(/[.*+?^${}()|[\]\]/g, '\\$&');
+  const match = description.match(new RegExp(`${escaped}\\s*[:：]\\s*([^\\n]+)`));
+  return match?.[1]?.trim() || null;
+};
+
+const parseNumeric = (value: string | number | null | undefined) => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const normalized = String(value).replace(/,/g, '').replace(/[^0-9.\-]/g, '');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatNumber = (value: number) => new Intl.NumberFormat('ko-KR').format(Math.round(value));
+
+const getDeadlineState = (deadlineText?: string | null) => {
+  if (!deadlineText) return null;
+  const deadline = new Date(deadlineText);
+  if (Number.isNaN(deadline.getTime())) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  deadline.setHours(0, 0, 0, 0);
+
+  const diff = Math.ceil((deadline.getTime() - today.getTime()) / 86400000);
+  return {
+    diff,
+    urgent: diff <= 3,
+    overdue: diff < 0,
+  };
+};
+
+const clampPercent = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
+
+const getProgressSummary = (site: any) => {
+  const description = site?.description || '';
+  const totalPanelQty = parseNumeric(parseDescriptionField(description, '물량'));
+  const deliveredQty = Array.isArray(site?.shipments)
+    ? site.shipments.reduce((sum: number, item: any) => sum + parseNumeric(item?.quantity), 0)
+    : 0;
+  const pipeRate = parseNumeric(parseDescriptionField(description, '하지파이프 설치율'));
+  const panelRate = totalPanelQty > 0 ? (deliveredQty / totalPanelQty) * 100 : 0;
+  const progress = clampPercent(pipeRate > 0 ? (pipeRate + panelRate) / 2 : panelRate);
+
+  return {
+    siteType: parseDescriptionField(description, '현장구분'),
+    specification: parseDescriptionField(description, '사양'),
+    quantityText: parseDescriptionField(description, '물량'),
+    unitPriceText: parseDescriptionField(description, '단가'),
+    amountText: parseDescriptionField(description, '금액'),
+    contractDate: parseDescriptionField(description, '계약일'),
+    deliveryDeadline: parseDescriptionField(description, '납품기한'),
+    installer: parseDescriptionField(description, '전문시공사'),
+    clientName: parseDescriptionField(description, '수요처/발주처'),
+    pipeRate: clampPercent(pipeRate),
+    totalPanelQty,
+    deliveredQty,
+    panelRate: clampPercent(panelRate),
+    progress,
+  };
+};
+
+const ProgressBar = ({ value, danger = false }: { value: number; danger?: boolean }) => (
+  <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-800">
+    <div
+      className={`h-full rounded-full transition-all ${danger ? 'bg-red-500' : 'bg-blue-600'}`}
+      style={{ width: `${clampPercent(value)}%` }}
+    />
+  </div>
+);
+
 const allTabs = ['overview', 'sales', 'contract', 'production', 'painting', 'shipping', 'documents', 'requests', 'issues', 'changes', 'schedule', 'history', 'comments'];
 const hiddenTabsByRole: Record<string, string[]> = {
   PARTNER: ['sales', 'contract'],
@@ -58,47 +131,105 @@ const SiteDetail = () => {
 
   if (!site) return <div className="text-center py-10"><span className="loading loading-spinner loading-md"></span></div>;
 
+  const summary = getProgressSummary(site);
+  const deadlineState = getDeadlineState(summary.deliveryDeadline);
+
   return (
     <>
       <Head><title>{site.name} | LOOKUP9</title></Head>
       <div className="space-y-4">
         {/* ===== 상단 고정 요약 ===== */}
-        <div className="rounded-lg border border-gray-800 p-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center">
+        <div className="rounded-2xl border border-gray-800 bg-black/20 p-4 md:p-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
                 <StatusDot status={site.status} />
-                <h2 className="text-xl font-bold">{site.name}</h2>
-                <span className="ml-2 text-sm text-gray-400">{site.status}</span>
+                <h2 className="truncate text-xl font-bold md:text-2xl">{site.name}</h2>
+                <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-300">{site.status}</span>
+                {summary.siteType && (
+                  <span className="rounded-full border border-blue-900/60 bg-blue-950/30 px-2 py-0.5 text-xs text-blue-300">
+                    {summary.siteType}
+                  </span>
+                )}
               </div>
-              <p className="text-sm text-gray-400 mt-1">
-                {site.client?.name && <span className="mr-3">{site.client.name}</span>}
-                {site.address && <span className="mr-3">{site.address}</span>}
-                <span>{site.createdBy.position ? `${site.createdBy.position} ${site.createdBy.name}` : site.createdBy.name}</span>
+
+              <p className="mt-2 break-words text-sm text-gray-400">
+                {site.client?.name && <span className="mr-3 inline-block">{site.client.name}</span>}
+                {site.address && <span className="mr-3 inline-block">{site.address}</span>}
+                <span className="inline-block">
+                  최근 수정: {new Date(site.updatedAt || site.createdAt).toLocaleDateString('ko-KR')}
+                </span>
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                등록자: {site.createdBy.position ? `${site.createdBy.position} ` : ''}{site.createdBy.name}
               </p>
             </div>
-            <div className="flex gap-2 items-center shrink-0">
+
+            <div className="flex items-center gap-2 self-start">
               {site._count?.requests > 0 && <span className="badge badge-sm badge-warning">{t('v2-open-requests')}: {site._count.requests}</span>}
               {canDelete && <Button color="error" size="xs" onClick={handleDeleteSite}>{t('delete')}</Button>}
             </div>
           </div>
-          {/* 요약 수치 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-            <div className="text-center p-2 rounded bg-gray-800/30">
-              <p className="text-xs text-gray-500">{t('v2-assignments')}</p>
-              <p className="text-lg font-bold">{site.assignments?.length || 0}</p>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-4">
+            <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4 lg:col-span-2">
+              <div className="flex items-center justify-between text-xs text-gray-400">
+                <span>현장 공정률</span>
+                <span className="font-semibold text-white">{summary.progress}%</span>
+              </div>
+              <div className="mt-2">
+                <ProgressBar value={summary.progress} danger={!!deadlineState?.urgent || !!deadlineState?.overdue} />
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="rounded-lg bg-black/30 px-2 py-2">
+                  <p className="text-gray-500">하지파이프</p>
+                  <p className="mt-1 text-sm font-bold">{summary.pipeRate}%</p>
+                </div>
+                <div className="rounded-lg bg-black/30 px-2 py-2">
+                  <p className="text-gray-500">출고 진행률</p>
+                  <p className="mt-1 text-sm font-bold">{summary.panelRate}%</p>
+                </div>
+                <div className="rounded-lg bg-black/30 px-2 py-2">
+                  <p className="text-gray-500">출고량</p>
+                  <p className="mt-1 text-sm font-bold">{formatNumber(summary.deliveredQty)}</p>
+                </div>
+              </div>
             </div>
-            <div className="text-center p-2 rounded bg-gray-800/30">
-              <p className="text-xs text-gray-500">{t('v2-paint-specs')}</p>
-              <p className="text-lg font-bold">{site.paintSpecs?.length || 0}</p>
+
+            <div className={`rounded-xl border p-4 ${deadlineState?.urgent || deadlineState?.overdue ? 'border-red-500/40 bg-red-500/10' : 'border-gray-800 bg-gray-900/40'}`}>
+              <p className={`text-xs ${deadlineState?.urgent || deadlineState?.overdue ? 'text-red-300' : 'text-gray-400'}`}>납품기한</p>
+              <p className="mt-2 text-lg font-bold">{summary.deliveryDeadline || '미입력'}</p>
+              <p className={`mt-2 text-xs ${deadlineState?.urgent || deadlineState?.overdue ? 'text-red-300' : 'text-gray-500'}`}>
+                {deadlineState
+                  ? deadlineState.overdue
+                    ? `납기 경과 (${Math.abs(deadlineState.diff)}일)`
+                    : deadlineState.diff === 0
+                      ? '오늘 마감'
+                      : `D-${deadlineState.diff}`
+                  : '납기 정보 없음'}
+              </p>
             </div>
-            <div className="text-center p-2 rounded bg-gray-800/30">
-              <p className="text-xs text-gray-500">{t('v2-shipments')}</p>
-              <p className="text-lg font-bold">{site.shipments?.length || 0}</p>
-            </div>
-            <div className="text-center p-2 rounded bg-gray-800/30">
-              <p className="text-xs text-gray-500">{t('tab-documents')}</p>
-              <p className="text-lg font-bold">{site._count?.documents || 0}</p>
+
+            <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
+              <p className="text-xs text-gray-400">핵심 수치</p>
+              <div className="mt-3 grid grid-cols-2 gap-3 text-center text-xs">
+                <div>
+                  <p className="text-gray-500">전체 물량</p>
+                  <p className="mt-1 text-base font-bold">{summary.totalPanelQty > 0 ? formatNumber(summary.totalPanelQty) : '-'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">배정 인원</p>
+                  <p className="mt-1 text-base font-bold">{site.assignments?.length || 0}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">출하 건수</p>
+                  <p className="mt-1 text-base font-bold">{site.shipments?.length || 0}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">문서 수</p>
+                  <p className="mt-1 text-base font-bold">{site._count?.documents || 0}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -162,19 +293,34 @@ const OverviewPanel = ({ site, siteId, canManage, onMutate }: any) => {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ status: site.status, description: site.description || '', statusReason: '' });
   const [saving, setSaving] = useState(false);
+  const summary = getProgressSummary(site);
+  const deadlineState = getDeadlineState(summary.deliveryDeadline);
+
   const handleSave = async () => {
     setSaving(true);
     await fetch(`/api/sites/${siteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
     setSaving(false); setEditing(false); onMutate();
   };
+
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-lg border border-gray-800 p-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="rounded-xl border border-gray-800 p-4">
           <p className="text-xs text-gray-500 mb-1">{t('site-client')}</p>
-          <p className="font-medium">{site.client?.name || '-'}</p>
+          <p className="font-medium">{site.client?.name || summary.clientName || '-'}</p>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-gray-500">현장구분</p>
+              <p className="mt-1 font-medium">{summary.siteType || '-'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">사양</p>
+              <p className="mt-1 font-medium break-words">{summary.specification || '-'}</p>
+            </div>
+          </div>
         </div>
-        <div className="rounded-lg border border-gray-800 p-4">
+
+        <div className="rounded-xl border border-gray-800 p-4">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs text-gray-500">{t('site-status-label')}</p>
             {canManage && !editing && <button className="btn btn-ghost btn-xs" onClick={() => setEditing(true)}>{t('edit')}</button>}
@@ -187,16 +333,101 @@ const OverviewPanel = ({ site, siteId, canManage, onMutate }: any) => {
               <input type="text" className="input input-bordered input-sm w-full" placeholder={t('v2-status-reason')} value={form.statusReason} onChange={(e) => setForm({ ...form, statusReason: e.target.value })} />
             </div>
           ) : <p className="font-medium"><StatusDot status={site.status} />{site.status}</p>}
+
+          <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-gray-500">계약일</p>
+              <p className="mt-1 font-medium">{summary.contractDate || '-'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">전문시공사</p>
+              <p className="mt-1 font-medium break-words">{summary.installer || '-'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className={`rounded-xl border p-4 ${deadlineState?.urgent || deadlineState?.overdue ? 'border-red-500/40 bg-red-500/10' : 'border-gray-800'}`}>
+          <p className={`text-xs mb-1 ${deadlineState?.urgent || deadlineState?.overdue ? 'text-red-300' : 'text-gray-500'}`}>납기 상태</p>
+          <p className="text-lg font-bold">{summary.deliveryDeadline || '미입력'}</p>
+          <p className={`mt-2 text-sm ${deadlineState?.urgent || deadlineState?.overdue ? 'text-red-300' : 'text-gray-400'}`}>
+            {deadlineState
+              ? deadlineState.overdue
+                ? `납기 경과 ${Math.abs(deadlineState.diff)}일`
+                : deadlineState.diff === 0
+                  ? '오늘 마감'
+                  : `D-${deadlineState.diff}`
+              : '납기 정보 없음'}
+          </p>
         </div>
       </div>
-      <div className="rounded-lg border border-gray-800 p-4">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-xs text-gray-500">{t('site-description')}</p>
-          {canManage && !editing && <button className="btn btn-ghost btn-xs" onClick={() => setEditing(true)}>{t('edit')}</button>}
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className="rounded-xl border border-gray-800 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-gray-500">공정률 요약</p>
+            <p className="text-sm font-semibold">총 {summary.progress}%</p>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <div className="mb-1 flex items-center justify-between text-xs text-gray-400">
+                <span>하지파이프 설치율</span>
+                <span>{summary.pipeRate}%</span>
+              </div>
+              <ProgressBar value={summary.pipeRate} />
+            </div>
+            <div>
+              <div className="mb-1 flex items-center justify-between text-xs text-gray-400">
+                <span>계약물량 대비 출고량</span>
+                <span>{summary.panelRate}%</span>
+              </div>
+              <ProgressBar value={summary.panelRate} danger={!!deadlineState?.urgent || !!deadlineState?.overdue} />
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-3 text-center text-xs">
+            <div className="rounded-lg bg-gray-900/40 px-2 py-3">
+              <p className="text-gray-500">계약물량</p>
+              <p className="mt-1 text-sm font-bold">{summary.totalPanelQty > 0 ? formatNumber(summary.totalPanelQty) : '-'}</p>
+            </div>
+            <div className="rounded-lg bg-gray-900/40 px-2 py-3">
+              <p className="text-gray-500">출고량</p>
+              <p className="mt-1 text-sm font-bold">{formatNumber(summary.deliveredQty)}</p>
+            </div>
+            <div className="rounded-lg bg-gray-900/40 px-2 py-3">
+              <p className="text-gray-500">금액</p>
+              <p className="mt-1 text-sm font-bold">{summary.amountText || '-'}</p>
+            </div>
+          </div>
         </div>
-        {editing ? <textarea className="textarea textarea-bordered w-full text-sm" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /> : <p className="text-sm whitespace-pre-wrap">{site.description || '-'}</p>}
-        {editing && <div className="flex gap-2 justify-end mt-2"><Button size="xs" onClick={() => setEditing(false)}>{t('cancel')}</Button><Button size="xs" color="primary" loading={saving} onClick={handleSave}>{t('save-changes')}</Button></div>}
+
+        <div className="rounded-xl border border-gray-800 p-4">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-gray-500">{t('site-description')}</p>
+            {canManage && !editing && <button className="btn btn-ghost btn-xs" onClick={() => setEditing(true)}>{t('edit')}</button>}
+          </div>
+          {editing ? (
+            <textarea className="textarea textarea-bordered w-full text-sm" rows={8} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-lg bg-gray-900/30 p-3">
+                  <p className="text-xs text-gray-500">물량</p>
+                  <p className="mt-1 font-medium">{summary.quantityText || '-'}</p>
+                </div>
+                <div className="rounded-lg bg-gray-900/30 p-3">
+                  <p className="text-xs text-gray-500">단가</p>
+                  <p className="mt-1 font-medium">{summary.unitPriceText || '-'}</p>
+                </div>
+              </div>
+              <div className="rounded-lg bg-gray-900/30 p-3">
+                <p className="text-xs text-gray-500">상세 설명</p>
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm">{site.description || '-'}</p>
+              </div>
+            </div>
+          )}
+          {editing && <div className="mt-2 flex justify-end gap-2"><Button size="xs" onClick={() => setEditing(false)}>{t('cancel')}</Button><Button size="xs" color="primary" loading={saving} onClick={handleSave}>{t('save-changes')}</Button></div>}
+        </div>
       </div>
+
       <AssignmentPanel siteId={siteId} assignments={site.assignments} canManage={canManage} onMutate={onMutate} />
     </div>
   );

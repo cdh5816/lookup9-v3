@@ -7,7 +7,8 @@ import { useRouter } from 'next/router';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 import { Button } from 'react-daisyui';
-import { PlusIcon, TrashIcon, MagnifyingGlassIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import ProductionProgressPanel from '@/components/sites/ProductionProgressPanel';
 
 // 상태 신호등 색상
 const STATUS_DOT: Record<string, string> = {
@@ -119,7 +120,7 @@ const SiteDetail = () => {
         {activeTab === 'overview' && <OverviewPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'sales' && <SalesPanel siteId={id as string} sales={site.sales} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'contract' && <ContractPanel siteId={id as string} contracts={site.contracts} canManage={canManage} onMutate={mutate} />}
-        {activeTab === 'production' && <div className="rounded-lg border border-gray-800 p-6 text-center"><p className="text-gray-500">{t('coming-soon')}</p></div>}
+        {activeTab === 'production' && <ProductionProgressPanel site={site} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'painting' && <PaintPanel siteId={id as string} specs={site.paintSpecs || []} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'shipping' && <ShipmentPanel siteId={id as string} shipments={site.shipments || []} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'documents' && <DocumentPanel siteId={id as string} canManage={canManage} />}
@@ -198,6 +199,95 @@ const OverviewPanel = ({ site, siteId, canManage, onMutate }: any) => {
         {editing && <div className="flex gap-2 justify-end mt-2"><Button size="xs" onClick={() => setEditing(false)}>{t('cancel')}</Button><Button size="xs" color="primary" loading={saving} onClick={handleSave}>{t('save-changes')}</Button></div>}
       </div>
       <AssignmentPanel siteId={siteId} assignments={site.assignments} canManage={canManage} onMutate={onMutate} />
+    </div>
+  );
+};
+
+// ========= 영업 =========
+const SalesPanel = ({ sales }: any) => {
+  const { t } = useTranslation('common');
+  const rows = Array.isArray(sales) ? sales : [];
+  return (
+    <div className="rounded-lg border border-gray-800 p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="font-semibold">{t('tab-sales')}</h3>
+        <span className="text-xs text-gray-500">{rows.length}{t('count-suffix', { defaultValue: '건' })}</span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
+      ) : (
+        <div className="space-y-3">
+          {rows.map((item: any) => (
+            <div key={item.id} className="rounded border border-gray-800 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-medium">{item.title || item.name || t('tab-sales')}</p>
+                <span className="text-xs text-gray-500">{item.status || '-'}</span>
+              </div>
+              <p className="mt-2 text-sm text-gray-400 whitespace-pre-wrap">{item.notes || item.description || '-'}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ========= 계약 =========
+const ContractPanel = ({ contracts }: any) => {
+  const { t } = useTranslation('common');
+  const rows = Array.isArray(contracts) ? contracts : [];
+  return (
+    <div className="rounded-lg border border-gray-800 p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="font-semibold">{t('tab-contract')}</h3>
+        <span className="text-xs text-gray-500">{rows.length}{t('count-suffix', { defaultValue: '건' })}</span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
+      ) : (
+        <div className="space-y-3">
+          {rows.map((item: any) => (
+            <div key={item.id} className="rounded border border-gray-800 p-4">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                <div><span className="text-xs text-gray-500">{t('site-status-label')}</span><p className="text-sm">{item.status || '-'}</p></div>
+                <div><span className="text-xs text-gray-500">{t('amount', { defaultValue: '금액' })}</span><p className="text-sm">{item.amount ? Number(item.amount).toLocaleString() : '-'}</p></div>
+                <div><span className="text-xs text-gray-500">{t('date', { defaultValue: '일자' })}</span><p className="text-sm">{item.contractDate ? new Date(item.contractDate).toLocaleDateString('ko-KR') : '-'}</p></div>
+              </div>
+              <p className="mt-2 text-sm text-gray-400 whitespace-pre-wrap">{item.notes || item.description || '-'}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ========= 도장 =========
+const PaintPanel = ({ specs }: any) => {
+  const { t } = useTranslation('common');
+  const rows = Array.isArray(specs) ? specs : [];
+  return (
+    <div className="rounded-lg border border-gray-800 p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="font-semibold">{t('tab-painting')}</h3>
+        <span className="text-xs text-gray-500">{rows.length}{t('count-suffix', { defaultValue: '건' })}</span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
+      ) : (
+        <div className="space-y-3">
+          {rows.map((item: any) => (
+            <div key={item.id} className="rounded border border-gray-800 p-4">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                <div><span className="text-xs text-gray-500">{t('v2-color', { defaultValue: '색상' })}</span><p className="text-sm">{item.color || item.paintCode || '-'}</p></div>
+                <div><span className="text-xs text-gray-500">{t('v2-spec', { defaultValue: '사양' })}</span><p className="text-sm">{item.spec || item.coating || '-'}</p></div>
+                <div><span className="text-xs text-gray-500">{t('site-status-label')}</span><p className="text-sm">{item.status || '-'}</p></div>
+              </div>
+              <p className="mt-2 text-sm text-gray-400 whitespace-pre-wrap">{item.notes || item.description || '-'}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

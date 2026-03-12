@@ -1,130 +1,167 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { getTeamMemberByUserId, getPermissionProfile, findUsersByTargetDept } from '@/lib/team-helper';
+import { createNotification } from '@/lib/notification-helper';
+import { canApproveRequest, getTeamMemberByUserId, verifySiteAccess } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
-  if (!session?.user?.id) return res.status(401).json({ error: { message: 'Unauthorized' } });
+  if (!session) return res.status(401).json({ error: { message: 'Unauthorized' } });
 
   const tm = await getTeamMemberByUserId(session.user.id);
-  if (!tm) return res.status(403).json({ error: { message: 'Forbidden' } });
-
-  const permission = getPermissionProfile(tm.role, tm.user?.department);
-  if (!permission.canManageApprovals) {
-    return res.status(403).json({ error: { message: '전자결재 접근 권한이 없습니다.' } });
-  }
+  if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
 
   try {
-    if (req.method === 'GET') {
-      const status = String(req.query.status || '').trim();
-      const targetDept = String(req.query.targetDept || '').trim();
-
-      const items = await prisma.request.findMany({
-        where: {
-          site: { teamId: tm.teamId },
-          type: { in: ['전자결재', '변경승인', '미팅요청'] },
-          ...(status ? { status } : {}),
-          ...(targetDept ? { targetDept } : {}),
-        },
-        include: {
-          site: { select: { id: true, name: true, status: true } },
-          createdBy: { select: { id: true, name: true, position: true, department: true } },
-          handledBy: { select: { id: true, name: true, position: true } },
-        },
-        orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
-      });
-
-      return res.status(200).json({ data: items });
+    switch (req.method) {
+      case 'GET':
+        return await handleGET(req, res, tm, session.user.id);
+      case 'POST':
+        return await handlePOST(req, res, tm, session.user.id);
+      case 'PUT':
+        return await handlePUT(req, res, tm, session.user.id);
+      default:
+        res.setHeader('Allow', 'GET, POST, PUT');
+        return res.status(405).json({ error: { message: `Method ${req.method} Not Allowed` } });
     }
-
-    if (req.method === 'PUT') {
-      const { requestId, action, result } = req.body;
-      if (!requestId || !action) {
-        return res.status(400).json({ error: { message: 'requestId와 action이 필요합니다.' } });
-      }
-
-      const target = await prisma.request.findUnique({
-        where: { id: requestId },
-        include: { site: { select: { id: true, name: true, teamId: true } }, createdBy: true },
-      });
-      if (!target || target.site.teamId !== tm.teamId) {
-        return res.status(404).json({ error: { message: '결재 문서를 찾을 수 없습니다.' } });
-      }
-
-      const nextStatus = action === 'approve' ? '승인완료' : action === 'reject' ? '반려' : '처리중';
-
-      const updated = await prisma.request.update({
-        where: { id: requestId },
-        data: {
-          status: nextStatus,
-          handledById: session.user.id,
-          result: result || null,
-          updatedAt: new Date(),
-        },
-        include: {
-          site: { select: { id: true, name: true, status: true } },
-          createdBy: { select: { id: true, name: true, position: true, department: true } },
-          handledBy: { select: { id: true, name: true, position: true } },
-        },
-      });
-
-      await prisma.message.create({
-        data: {
-          senderId: session.user.id,
-          receiverId: target.createdById,
-          title: `[전자결재] ${target.title}`,
-          content: `${target.site.name} / ${nextStatus}${result ? `\n${result}` : ''}`,
-        },
-      });
-
-      return res.status(200).json({ data: updated });
-    }
-
-    if (req.method === 'POST') {
-      const { siteId, title, targetDept, description, deadline } = req.body;
-      if (!siteId || !title) {
-        return res.status(400).json({ error: { message: 'siteId와 title이 필요합니다.' } });
-      }
-
-      const site = await prisma.site.findUnique({ where: { id: siteId }, select: { id: true, name: true, teamId: true } });
-      if (!site || site.teamId !== tm.teamId) {
-        return res.status(404).json({ error: { message: '현장을 찾을 수 없습니다.' } });
-      }
-
-      const created = await prisma.request.create({
-        data: {
-          siteId,
-          title,
-          type: '전자결재',
-          targetDept: targetDept || '경영지원부',
-          description: description || null,
-          deadline: deadline ? new Date(deadline) : null,
-          status: '결재대기',
-          createdById: session.user.id,
-        },
-      });
-
-      const receivers = await findUsersByTargetDept(tm.teamId, targetDept || '경영지원부');
-      if (receivers.length > 0) {
-        await prisma.message.createMany({
-          data: receivers
-            .filter((user) => user.id !== session.user.id)
-            .map((user) => ({
-              senderId: session.user.id,
-              receiverId: user.id,
-              title: `[전자결재 요청] ${title}`,
-              content: `${site.name} / ${description || '결재 요청이 등록되었습니다.'}`,
-            })),
-        });
-      }
-
-      return res.status(201).json({ data: created });
-    }
-
-    res.setHeader('Allow', 'GET, POST, PUT');
-    return res.status(405).json({ error: { message: `Method ${req.method} Not Allowed` } });
   } catch (error: any) {
     return res.status(500).json({ error: { message: error.message || 'Internal server error' } });
   }
+}
+
+async function handleGET(req: NextApiRequest, res: NextApiResponse, tm: any, userId: string) {
+  const box = typeof req.query.box === 'string' ? req.query.box : 'inbox';
+  const department = tm.user?.department || null;
+  const canApprove = canApproveRequest(tm.role, department, null);
+
+  const where: any = {
+    site: { teamId: tm.teamId },
+    type: { in: ['전자결재', '미팅요청', '변경승인'] },
+  };
+
+  if (box === 'mine') {
+    where.createdById = userId;
+  } else if (!canApprove) {
+    where.OR = [{ createdById: userId }, { targetDept: department || undefined }];
+  } else if (box === 'dept' && department) {
+    where.targetDept = department;
+  }
+
+  const approvals = await prisma.request.findMany({
+    where,
+    include: {
+      site: { select: { id: true, name: true, status: true } },
+      createdBy: { select: { id: true, name: true, position: true, department: true } },
+      handledBy: { select: { id: true, name: true, position: true } },
+    },
+    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    take: 100,
+  });
+
+  return res.status(200).json({ data: approvals });
+}
+
+async function handlePOST(req: NextApiRequest, res: NextApiResponse, tm: any, userId: string) {
+  const { siteId, title, description, targetDept, priority, type } = req.body;
+  if (!siteId || !title) {
+    return res.status(400).json({ error: { message: 'siteId와 title이 필요합니다.' } });
+  }
+
+  const access = await verifySiteAccess(userId, siteId);
+  if (!access) return res.status(403).json({ error: { message: 'Forbidden' } });
+
+  const request = await prisma.request.create({
+    data: {
+      siteId,
+      title,
+      description: description || null,
+      targetDept: targetDept || null,
+      priority: priority || '보통',
+      type: type || '전자결재',
+      status: '등록',
+      createdById: userId,
+    },
+    include: {
+      site: { select: { id: true, name: true, status: true } },
+      createdBy: { select: { id: true, name: true, position: true, department: true } },
+      handledBy: { select: { id: true, name: true, position: true } },
+    },
+  });
+
+  const receivers = await prisma.teamMember.findMany({
+    where: {
+      teamId: tm.teamId,
+      ...(targetDept
+        ? { user: { department: targetDept } }
+        : { role: { in: ['ADMIN_HR', 'MANAGER'] } }),
+    },
+    select: { userId: true },
+  });
+
+  await Promise.all(
+    receivers
+      .filter((r) => r.userId !== userId)
+      .map((receiver) =>
+        createNotification({
+          userId: receiver.userId,
+          type: 'APPROVAL_CREATED',
+          title: `[${type || '전자결재'}] ${title}`,
+          message: description || '새 승인 요청이 등록되었습니다.',
+          link: `/approvals`,
+          siteId,
+          entityType: 'Request',
+          entityId: request.id,
+        })
+      )
+  );
+
+  return res.status(201).json({ data: request });
+}
+
+async function handlePUT(req: NextApiRequest, res: NextApiResponse, tm: any, userId: string) {
+  const { requestId, status, result } = req.body;
+  if (!requestId || !status) {
+    return res.status(400).json({ error: { message: 'requestId와 status가 필요합니다.' } });
+  }
+
+  const current = await prisma.request.findUnique({
+    where: { id: requestId },
+    include: { site: { select: { teamId: true, id: true, name: true } }, createdBy: { select: { id: true } } },
+  });
+  if (!current || current.site.teamId !== tm.teamId) {
+    return res.status(404).json({ error: { message: '승인 요청을 찾을 수 없습니다.' } });
+  }
+
+  if (!canApproveRequest(tm.role, tm.user?.department, current.targetDept)) {
+    return res.status(403).json({ error: { message: '이 승인 요청을 처리할 권한이 없습니다.' } });
+  }
+
+  const updated = await prisma.request.update({
+    where: { id: requestId },
+    data: {
+      status,
+      result: result || null,
+      handledById: userId,
+      updatedAt: new Date(),
+    },
+    include: {
+      site: { select: { id: true, name: true, status: true } },
+      createdBy: { select: { id: true, name: true, position: true, department: true } },
+      handledBy: { select: { id: true, name: true, position: true } },
+    },
+  });
+
+  if (current.createdBy.id !== userId) {
+    await createNotification({
+      userId: current.createdBy.id,
+      type: 'APPROVAL_UPDATED',
+      title: `[${status}] ${updated.title}`,
+      message: result || `${tm.user?.name || '담당자'}님이 승인 요청을 처리했습니다.`,
+      link: `/approvals`,
+      siteId: current.site.id,
+      entityType: 'Request',
+      entityId: updated.id,
+    });
+  }
+
+  return res.status(200).json({ data: updated });
 }

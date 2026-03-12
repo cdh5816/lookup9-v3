@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { getTeamMemberByUserId, getPermissionProfile, isExternalRole } from '@/lib/team-helper';
+import { getPermissionFlags, getTeamMemberByUserId } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -23,13 +23,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         position: true,
         phone: true,
         createdAt: true,
-        teamMembers: { select: { role: true, team: { select: { id: true, name: true, slug: true } } } },
+        teamMembers: { select: { role: true, team: { select: { id: true, name: true } } } },
       },
     }),
     tm
       ? prisma.siteAssignment.findMany({
           where: { userId, site: { teamId: tm.teamId } },
-          include: { site: { select: { id: true, name: true, status: true, address: true, updatedAt: true } } },
+          include: { site: { select: { id: true, name: true, status: true, address: true } } },
           orderBy: { assignedAt: 'desc' },
           take: 10,
         })
@@ -45,17 +45,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       : [],
   ]);
 
-  const role = user?.teamMembers?.[0]?.role || 'USER';
-  const companyDisplayName = user?.company || user?.teamMembers?.[0]?.team?.name || 'LOOKUP9';
-  const permissionProfile = getPermissionProfile(role, user?.department);
+  const role = tm?.role || user?.teamMembers?.[0]?.role || 'USER';
+  const companyDisplayName = user?.company || tm?.team?.name || 'LOOKUP9';
+  const permissionFlags = getPermissionFlags(role, user?.department || tm?.user?.department);
 
   return res.status(200).json({
     data: {
       ...user,
       role,
-      isExternal: isExternalRole(role),
       companyDisplayName,
-      permissionProfile,
+      permissions: permissionFlags,
       mySites: Array.isArray(mySites) ? mySites.map((a: any) => a.site) : [],
       unreadMessages: unreadCount,
       myComments,

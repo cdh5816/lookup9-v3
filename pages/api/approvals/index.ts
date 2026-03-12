@@ -1,18 +1,19 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { getPermissionFlags, getTeamMemberByUserId } from '@/lib/team-helper';
+import { getTeamMemberByUserId, getPermissionFlags } from '@/lib/team-helper';
 
 const APPROVAL_TYPES = ['전자결재', '미팅요청', '변경승인'];
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
-  if (!session?.user?.id) return res.status(401).json({ error: { message: 'Unauthorized' } });
+  if (!session) return res.status(401).json({ error: { message: 'Unauthorized' } });
 
   const tm = await getTeamMemberByUserId(session.user.id);
-  if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
+  if (!tm) return res.status(403).json({ error: { message: 'Forbidden' } });
 
-  const permissions = getPermissionFlags(tm.role, tm.user?.department);
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, department: true, position: true, name: true } });
+  const permissions = getPermissionFlags(tm.role, me?.department);
   if (!permissions.canApprove) {
     return res.status(403).json({ error: { message: '승인함 접근 권한이 없습니다.' } });
   }
@@ -22,55 +23,62 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where: {
         site: { teamId: tm.teamId },
         type: { in: APPROVAL_TYPES },
+        status: { in: ['등록', '검토중', '승인대기'] },
+        OR: [
+          { targetDept: me?.department || undefined },
+          { targetDept: null },
+        ],
       },
       include: {
         site: { select: { id: true, name: true, status: true } },
         createdBy: { select: { id: true, name: true, department: true, position: true } },
-        handledBy: { select: { id: true, name: true, department: true, position: true } },
+        handledBy: { select: { id: true, name: true, position: true } },
       },
-      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+      orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
       take: 100,
     });
 
-    const myDept = tm.user?.department || '';
-    const visible = items.filter((item) => {
-      if (permissions.isCompanyAdmin || permissions.isManager) return true;
-      if (!item.targetDept) return true;
-      return myDept.includes(item.targetDept) || item.targetDept.includes(myDept);
-    });
-
-    return res.status(200).json({ data: visible });
+    return res.status(200).json({ data: items });
   }
 
   if (req.method === 'PUT') {
     const { requestId, action, result } = req.body;
-    if (!requestId || !action) return res.status(400).json({ error: { message: 'requestId, action is required' } });
-    if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: { message: 'Invalid action' } });
+    if (!requestId || !action) {
+      return res.status(400).json({ error: { message: 'requestId and action are required' } });
+    }
 
-    const current = await prisma.request.findUnique({ where: { id: requestId }, include: { site: { select: { teamId: true, name: true } }, createdBy: true } });
-    if (!current || current.site.teamId !== tm.teamId) return res.status(404).json({ error: { message: 'Request not found' } });
+    const request = await prisma.request.findFirst({
+      where: { id: requestId, site: { teamId: tm.teamId } },
+      include: { site: true, createdBy: true },
+    });
+    if (!request) return res.status(404).json({ error: { message: '요청을 찾을 수 없습니다.' } });
 
+    const status = action === 'approve' ? '승인' : '반려';
     const updated = await prisma.request.update({
       where: { id: requestId },
       data: {
-        status: action === 'approve' ? '승인완료' : '반려',
+        status,
+        result: result || null,
         handledById: session.user.id,
-        result: result || (action === 'approve' ? '승인 처리되었습니다.' : '반려 처리되었습니다.'),
         updatedAt: new Date(),
       },
       include: {
         site: { select: { id: true, name: true, status: true } },
         createdBy: { select: { id: true, name: true, department: true, position: true } },
-        handledBy: { select: { id: true, name: true, department: true, position: true } },
+        handledBy: { select: { id: true, name: true, position: true } },
       },
     });
 
-    await prisma.message.create({
+    await prisma.notification.create({
       data: {
-        senderId: session.user.id,
-        receiverId: current.createdById,
-        title: `[${updated.type}] ${action === 'approve' ? '승인' : '반려'}`,
-        content: `${updated.site.name} / ${updated.title}\n${updated.result || ''}`,
+        userId: request.createdById,
+        type: 'approval',
+        title: `[${request.type}] ${status}`,
+        message: `${request.site.name} / ${request.title} / ${me?.name || '담당자'} 처리`,
+        siteId: request.siteId,
+        link: `/sites/${request.siteId}`,
+        entityType: 'request',
+        entityId: request.id,
       },
     });
 

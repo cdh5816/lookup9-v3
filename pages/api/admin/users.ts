@@ -2,13 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 import { getSession } from '@/lib/session';
-import {
-  getTeamMemberByUserId,
-  hasMinRole,
-  canDeleteUser,
-  canAssignRole,
-  isExternalRole,
-} from '@/lib/team-helper';
+import { getTeamMemberByUserId, hasMinRole, canDeleteUser, canAssignRole, findTeamAdminHr } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -24,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     switch (req.method) {
       case 'GET':
-        return await handleGET(tm.teamId, tm.role, res);
+        return await handleGET(tm.teamId, res);
       case 'POST':
         return await handlePOST(req, res, tm);
       case 'DELETE':
@@ -38,90 +32,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-const handleGET = async (teamId: string, actorRole: string, res: NextApiResponse) => {
-  const [members, sites, companyAdminCount] = await Promise.all([
+const handleGET = async (teamId: string, res: NextApiResponse) => {
+  const [members, sites, adminHr] = await Promise.all([
     prisma.teamMember.findMany({
       where: { teamId },
       include: {
         user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            company: true,
-            department: true,
-            position: true,
-            phone: true,
-            createdAt: true,
-            siteAssignments: {
-              include: {
-                site: { select: { id: true, name: true, status: true } },
-              },
-            },
-          },
+          select: { id: true, name: true, email: true, company: true, department: true, position: true, phone: true, createdAt: true },
         },
       },
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.site.findMany({ where: { teamId }, orderBy: { createdAt: 'desc' }, select: { id: true, name: true, status: true } }),
-    prisma.teamMember.count({ where: { teamId, role: 'ADMIN_HR' } }),
+    prisma.site.findMany({ where: { teamId }, select: { id: true, name: true, status: true }, orderBy: { createdAt: 'desc' } }),
+    findTeamAdminHr(teamId),
   ]);
 
-  const users = members
-    .filter((m) => !['SUPER_ADMIN', 'OWNER'].includes(m.role))
-    .map((m) => ({
-      ...m.user,
-      teamMembers: [{ role: m.role, team: { name: m.teamId } }],
-      assignedSites: (m.user.siteAssignments || []).map((a) => a.site),
-    }));
+  const users = await Promise.all(
+    members.map(async (m) => {
+      const assignments = await prisma.siteAssignment.findMany({
+        where: { userId: m.userId },
+        include: { site: { select: { id: true, name: true, status: true } } },
+      });
+      return {
+        ...m.user,
+        assignedSites: assignments.map((a) => a.site),
+        teamMembers: [{ role: m.role, team: { name: '' } }],
+      };
+    })
+  );
 
-  return res.status(200).json({
-    data: users,
-    meta: {
-      sites,
-      companyAdminExists: companyAdminCount > 0,
-      actorRole,
-    },
-  });
+  return res.status(200).json({ data: users, meta: { sites, hasCompanyAdmin: !!adminHr, companyAdminUserId: adminHr?.userId || null } });
 };
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: any) => {
   const { name, email, password, company, department, position, phone, role, siteIds } = req.body;
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: { message: 'Name, email, password are required' } });
-  }
+  if (!name || !email || !password) return res.status(400).json({ error: { message: 'Name, email, password are required' } });
 
   const targetRole = role || 'USER';
-
   if (!canAssignRole(actorTm.role, targetRole)) {
     return res.status(403).json({ error: { message: `${targetRole} 역할을 부여할 수 없습니다.` } });
   }
 
   if (targetRole === 'ADMIN_HR') {
-    const adminExists = await prisma.teamMember.findFirst({
-      where: { teamId: actorTm.teamId, role: 'ADMIN_HR' },
-      select: { id: true },
-    });
-    if (adminExists) {
-      return res.status(400).json({ error: { message: 'COMPANY_ADMIN 계정은 회사당 1개만 생성할 수 있습니다.' } });
+    const existingAdmin = await findTeamAdminHr(actorTm.teamId);
+    if (existingAdmin) {
+      return res.status(400).json({ error: { message: '회사당 COMPANY_ADMIN은 1명만 생성할 수 있습니다.' } });
     }
   }
 
-  const normalizedSiteIds = Array.isArray(siteIds)
-    ? Array.from(new Set(siteIds.filter((id) => typeof id === 'string' && id.trim())))
-    : [];
-
-  if (isExternalRole(targetRole) && normalizedSiteIds.length === 0) {
-    return res.status(400).json({ error: { message: '외부 계정은 최소 1개 현장을 지정해야 합니다.' } });
-  }
-
-  if (normalizedSiteIds.length > 0) {
-    const siteCount = await prisma.site.count({
-      where: { teamId: actorTm.teamId, id: { in: normalizedSiteIds } },
-    });
-    if (siteCount !== normalizedSiteIds.length) {
-      return res.status(400).json({ error: { message: '선택한 현장 중 다른 회사 현장이 포함되어 있습니다.' } });
-    }
+  const isExternalRole = ['PARTNER', 'GUEST', 'VIEWER'].includes(targetRole);
+  if (isExternalRole && (!Array.isArray(siteIds) || siteIds.length === 0)) {
+    return res.status(400).json({ error: { message: '외부 계정은 최소 1개 이상의 현장을 지정해야 합니다.' } });
   }
 
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -129,30 +90,21 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
 
   const hashedPassword = await hashPassword(password);
   const user = await prisma.user.create({
-    data: {
-      name,
-      email,
-      password: hashedPassword,
-      company: company || null,
-      department: department || null,
-      position: position || null,
-      phone: phone || null,
-    },
+    data: { name, email, password: hashedPassword, company: company || null, department: department || null, position: position || null, phone: phone || null },
   });
 
-  await prisma.teamMember.create({
-    data: { teamId: actorTm.teamId, userId: user.id, role: targetRole },
-  });
+  await prisma.teamMember.create({ data: { teamId: actorTm.teamId, userId: user.id, role: targetRole } });
 
-  if (normalizedSiteIds.length > 0) {
-    await prisma.siteAssignment.createMany({
-      data: normalizedSiteIds.map((siteId: string) => ({
-        siteId,
-        userId: user.id,
-        assignedRole: targetRole,
-      })),
-      skipDuplicates: true,
+  if (isExternalRole) {
+    const validSites = await prisma.site.findMany({
+      where: { id: { in: siteIds || [] }, teamId: actorTm.teamId },
+      select: { id: true },
     });
+    if (validSites.length > 0) {
+      await prisma.siteAssignment.createMany({
+        data: validSites.map((site) => ({ siteId: site.id, userId: user.id })),
+      });
+    }
   }
 
   return res.status(201).json({ data: user });
@@ -169,8 +121,8 @@ const handleDELETE = async (req: NextApiRequest, res: NextApiResponse, actorTm: 
     return res.status(403).json({ error: { message: '이 사용자를 삭제할 권한이 없습니다.' } });
   }
 
+  await prisma.siteAssignment.deleteMany({ where: { userId } });
   await prisma.teamMember.delete({ where: { id: targetTm.id } });
-
   const otherMemberships = await prisma.teamMember.count({ where: { userId } });
   if (otherMemberships === 0) {
     await prisma.user.delete({ where: { id: userId } });

@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { getPermissionFlags, getTeamMemberByUserId, isExternalRole } from '@/lib/team-helper';
+import { getTeamMemberByUserId, getPermissionFlags } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -29,9 +29,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     tm
       ? prisma.siteAssignment.findMany({
           where: { userId, site: { teamId: tm.teamId } },
-          include: { site: { select: { id: true, name: true, status: true, address: true, updatedAt: true } } },
+          include: { site: { select: { id: true, name: true, status: true, address: true } } },
           orderBy: { assignedAt: 'desc' },
-          take: 20,
+          take: 10,
         })
       : [],
     prisma.message.count({ where: { receiverId: userId, isRead: false } }),
@@ -46,17 +46,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ]);
 
   const role = user?.teamMembers?.[0]?.role || 'USER';
-  const teamName = user?.teamMembers?.[0]?.team?.name || null;
-  const companyDisplayName = user?.company || teamName || 'LOOKUP9';
   const permissions = getPermissionFlags(role, user?.department);
+  const companyDisplayName = user?.company || user?.teamMembers?.[0]?.team?.name || 'LOOKUP9';
 
   return res.status(200).json({
     data: {
       ...user,
       role,
-      isExternal: isExternalRole(role),
-      companyDisplayName,
       permissions,
+      isExternal: permissions.isExternal,
+      companyDisplayName,
       mySites: Array.isArray(mySites) ? mySites.map((a: any) => a.site) : [],
       unreadMessages: unreadCount,
       myComments,

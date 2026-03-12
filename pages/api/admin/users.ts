@@ -7,7 +7,7 @@ import {
   hasMinRole,
   canDeleteUser,
   canAssignRole,
-  hasCompanyAdmin,
+  isExternalRole,
 } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -16,16 +16,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const tm = await getTeamMemberByUserId(session.user.id);
   if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
-  if (!hasMinRole(tm.role, 'ADMIN_HR') && tm.role !== 'MANAGER') {
+
+  if (!hasMinRole(tm.role, 'MANAGER')) {
     return res.status(403).json({ error: { message: 'Forbidden' } });
   }
-
-  const teamId = tm.teamId;
 
   try {
     switch (req.method) {
       case 'GET':
-        return await handleGET(teamId, res);
+        return await handleGET(tm.teamId, tm.role, res);
       case 'POST':
         return await handlePOST(req, res, tm);
       case 'DELETE':
@@ -39,41 +38,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-const handleGET = async (teamId: string, res: NextApiResponse) => {
-  const [members, sites, hasAdmin] = await Promise.all([
+const handleGET = async (teamId: string, actorRole: string, res: NextApiResponse) => {
+  const [members, sites, companyAdminCount] = await Promise.all([
     prisma.teamMember.findMany({
       where: { teamId },
       include: {
         user: {
-          select: { id: true, name: true, email: true, company: true, department: true, position: true, phone: true, createdAt: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            company: true,
+            department: true,
+            position: true,
+            phone: true,
+            createdAt: true,
+            siteAssignments: {
+              include: {
+                site: { select: { id: true, name: true, status: true } },
+              },
+            },
+          },
         },
       },
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.site.findMany({
-      where: { teamId },
-      select: { id: true, name: true, status: true },
-      orderBy: { createdAt: 'desc' },
-    }),
-    hasCompanyAdmin(teamId),
+    prisma.site.findMany({ where: { teamId }, orderBy: { createdAt: 'desc' }, select: { id: true, name: true, status: true } }),
+    prisma.teamMember.count({ where: { teamId, role: 'ADMIN_HR' } }),
   ]);
 
-  const users = await Promise.all(
-    members.map(async (m) => {
-      const siteAssignments = await prisma.siteAssignment.findMany({
-        where: { userId: m.userId },
-        include: { site: { select: { id: true, name: true } } },
-      });
+  const users = members
+    .filter((m) => !['SUPER_ADMIN', 'OWNER'].includes(m.role))
+    .map((m) => ({
+      ...m.user,
+      teamMembers: [{ role: m.role, team: { name: m.teamId } }],
+      assignedSites: (m.user.siteAssignments || []).map((a) => a.site),
+    }));
 
-      return {
-        ...m.user,
-        siteAssignments,
-        teamMembers: [{ role: m.role, team: { name: m.teamId } }],
-      };
-    })
-  );
-
-  return res.status(200).json({ data: users, meta: { hasCompanyAdmin: hasAdmin, sites } });
+  return res.status(200).json({
+    data: users,
+    meta: {
+      sites,
+      companyAdminExists: companyAdminCount > 0,
+      actorRole,
+    },
+  });
 };
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: any) => {
@@ -89,15 +98,30 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
   }
 
   if (targetRole === 'ADMIN_HR') {
-    const exists = await hasCompanyAdmin(actorTm.teamId);
-    if (exists) {
-      return res.status(400).json({ error: { message: 'COMPANY_ADMIN은 회사당 1명만 생성할 수 있습니다.' } });
+    const adminExists = await prisma.teamMember.findFirst({
+      where: { teamId: actorTm.teamId, role: 'ADMIN_HR' },
+      select: { id: true },
+    });
+    if (adminExists) {
+      return res.status(400).json({ error: { message: 'COMPANY_ADMIN 계정은 회사당 1개만 생성할 수 있습니다.' } });
     }
   }
 
-  const isExternal = ['PARTNER', 'GUEST', 'VIEWER'].includes(targetRole);
-  if (isExternal && (!Array.isArray(siteIds) || siteIds.length === 0)) {
-    return res.status(400).json({ error: { message: '외부 계정은 최소 1개 이상 현장을 지정해야 합니다.' } });
+  const normalizedSiteIds = Array.isArray(siteIds)
+    ? Array.from(new Set(siteIds.filter((id) => typeof id === 'string' && id.trim())))
+    : [];
+
+  if (isExternalRole(targetRole) && normalizedSiteIds.length === 0) {
+    return res.status(400).json({ error: { message: '외부 계정은 최소 1개 현장을 지정해야 합니다.' } });
+  }
+
+  if (normalizedSiteIds.length > 0) {
+    const siteCount = await prisma.site.count({
+      where: { teamId: actorTm.teamId, id: { in: normalizedSiteIds } },
+    });
+    if (siteCount !== normalizedSiteIds.length) {
+      return res.status(400).json({ error: { message: '선택한 현장 중 다른 회사 현장이 포함되어 있습니다.' } });
+    }
   }
 
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -120,22 +144,15 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
     data: { teamId: actorTm.teamId, userId: user.id, role: targetRole },
   });
 
-  if (isExternal) {
-    const validSites = await prisma.site.findMany({
-      where: { id: { in: siteIds || [] }, teamId: actorTm.teamId },
-      select: { id: true },
+  if (normalizedSiteIds.length > 0) {
+    await prisma.siteAssignment.createMany({
+      data: normalizedSiteIds.map((siteId: string) => ({
+        siteId,
+        userId: user.id,
+        assignedRole: targetRole,
+      })),
+      skipDuplicates: true,
     });
-
-    if (validSites.length > 0) {
-      await prisma.siteAssignment.createMany({
-        data: validSites.map((site) => ({
-          siteId: site.id,
-          userId: user.id,
-          assignedRole: targetRole,
-        })),
-        skipDuplicates: true,
-      });
-    }
   }
 
   return res.status(201).json({ data: user });
@@ -145,16 +162,13 @@ const handleDELETE = async (req: NextApiRequest, res: NextApiResponse, actorTm: 
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ error: { message: 'userId is required' } });
 
-  const targetTm = await prisma.teamMember.findFirst({
-    where: { teamId: actorTm.teamId, userId },
-  });
+  const targetTm = await prisma.teamMember.findFirst({ where: { teamId: actorTm.teamId, userId } });
   if (!targetTm) return res.status(404).json({ error: { message: 'User not found in team' } });
 
   if (!canDeleteUser(actorTm.role, actorTm.userId, targetTm.role, userId)) {
     return res.status(403).json({ error: { message: '이 사용자를 삭제할 권한이 없습니다.' } });
   }
 
-  await prisma.siteAssignment.deleteMany({ where: { userId } });
   await prisma.teamMember.delete({ where: { id: targetTm.id } });
 
   const otherMemberships = await prisma.teamMember.count({ where: { userId } });

@@ -25,9 +25,9 @@ const MainNavigation = ({ activePathname }: NavigationProps) => {
   const permissions = profile?.permissions || {};
 
   const isSuperAdmin = userRole === 'SUPER_ADMIN' || userRole === 'OWNER';
-  const isAdminHR = userRole === 'ADMIN_HR' || isSuperAdmin;
-  const isManager = userRole === 'MANAGER' || isAdminHR;
-  const isUser = userRole === 'USER' || isManager;
+  const isAdminHR = permissions.isCompanyAdmin || isSuperAdmin;
+  const isManager = permissions.isManager || isAdminHR;
+  const isUser = permissions.isInternal || isManager;
   const isPartner = userRole === 'PARTNER';
   const isGuest = userRole === 'GUEST' || userRole === 'VIEWER';
 
@@ -73,22 +73,22 @@ const MainNavigation = ({ activePathname }: NavigationProps) => {
     menus.push({ name: t('nav-production-dashboard'), href: '/production', icon: WrenchScrewdriverIcon, active: activePathname?.startsWith('/production') || false });
   }
 
-  if (permissions.canOpenApprovals) {
+  if (permissions.canApprove) {
     menus.push({ name: '전자결재', href: '/approvals', icon: ClipboardDocumentCheckIcon, active: activePathname?.startsWith('/approvals') || false });
   }
 
   menus.push(
     { name: t('nav-messages'), href: '/messages', icon: EnvelopeIcon, active: activePathname?.startsWith('/messages') || false },
-    { name: t('noti-title'), href: '/notifications', icon: BellAlertIcon, active: activePathname?.startsWith('/notifications') || false }
+    { name: t('noti-title'), href: '/notifications', icon: BellAlertIcon, active: activePathname?.startsWith('/notifications') || false },
   );
 
-  if (permissions.canManageAccounts) {
+  if (isManager) {
     menus.push({ name: t('admin-users'), href: '/admin/users', icon: UsersIcon, active: activePathname?.startsWith('/admin') || false });
   }
 
   menus.push(
     { name: t('my-page-title'), href: '/my', icon: UserCircleIcon, active: activePathname === '/my' },
-    { name: t('security'), href: '/settings/security', icon: ShieldCheckIcon, active: activePathname === '/settings/security' }
+    { name: t('security'), href: '/settings/security', icon: ShieldCheckIcon, active: activePathname === '/settings/security' },
   );
 
   return <NavigationItems menus={menus} />;

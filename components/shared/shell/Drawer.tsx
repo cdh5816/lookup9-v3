@@ -1,15 +1,9 @@
-/*
- * AIRX (individual business) proprietary source.
- * Owner: AIRX / choe DONGHYUN. All rights reserved.
- */
-
-import React, { useEffect } from 'react';
+import React from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import Brand from './Brand';
 import Navigation from './Navigation';
 import { useTranslation } from 'next-i18next';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/router';
 
 interface DrawerProps {
   sidebarOpen: boolean;
@@ -19,25 +13,22 @@ interface DrawerProps {
 const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
   const { t } = useTranslation('common');
   const { data } = useSession();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (sidebarOpen) {
-      setSidebarOpen(false);
-    }
-  }, [router.asPath, sidebarOpen, setSidebarOpen]);
 
   return (
     <>
       {sidebarOpen && (
-        <div className="relative z-50 lg:hidden">
-          <div className="fixed inset-0 bg-gray-600/80" onClick={() => setSidebarOpen(false)} />
+        <div className="relative z-50 lg:hidden" aria-modal="true" role="dialog">
+          <div
+            className="fixed inset-0 bg-black/70"
+            onClick={() => setSidebarOpen(false)}
+          />
+
           <div className="fixed inset-0 flex">
-            <div className="relative mr-16 flex w-full max-w-xs flex-1">
-              <div className="absolute left-full top-0 flex w-16 justify-center pt-5">
+            <div className="relative flex w-full max-w-xs flex-1">
+              <div className="absolute right-0 top-0 z-10 flex w-16 justify-center pt-5 translate-x-full">
                 <button
                   type="button"
-                  className="-m-2.5 p-2.5"
+                  className="-m-2.5 rounded-md p-2.5"
                   onClick={() => setSidebarOpen(false)}
                 >
                   <span className="sr-only">{t('close-sidebar')}</span>
@@ -45,10 +36,10 @@ const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
                 </button>
               </div>
 
-              <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-800 bg-black px-5 pb-4">
+              <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-800 bg-black px-5 pb-4 shadow-2xl">
                 <Brand />
                 {data?.user && (
-                  <div className="-mt-3 break-words text-xs text-gray-500 leading-5">
+                  <div className="-mt-3 break-words text-xs leading-5 text-gray-500">
                     {data.user.name}
                   </div>
                 )}
@@ -63,7 +54,7 @@ const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
         <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-800 bg-black px-6">
           <Brand />
           {data?.user && (
-            <div className="-mt-3 break-words text-xs text-gray-500 leading-5">
+            <div className="-mt-3 break-words text-xs leading-5 text-gray-500">
               {data.user.name}
             </div>
           )}

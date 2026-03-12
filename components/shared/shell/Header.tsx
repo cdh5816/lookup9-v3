@@ -1,8 +1,3 @@
-/*
- * AIRX (individual business) proprietary source.
- * Owner: AIRX / choe DONGHYUN. All rights reserved.
- */
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { signOut } from 'next-auth/react';
 import {
@@ -37,7 +32,6 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
   const { data: profileData } = useSWR('/api/my/profile', fetcher, {
     refreshInterval: 30000,
   });
-
   const unreadCount = profileData?.data?.unreadMessages || 0;
   const companyDisplayName = profileData?.data?.companyDisplayName || app.name;
 
@@ -50,7 +44,6 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
     } catch (error) {
       void error;
     }
-
     await signOut({ callbackUrl: '/auth/login' });
   };
 
@@ -58,14 +51,11 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
 
   const handleSearch = useCallback((q: string) => {
     setQuery(q);
-
     if (debounceRef.current) clearTimeout(debounceRef.current);
-
     if (q.length < 1) {
       setResults(null);
       return;
     }
-
     debounceRef.current = setTimeout(async () => {
       const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
       if (res.ok) {
@@ -83,7 +73,6 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
         setQuery('');
       }
     };
-
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
@@ -93,13 +82,13 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
       <div className="flex min-w-0 items-center gap-3 lg:hidden">
         <button
           type="button"
-          className="-m-2.5 p-2.5 text-gray-400"
+          className="-m-2.5 rounded-md p-2.5 text-gray-400"
           onClick={() => setSidebarOpen(true)}
         >
           <span className="sr-only">{t('open-sidebar')}</span>
           <Bars3Icon className="h-6 w-6" aria-hidden="true" />
         </button>
-        <span className="block max-w-[180px] truncate text-base font-bold">
+        <span className="block max-w-[180px] truncate text-base font-bold leading-6">
           {companyDisplayName}
         </span>
       </div>
@@ -111,15 +100,10 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
               className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white"
               onClick={() => setShowSearch(!showSearch)}
             >
-              {showSearch ? (
-                <XMarkIcon className="h-5 w-5" />
-              ) : (
-                <MagnifyingGlassIcon className="h-5 w-5" />
-              )}
+              {showSearch ? <XMarkIcon className="h-5 w-5" /> : <MagnifyingGlassIcon className="h-5 w-5" />}
             </button>
-
             {showSearch && (
-              <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-gray-700 bg-gray-900 shadow-xl">
+              <div className="absolute right-0 top-full mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-gray-700 bg-gray-900 shadow-xl">
                 <input
                   type="text"
                   autoFocus
@@ -128,7 +112,6 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                   value={query}
                   onChange={(e) => handleSearch(e.target.value)}
                 />
-
                 {results && (
                   <div className="max-h-72 overflow-y-auto p-2">
                     {results.sites?.length > 0 && (
@@ -145,20 +128,19 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                             }}
                           >
                             <div className="cursor-pointer rounded px-3 py-2 text-sm hover:bg-gray-800">
-                              <span className="block truncate">{s.name}</span>
+                              <span className="block break-words leading-6">{s.name}</span>
                               <span className="text-xs text-gray-500">{s.status}</span>
                             </div>
                           </Link>
                         ))}
                       </div>
                     )}
-
                     {results.users?.length > 0 && (
                       <div className="mb-2">
                         <p className="px-2 py-1 text-xs text-gray-500">{t('members')}</p>
                         {results.users.map((u: any) => (
                           <div key={u.id} className="rounded px-3 py-2 text-sm hover:bg-gray-800">
-                            <span className="block truncate">
+                            <span className="block break-words leading-6">
                               {u.position ? `${u.position} ` : ''}
                               {u.name}
                             </span>
@@ -167,47 +149,37 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                         ))}
                       </div>
                     )}
-
                     {results.clients?.length > 0 && (
                       <div>
                         <p className="px-2 py-1 text-xs text-gray-500">{t('admin-tab-clients')}</p>
                         {results.clients.map((c: any) => (
                           <div key={c.id} className="rounded px-3 py-2 text-sm hover:bg-gray-800">
-                            <span className="block truncate">{c.name}</span>
+                            <span className="block break-words leading-6">{c.name}</span>
                             <span className="text-xs text-gray-500">{c.type}</span>
                           </div>
                         ))}
                       </div>
                     )}
-
-                    {results.sites?.length === 0 &&
-                      results.users?.length === 0 &&
-                      results.clients?.length === 0 && (
-                        <p className="px-3 py-4 text-center text-sm text-gray-500">{t('search-no-results')}</p>
-                      )}
+                    {results.sites?.length === 0 && results.users?.length === 0 && results.clients?.length === 0 && (
+                      <p className="px-3 py-4 text-center text-sm text-gray-500">{t('search-no-results')}</p>
+                    )}
                   </div>
                 )}
               </div>
             )}
           </div>
 
-          <Link
-            href="/notifications"
-            className="relative rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white"
-          >
+          <Link href="/notifications" className="relative rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white">
             <BellIcon className="h-5 w-5" />
             {unreadCount > 0 && (
-              <span className="absolute right-1 top-1 inline-flex min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </Link>
 
           {env.darkModeEnabled && (
-            <button
-              className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white"
-              onClick={toggleTheme}
-            >
+            <button className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white" onClick={toggleTheme}>
               <SunIcon className="h-5 w-5" />
             </button>
           )}
@@ -215,11 +187,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
           <Link href="/my" className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white">
             <UserCircleIcon className="h-5 w-5" />
           </Link>
-
-          <button
-            className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-red-400"
-            onClick={handleLogout}
-          >
+          <button className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-red-400" onClick={handleLogout}>
             <ArrowRightOnRectangleIcon className="h-5 w-5" />
           </button>
         </div>

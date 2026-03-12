@@ -13,12 +13,6 @@ const ROLE_LEVEL: Record<string, number> = {
   SUPER_ADMIN: 5,
 };
 
-const SALES_DEPARTMENTS = ['영업부', '경영진', '경영지원부'];
-const CONTRACT_DEPARTMENTS = ['영업부', '수주팀', '경영진', '경영지원부'];
-const PRODUCTION_DEPARTMENTS = ['생산관리팀', '경영진', '경영지원부'];
-const PAINT_DEPARTMENTS = ['도장팀', '생산관리팀', '경영진', '경영지원부'];
-const SHIPPING_DEPARTMENTS = ['출하팀', '생산관리팀', '경영진', '경영지원부'];
-
 export function getRoleLevel(role: string): number {
   return ROLE_LEVEL[role] ?? 0;
 }
@@ -26,23 +20,12 @@ export function getRoleLevel(role: string): number {
 export async function getTeamMemberByUserId(userId: string) {
   return prisma.teamMember.findFirst({
     where: { userId },
-    include: {
-      team: { select: { id: true, slug: true, name: true } },
-      user: { select: { id: true, name: true, email: true, company: true, department: true, position: true } },
-    },
+    include: { team: { select: { id: true, slug: true, name: true } } },
   });
 }
 
 export function hasMinRole(currentRole: string, minRole: string): boolean {
   return getRoleLevel(currentRole) >= getRoleLevel(minRole);
-}
-
-export function isExternalRole(role: string): boolean {
-  return ['PARTNER', 'GUEST', 'VIEWER'].includes(role);
-}
-
-export function isInternalRole(role: string): boolean {
-  return !isExternalRole(role);
 }
 
 export function canDeleteUser(
@@ -59,44 +42,8 @@ export function canDeleteUser(
 export function canAssignRole(actorRole: string, targetRole: string): boolean {
   if (targetRole === 'SUPER_ADMIN' || targetRole === 'OWNER') return false;
   if (actorRole === 'SUPER_ADMIN' || actorRole === 'OWNER') return true;
-  if (actorRole === 'ADMIN_HR' || actorRole === 'ADMIN') {
-    return ['MANAGER', 'USER', 'PARTNER', 'GUEST', 'VIEWER'].includes(targetRole);
-  }
-  if (actorRole === 'MANAGER') {
-    return ['USER', 'PARTNER', 'GUEST', 'VIEWER'].includes(targetRole);
-  }
-  return false;
-}
-
-export function canCreateCompanyAdmin(actorRole: string): boolean {
-  return actorRole === 'SUPER_ADMIN' || actorRole === 'OWNER';
-}
-
-export function canManageAccounts(actorRole: string): boolean {
-  return ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER'].includes(actorRole);
-}
-
-export function canApproveRequest(actorRole: string, department?: string | null, targetDept?: string | null): boolean {
-  if (['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN'].includes(actorRole)) return true;
-  if (actorRole !== 'MANAGER') return false;
-  if (!targetDept) return true;
-  return department === targetDept;
-}
-
-export function getPermissionFlags(role: string, department?: string | null) {
-  const dep = department || '';
-  const isAdmin = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN'].includes(role);
-  return {
-    role,
-    isExternal: isExternalRole(role),
-    canManageAccounts: canManageAccounts(role),
-    canViewSales: isAdmin || SALES_DEPARTMENTS.includes(dep),
-    canViewContracts: isAdmin || CONTRACT_DEPARTMENTS.includes(dep),
-    canViewProduction: isAdmin || PRODUCTION_DEPARTMENTS.includes(dep),
-    canViewPaint: isAdmin || PAINT_DEPARTMENTS.includes(dep),
-    canViewShipping: isAdmin || SHIPPING_DEPARTMENTS.includes(dep),
-    canApprove: canApproveRequest(role, dep, null),
-  };
+  if (getRoleLevel(targetRole) >= getRoleLevel(actorRole)) return false;
+  return true;
 }
 
 export async function verifySiteAccess(userId: string, siteId: string) {
@@ -108,15 +55,54 @@ export async function verifySiteAccess(userId: string, siteId: string) {
     select: { id: true, teamId: true },
   });
   if (!site) return null;
-
   if (site.teamId && site.teamId !== tm.teamId) return null;
 
-  if (isExternalRole(tm.role)) {
-    const assignment = await prisma.siteAssignment.findFirst({
-      where: { siteId, userId },
-    });
+  if (tm.role === 'PARTNER' || tm.role === 'GUEST' || tm.role === 'VIEWER') {
+    const assignment = await prisma.siteAssignment.findFirst({ where: { siteId, userId } });
     if (!assignment) return null;
   }
 
   return tm;
+}
+
+export async function hasCompanyAdmin(teamId: string) {
+  const count = await prisma.teamMember.count({
+    where: { teamId, role: 'ADMIN_HR' },
+  });
+  return count > 0;
+}
+
+export function getDepartmentFlags(department?: string | null) {
+  const dept = department || '';
+  return {
+    isSalesDept: dept.includes('영업'),
+    isContractDept: dept.includes('수주'),
+    isProductionDept: dept.includes('생산'),
+    isPaintDept: dept.includes('도장'),
+    isShippingDept: dept.includes('출하'),
+    isSupportDept: dept.includes('경영') || dept.includes('지원'),
+    isConstructionDept: dept.includes('공사'),
+  };
+}
+
+export function buildPermissionSet(role: string, department?: string | null) {
+  const dept = getDepartmentFlags(department);
+  const isCompanyAdmin = role === 'ADMIN_HR' || role === 'ADMIN' || role === 'OWNER' || role === 'SUPER_ADMIN';
+  const isManager = role === 'MANAGER' || isCompanyAdmin;
+  const isInternal = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'USER', 'MEMBER'].includes(role);
+  const isExternal = ['PARTNER', 'GUEST', 'VIEWER'].includes(role);
+
+  return {
+    isInternal,
+    isExternal,
+    isCompanyAdmin,
+    canOpenApprovals: isCompanyAdmin || isManager || dept.isSupportDept,
+    canViewSales: isCompanyAdmin || dept.isSalesDept,
+    canViewContract: isCompanyAdmin || dept.isSalesDept || dept.isContractDept,
+    canViewProduction: isCompanyAdmin || dept.isProductionDept,
+    canViewPaint: isCompanyAdmin || dept.isProductionDept || dept.isPaintDept,
+    canViewShipping: isCompanyAdmin || dept.isProductionDept || dept.isShippingDept,
+    canManageAccounts: isCompanyAdmin || role === 'MANAGER',
+    canCreateGuest: isCompanyAdmin || role === 'MANAGER' || role === 'PARTNER' || role === 'USER',
+  };
 }

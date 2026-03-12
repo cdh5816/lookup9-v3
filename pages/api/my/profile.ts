@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { getPermissionFlags, getTeamMemberByUserId } from '@/lib/team-helper';
+import { buildPermissionSet, getTeamMemberByUserId } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -45,16 +45,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       : [],
   ]);
 
-  const role = tm?.role || user?.teamMembers?.[0]?.role || 'USER';
-  const companyDisplayName = user?.company || tm?.team?.name || 'LOOKUP9';
-  const permissionFlags = getPermissionFlags(role, user?.department || tm?.user?.department);
+  const role = user?.teamMembers?.[0]?.role || 'USER';
+  const permissions = buildPermissionSet(role, user?.department);
+  const companyDisplayName = user?.company || user?.teamMembers?.[0]?.team?.name || 'LOOKUP9';
 
   return res.status(200).json({
     data: {
       ...user,
       role,
+      permissions,
       companyDisplayName,
-      permissions: permissionFlags,
+      isExternal: permissions.isExternal,
       mySites: Array.isArray(mySites) ? mySites.map((a: any) => a.site) : [],
       unreadMessages: unreadCount,
       myComments,

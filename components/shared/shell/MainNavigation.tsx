@@ -19,7 +19,6 @@ import fetcher from '@/lib/fetcher';
 
 const MainNavigation = ({ activePathname }: NavigationProps) => {
   const { t } = useTranslation('common');
-
   const { data: profileData } = useSWR('/api/my/profile', fetcher);
   const profile = profileData?.data;
   const userRole = profile?.role || profile?.teamMembers?.[0]?.role || 'USER';
@@ -34,29 +33,36 @@ const MainNavigation = ({ activePathname }: NavigationProps) => {
 
   if (isGuest) {
     return (
-      <NavigationItems menus={[
-        { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: activePathname === '/dashboard' },
-        { name: t('nav-my-sites'), href: '/my/sites', icon: BuildingOffice2Icon, active: activePathname?.startsWith('/my/sites') || false },
-        { name: t('nav-messages'), href: '/messages', icon: EnvelopeIcon, active: activePathname?.startsWith('/messages') || false },
-        { name: t('my-page-title'), href: '/my', icon: UserCircleIcon, active: activePathname === '/my' },
-      ]} />
+      <NavigationItems
+        menus={[
+          { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: activePathname === '/dashboard' },
+          { name: t('nav-my-sites'), href: '/my/sites', icon: BuildingOffice2Icon, active: activePathname?.startsWith('/my/sites') || false },
+          { name: t('nav-messages'), href: '/messages', icon: EnvelopeIcon, active: activePathname?.startsWith('/messages') || false },
+          { name: t('my-page-title'), href: '/my', icon: UserCircleIcon, active: activePathname === '/my' },
+        ]}
+      />
     );
   }
 
   if (isPartner) {
     return (
-      <NavigationItems menus={[
-        { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: activePathname === '/dashboard' },
-        { name: t('nav-my-sites'), href: '/my/sites', icon: BuildingOffice2Icon, active: activePathname?.startsWith('/my/sites') || false },
-        { name: t('nav-production-dashboard'), href: '/production', icon: WrenchScrewdriverIcon, active: activePathname?.startsWith('/production') || false },
-        { name: '전자결재', href: '/approvals', icon: ClipboardDocumentCheckIcon, active: activePathname?.startsWith('/approvals') || false },
-        { name: t('nav-messages'), href: '/messages', icon: EnvelopeIcon, active: activePathname?.startsWith('/messages') || false },
-        { name: t('my-page-title'), href: '/my', icon: UserCircleIcon, active: activePathname === '/my' },
-      ]} />
+      <NavigationItems
+        menus={[
+          { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: activePathname === '/dashboard' },
+          { name: t('nav-my-sites'), href: '/my/sites', icon: BuildingOffice2Icon, active: activePathname?.startsWith('/my/sites') || false },
+          { name: t('nav-production-dashboard'), href: '/production', icon: WrenchScrewdriverIcon, active: activePathname?.startsWith('/production') || false },
+          { name: '게스트 관리', href: '/admin/users', icon: UserPlusIcon, active: activePathname?.startsWith('/admin/users') || false },
+          { name: t('nav-messages'), href: '/messages', icon: EnvelopeIcon, active: activePathname?.startsWith('/messages') || false },
+          { name: t('my-page-title'), href: '/my', icon: UserCircleIcon, active: activePathname === '/my' },
+          { name: t('security'), href: '/settings/security', icon: ShieldCheckIcon, active: activePathname === '/settings/security' },
+        ]}
+      />
     );
   }
 
-  const menus: MenuItem[] = [{ name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: activePathname === '/dashboard' }];
+  const menus: MenuItem[] = [
+    { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: activePathname === '/dashboard' },
+  ];
 
   if (isAdminHR) {
     menus.push({ name: t('nav-admin-hr'), href: '/admin-hr', icon: BuildingLibraryIcon, active: activePathname?.startsWith('/admin-hr') || false });
@@ -67,7 +73,7 @@ const MainNavigation = ({ activePathname }: NavigationProps) => {
     menus.push({ name: t('nav-production-dashboard'), href: '/production', icon: WrenchScrewdriverIcon, active: activePathname?.startsWith('/production') || false });
   }
 
-  if (permissions?.canApprove || isManager) {
+  if (permissions.canOpenApprovals) {
     menus.push({ name: '전자결재', href: '/approvals', icon: ClipboardDocumentCheckIcon, active: activePathname?.startsWith('/approvals') || false });
   }
 
@@ -76,7 +82,7 @@ const MainNavigation = ({ activePathname }: NavigationProps) => {
     { name: t('noti-title'), href: '/notifications', icon: BellAlertIcon, active: activePathname?.startsWith('/notifications') || false }
   );
 
-  if (isManager) {
+  if (permissions.canManageAccounts) {
     menus.push({ name: t('admin-users'), href: '/admin/users', icon: UsersIcon, active: activePathname?.startsWith('/admin') || false });
   }
 

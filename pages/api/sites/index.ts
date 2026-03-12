@@ -3,8 +3,6 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { getTeamMemberByUserId } from '@/lib/team-helper';
 
-const EXTERNAL_ROLES = ['PARTNER', 'GUEST', 'VIEWER'];
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: { message: 'Unauthorized' } });
@@ -14,10 +12,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     switch (req.method) {
-      case 'GET':
-        return await handleGET(req, res, tm);
-      case 'POST':
-        return await handlePOST(req, res, session, tm);
+      case 'GET': return await handleGET(req, res, tm);
+      case 'POST': return await handlePOST(req, res, session, tm);
       default:
         res.setHeader('Allow', 'GET, POST');
         return res.status(405).json({ error: { message: `Method ${req.method} Not Allowed` } });
@@ -36,11 +32,11 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     where.OR = [
       { name: { contains: search as string, mode: 'insensitive' } },
       { address: { contains: search as string, mode: 'insensitive' } },
-      { description: { contains: search as string, mode: 'insensitive' } },
     ];
   }
 
-  if (EXTERNAL_ROLES.includes(tm.role)) {
+  // PARTNER/GUEST는 배정된 현장만
+  if (tm.role === 'PARTNER' || tm.role === 'GUEST' || tm.role === 'VIEWER') {
     where.assignments = { some: { userId: tm.userId } };
   }
 
@@ -49,7 +45,10 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     include: {
       client: { select: { name: true } },
       createdBy: { select: { name: true, position: true } },
-      shipments: { select: { quantity: true, updatedAt: true, createdAt: true } },
+      shipments: {
+        select: { quantity: true, shippedAt: true, status: true },
+        orderBy: [{ sequence: 'desc' }, { createdAt: 'desc' }],
+      },
       _count: { select: { assignments: true, comments: true } },
     },
     orderBy: { createdAt: 'desc' },
@@ -59,10 +58,6 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
 };
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: any, tm: any) => {
-  if (EXTERNAL_ROLES.includes(tm.role)) {
-    return res.status(403).json({ error: { message: '외부 계정은 현장을 생성할 수 없습니다.' } });
-  }
-
   const { name, address, clientId, status, description } = req.body;
   if (!name) return res.status(400).json({ error: { message: 'Name is required' } });
 

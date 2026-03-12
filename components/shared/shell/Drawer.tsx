@@ -25,7 +25,7 @@ const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
     if (sidebarOpen) {
       setSidebarOpen(false);
     }
-  }, [router.asPath]);
+  }, [router.asPath, sidebarOpen, setSidebarOpen]);
 
   return (
     <>

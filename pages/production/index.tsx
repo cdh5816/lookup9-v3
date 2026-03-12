@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-/* eslint-disable i18next/no-literal-string */
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import Head from 'next/head';

@@ -7,8 +7,8 @@ import { useRouter } from 'next/router';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 import { Button } from 'react-daisyui';
-import ProductionProgressPanel from '@/components/sites/ProductionProgressPanel';
 import { PlusIcon, TrashIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import ProductionProgressPanel from '@/components/sites/ProductionProgressPanel';
 
 // 상태 신호등 색상
 const STATUS_DOT: Record<string, string> = {
@@ -120,7 +120,7 @@ const SiteDetail = () => {
         {activeTab === 'overview' && <OverviewPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'sales' && <SalesPanel siteId={id as string} sales={site.sales} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'contract' && <ContractPanel siteId={id as string} contracts={site.contracts} canManage={canManage} onMutate={mutate} />}
-        {activeTab === 'production' && <ProductionProgressPanel site={site} canManage={canManage} onMutate={mutate} />}
+        {activeTab === 'production' && <ProductionProgressPanel siteId={id as string} site={site} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'painting' && <PaintPanel siteId={id as string} specs={site.paintSpecs || []} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'shipping' && <ShipmentPanel siteId={id as string} shipments={site.shipments || []} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'documents' && <DocumentPanel siteId={id as string} canManage={canManage} />}
@@ -369,6 +369,285 @@ const AssignmentPanel = ({ siteId, assignments, canManage, onMutate }: any) => {
                   <TrashIcon className="h-3 w-3" />
                 </button>
               ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ========= 영업 =========
+const salesStatuses = ['영업접촉', '제안', '견적제출', '협상중', '수주확정', '실주'];
+const SalesPanel = ({ siteId, sales, canManage, onMutate }: any) => {
+  const { t } = useTranslation('common');
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ status: '영업접촉', estimateAmount: '', meetingNotes: '' });
+  const [sub, setSub] = useState(false);
+
+  const handleSubmit = async () => {
+    setSub(true);
+    await fetch(`/api/sites/${siteId}/sales`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    });
+    setForm({ status: '영업접촉', estimateAmount: '', meetingNotes: '' });
+    setShowForm(false);
+    setSub(false);
+    onMutate();
+  };
+
+  const handleDel = async (salesId: string) => {
+    if (!confirm(t('sales-delete-confirm'))) return;
+    await fetch(`/api/sites/${siteId}/sales`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ salesId }),
+    });
+    onMutate();
+  };
+
+  return (
+    <div className="rounded-lg border border-gray-800 p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="font-semibold">{t('tab-sales')}</h3>
+        {canManage && (
+          <Button size="xs" color="primary" onClick={() => setShowForm(!showForm)}>
+            {showForm ? t('cancel') : (<><PlusIcon className="mr-1 h-4 w-4" />{t('sales-add')}</>)}
+          </Button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="mb-4 space-y-3 rounded-lg border border-gray-700 p-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+              <label className="label"><span className="label-text text-xs">{t('sales-status')}</span></label>
+              <select className="select select-bordered select-sm w-full" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                {salesStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label"><span className="label-text text-xs">{t('site-estimate')}</span></label>
+              <input type="number" className="input input-bordered input-sm w-full" value={form.estimateAmount} onChange={(e) => setForm({ ...form, estimateAmount: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <label className="label"><span className="label-text text-xs">{t('sales-notes')}</span></label>
+            <textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.meetingNotes} onChange={(e) => setForm({ ...form, meetingNotes: e.target.value })} />
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" color="primary" loading={sub} onClick={handleSubmit}>{t('save-changes')}</Button>
+          </div>
+        </div>
+      )}
+
+      {sales.length === 0 ? (
+        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
+      ) : (
+        sales.map((item: any) => (
+          <div key={item.id} className="border-b border-gray-800 py-3 last:border-0">
+            <div className="flex items-center justify-between">
+              <span className="badge badge-sm">{item.status}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">{new Date(item.createdAt).toLocaleDateString('ko-KR')}</span>
+                {canManage && <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDel(item.id)}><TrashIcon className="h-3 w-3" /></button>}
+              </div>
+            </div>
+            {item.estimateAmount && <p className="mt-1 text-sm">{t('site-estimate')}: {Number(item.estimateAmount).toLocaleString()}</p>}
+            {item.meetingNotes && <p className="mt-1 break-words text-sm leading-6 text-gray-400">{item.meetingNotes}</p>}
+          </div>
+        ))
+      )}
+    </div>
+  );
+};
+
+// ========= 수주 =========
+const contractStatuses = ['수주등록', '계약진행', '계약완료', '변경계약', '취소'];
+const ContractPanel = ({ siteId, contracts, canManage, onMutate }: any) => {
+  const { t } = useTranslation('common');
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ status: '수주등록', contractAmount: '', specialNotes: '' });
+  const [sub, setSub] = useState(false);
+
+  const handleSubmit = async () => {
+    setSub(true);
+    await fetch(`/api/sites/${siteId}/contracts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    });
+    setForm({ status: '수주등록', contractAmount: '', specialNotes: '' });
+    setShowForm(false);
+    setSub(false);
+    onMutate();
+  };
+
+  const handleDel = async (contractId: string) => {
+    if (!confirm(t('contract-delete-confirm'))) return;
+    await fetch(`/api/sites/${siteId}/contracts`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contractId }),
+    });
+    onMutate();
+  };
+
+  return (
+    <div className="rounded-lg border border-gray-800 p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="font-semibold">{t('tab-contract')}</h3>
+        {canManage && (
+          <Button size="xs" color="primary" onClick={() => setShowForm(!showForm)}>
+            {showForm ? t('cancel') : (<><PlusIcon className="mr-1 h-4 w-4" />{t('contract-add')}</>)}
+          </Button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="mb-4 space-y-3 rounded-lg border border-gray-700 p-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+              <label className="label"><span className="label-text text-xs">{t('contract-status')}</span></label>
+              <select className="select select-bordered select-sm w-full" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                {contractStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label"><span className="label-text text-xs">{t('site-contract-amount')}</span></label>
+              <input type="number" className="input input-bordered input-sm w-full" value={form.contractAmount} onChange={(e) => setForm({ ...form, contractAmount: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <label className="label"><span className="label-text text-xs">{t('contract-notes')}</span></label>
+            <textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.specialNotes} onChange={(e) => setForm({ ...form, specialNotes: e.target.value })} />
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" color="primary" loading={sub} onClick={handleSubmit}>{t('save-changes')}</Button>
+          </div>
+        </div>
+      )}
+
+      {contracts.length === 0 ? (
+        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
+      ) : (
+        contracts.map((item: any) => (
+          <div key={item.id} className="border-b border-gray-800 py-3 last:border-0">
+            <div className="flex items-center justify-between">
+              <span className="badge badge-sm">{item.status}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">{new Date(item.createdAt).toLocaleDateString('ko-KR')}</span>
+                {canManage && <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDel(item.id)}><TrashIcon className="h-3 w-3" /></button>}
+              </div>
+            </div>
+            {item.contractAmount && <p className="mt-1 text-sm">{t('site-contract-amount')}: {Number(item.contractAmount).toLocaleString()}</p>}
+            {item.specialNotes && <p className="mt-1 break-words text-sm leading-6 text-gray-400">{item.specialNotes}</p>}
+          </div>
+        ))
+      )}
+    </div>
+  );
+};
+
+// ========= 도장 =========
+const PaintPanel = ({ siteId, specs, canManage, onMutate }: any) => {
+  const { t } = useTranslation('common');
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ colorCode: '', colorName: '', manufacturer: '', finishType: '', area: '', quantity: '', isPrimary: false, notes: '' });
+  const [sub, setSub] = useState(false);
+
+  const handleSubmit = async () => {
+    setSub(true);
+    await fetch(`/api/sites/${siteId}/paints`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    });
+    setForm({ colorCode: '', colorName: '', manufacturer: '', finishType: '', area: '', quantity: '', isPrimary: false, notes: '' });
+    setShowForm(false);
+    setSub(false);
+    onMutate();
+  };
+
+  const handleConfirm = async (specId: string) => {
+    await fetch(`/api/sites/${siteId}/paints`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ specId, status: '확정' }),
+    });
+    onMutate();
+  };
+
+  const handleDel = async (specId: string) => {
+    if (!confirm(t('v2-paint-delete-confirm'))) return;
+    await fetch(`/api/sites/${siteId}/paints`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ specId }),
+    });
+    onMutate();
+  };
+
+  return (
+    <div className="rounded-lg border border-gray-800 p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="font-semibold">{t('tab-painting')}</h3>
+        {canManage && (
+          <Button size="xs" color="primary" onClick={() => setShowForm(!showForm)}>
+            {showForm ? t('cancel') : (<><PlusIcon className="mr-1 h-4 w-4" />{t('v2-paint-add')}</>)}
+          </Button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="mb-4 space-y-3 rounded-lg border border-gray-700 p-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            <div><label className="label"><span className="label-text text-xs">{t('v2-color-code')} *</span></label><input type="text" className="input input-bordered input-sm w-full" value={form.colorCode} onChange={(e) => setForm({ ...form, colorCode: e.target.value })} /></div>
+            <div><label className="label"><span className="label-text text-xs">{t('v2-color-name')} *</span></label><input type="text" className="input input-bordered input-sm w-full" value={form.colorName} onChange={(e) => setForm({ ...form, colorName: e.target.value })} /></div>
+            <div><label className="label"><span className="label-text text-xs">{t('v2-manufacturer')}</span></label><input type="text" className="input input-bordered input-sm w-full" value={form.manufacturer} onChange={(e) => setForm({ ...form, manufacturer: e.target.value })} /></div>
+            <div><label className="label"><span className="label-text text-xs">{t('v2-finish-type')}</span></label><input type="text" className="input input-bordered input-sm w-full" value={form.finishType} onChange={(e) => setForm({ ...form, finishType: e.target.value })} /></div>
+            <div><label className="label"><span className="label-text text-xs">{t('v2-area')}</span></label><input type="text" className="input input-bordered input-sm w-full" value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} /></div>
+            <div><label className="label"><span className="label-text text-xs">{t('v2-quantity')}</span></label><input type="number" className="input input-bordered input-sm w-full" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></div>
+          </div>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="checkbox checkbox-sm" checked={form.isPrimary} onChange={(e) => setForm({ ...form, isPrimary: e.target.checked })} />{t('v2-primary-color')}</label>
+          </div>
+          <div><label className="label"><span className="label-text text-xs">{t('contract-notes')}</span></label><textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+          <div className="flex justify-end"><Button size="sm" color="primary" loading={sub} onClick={handleSubmit}>{t('save-changes')}</Button></div>
+        </div>
+      )}
+
+      {specs.length === 0 ? (
+        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {specs.map((spec: any) => (
+            <div key={spec.id} className="rounded-lg border border-gray-800 p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="badge badge-sm">{spec.colorCode}</span>
+                  <span className="font-medium">{spec.colorName}</span>
+                  {spec.isPrimary && <span className="badge badge-primary badge-sm">{t('v2-primary-color')}</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  {spec.status && <span className="badge badge-outline badge-sm">{spec.status}</span>}
+                  {canManage && <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDel(spec.id)}><TrashIcon className="h-3 w-3" /></button>}
+                </div>
+              </div>
+              <div className="space-y-1 text-sm text-gray-400">
+                {spec.manufacturer && <p>{t('v2-manufacturer')}: {spec.manufacturer}</p>}
+                {spec.finishType && <p>{t('v2-finish-type')}: {spec.finishType}</p>}
+                {spec.area && <p>{t('v2-area')}: {spec.area}</p>}
+                {spec.quantity && <p>{t('v2-quantity')}: {Number(spec.quantity).toLocaleString()}</p>}
+                {spec.notes && <p className="whitespace-pre-wrap">{spec.notes}</p>}
+              </div>
+              {canManage && spec.status !== '확정' && (
+                <div className="mt-3 flex justify-end">
+                  <Button size="xs" onClick={() => handleConfirm(spec.id)}>{t('v2-paint-confirm')}</Button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -641,27 +920,6 @@ const HistoryPanel = ({ history }: { history: any[] }) => {
     </div>
   );
 };
-
-
-function SimpleSoonPanel({ label }: { label: string }) {
-  return (
-    <div className="rounded-lg border border-gray-800 p-6 text-center">
-      <p className="text-gray-500">{label}</p>
-    </div>
-  );
-}
-
-function SalesPanel(_: any) {
-  return <SimpleSoonPanel label="영업 탭은 준비 중입니다." />;
-}
-
-function ContractPanel(_: any) {
-  return <SimpleSoonPanel label="공사수주 탭은 준비 중입니다." />;
-}
-
-function PaintPanel(_: any) {
-  return <SimpleSoonPanel label="도장 탭은 준비 중입니다." />;
-}
 
 export async function getServerSideProps({ locale }: GetServerSidePropsContext) {
   return { props: { ...(locale ? await serverSideTranslations(locale, ['common']) : {}) } };

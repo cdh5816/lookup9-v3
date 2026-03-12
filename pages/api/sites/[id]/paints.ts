@@ -3,26 +3,22 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { verifySiteAccess } from '@/lib/team-helper';
 
-async function notifyPaintUsers(siteId: string, title: string, message: string, entityId?: string) {
-  const site = await prisma.site.findUnique({ where: { id: siteId }, select: { teamId: true } });
-  if (!site?.teamId) return;
-  const targets = await prisma.teamMember.findMany({
-    where: { teamId: site.teamId, user: { department: { contains: '도장' } } },
-    select: { userId: true },
+async function notifyPaintDept(teamId: string, senderId: string, title: string, content: string) {
+  const users = await prisma.user.findMany({
+    where: {
+      id: { not: senderId },
+      teamMembers: { some: { teamId } },
+      OR: [
+        { department: { contains: '도장', mode: 'insensitive' } },
+        { department: { contains: '생산', mode: 'insensitive' } },
+        { position: { contains: '팀장', mode: 'insensitive' } },
+      ],
+    },
+    select: { id: true },
   });
-  const userIds = targets.map((item) => item.userId).slice(0, 30);
-  if (!userIds.length) return;
-  await prisma.notification.createMany({
-    data: userIds.map((userId) => ({
-      userId,
-      type: 'PAINT_ORDER',
-      title,
-      message,
-      link: `/sites/${siteId}`,
-      siteId,
-      entityType: 'PaintSpec',
-      entityId,
-    })),
+  if (!users.length) return;
+  await prisma.message.createMany({
+    data: users.map((user) => ({ senderId, receiverId: user.id, title, content })),
   });
 }
 
@@ -32,12 +28,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { id } = req.query;
   if (!id || typeof id !== 'string') return res.status(400).json({ error: { message: 'Invalid site id' } });
-  if (!(await verifySiteAccess(session.user.id, id))) return res.status(403).json({ error: { message: 'Forbidden' } });
+
+  const tm = await verifySiteAccess(session.user.id, id);
+  if (!tm) return res.status(403).json({ error: { message: 'Forbidden' } });
 
   try {
     switch (req.method) {
       case 'POST': {
-        const { colorCode, colorName, manufacturer, finishType, area, quantity, isPrimary, notes, status } = req.body;
+        const { colorCode, colorName, manufacturer, finishType, area, quantity, isPrimary, notes } = req.body;
         if (!colorCode || !colorName) return res.status(400).json({ error: { message: '색상 코드와 색상명은 필수입니다.' } });
         const spec = await prisma.paintSpec.create({
           data: {
@@ -49,12 +47,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             area: area || null,
             quantity: quantity || null,
             isPrimary: isPrimary || false,
-            status: status || '발주준비',
+            status: '발주대기',
             notes: notes || null,
           },
-          include: { confirmedBy: { select: { name: true, position: true } } },
+          include: { confirmedBy: { select: { name: true, position: true } }, site: { select: { name: true } } },
         });
-        await notifyPaintUsers(id, '도료 발주 현황 등록', `${spec.colorName} / ${spec.status}`, spec.id);
+        await notifyPaintDept(tm.teamId, session.user.id, `[도료발주대기] ${spec.site.name}`, `${colorName} (${colorCode}) / 수량 ${quantity || '-'} 등록됨`);
         return res.status(201).json({ data: spec });
       }
       case 'PUT': {
@@ -63,13 +61,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const data: any = { ...fields, updatedAt: new Date() };
         if (status) {
           data.status = status;
-          if (status === '확정') {
+          if (status === '확정' || status === '발주완료') {
             data.confirmedById = session.user.id;
             data.confirmedAt = new Date();
           }
         }
         const spec = await prisma.paintSpec.update({ where: { id: specId }, data, include: { confirmedBy: { select: { name: true, position: true } } } });
-        await notifyPaintUsers(id, '도료 발주 현황 변경', `${spec.colorName} / ${spec.status}`, spec.id);
         return res.status(200).json({ data: spec });
       }
       case 'DELETE': {

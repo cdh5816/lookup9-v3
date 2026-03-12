@@ -1,116 +1,94 @@
 /* eslint-disable i18next/no-literal-string */
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Button } from 'react-daisyui';
-import { buildProductionDescription, getFinalProgress, getPanelProgress } from '@/lib/site-progress';
+import { computeOverallProgress, getLabeledValue, toNumber, upsertLabeledValue } from '@/lib/site-progress';
 
-const ProgressBar = ({ value }: { value: number }) => (
-  <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
-    <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
-  </div>
-);
-
-const RangeInput = ({ label, value, onChange, disabled }: { label: string; value: number; onChange: (v: number) => void; disabled?: boolean }) => (
-  <div className="rounded-xl border border-gray-800 p-4">
-    <div className="mb-2 flex items-center justify-between">
-      <p className="text-sm text-gray-400">{label}</p>
-      <span className="text-sm font-semibold">{value}%</span>
-    </div>
-    <input type="range" min={0} max={100} value={value} onChange={(e) => onChange(Number(e.target.value))} className="range range-sm" disabled={disabled} />
-    <div className="mt-2"><ProgressBar value={value} /></div>
-  </div>
-);
-
-const ScoreRow = ({ label, value }: { label: string; value: number }) => (
-  <div>
-    <div className="mb-1 flex items-center justify-between text-sm"><span>{label}</span><span>{value}%</span></div>
-    <ProgressBar value={value} />
-  </div>
-);
-
-export default function ProductionProgressPanel({ site, siteId, canManage, onMutate }: { site: any; siteId: string; canManage: boolean; onMutate: () => void; }) {
-  const progress = useMemo(() => getFinalProgress(site), [site]);
-  const panelData = useMemo(() => getPanelProgress(site), [site]);
-  const [expanded, setExpanded] = useState(true);
+export default function ProductionProgressPanel({ siteId, site, canManage, onMutate }: any) {
+  const quantity = getLabeledValue(site.description, '물량');
+  const contractQty = toNumber(quantity);
+  const shippedQty = Array.isArray(site.shipments)
+    ? site.shipments.reduce((sum: number, item: any) => sum + toNumber(item.quantity), 0)
+    : 0;
+  const panelRate = contractQty > 0 ? Math.min(100, Math.round((shippedQty / contractQty) * 100)) : 0;
+  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    pipeRate: progress.pipeRate,
-    caulkingRate: progress.caulkingRate,
-    startDocsDone: progress.startDocsDone,
-    finishDocsDone: progress.finishDocsDone,
-  });
+  const [pipeRate, setPipeRate] = useState(getLabeledValue(site.description, '하지파이프 진행률') || '0');
+  const [caulkingRate, setCaulkingRate] = useState(getLabeledValue(site.description, '코킹작업 진행률') || '0');
+  const [startDocsDone, setStartDocsDone] = useState(getLabeledValue(site.description, '착수서류 완료') === 'Y');
+  const [finishDocsDone, setFinishDocsDone] = useState(getLabeledValue(site.description, '준공서류 완료') === 'Y');
 
-  useEffect(() => {
-    setForm({
-      pipeRate: progress.pipeRate,
-      caulkingRate: progress.caulkingRate,
-      startDocsDone: progress.startDocsDone,
-      finishDocsDone: progress.finishDocsDone,
-    });
-  }, [progress.pipeRate, progress.caulkingRate, progress.startDocsDone, progress.finishDocsDone, siteId]);
+  const overall = useMemo(() => computeOverallProgress({
+    pipeRate: toNumber(pipeRate),
+    panelRate,
+    caulkingRate: toNumber(caulkingRate),
+    startDocsDone,
+    finishDocsDone,
+  }), [pipeRate, panelRate, caulkingRate, startDocsDone, finishDocsDone]);
 
-  const previewFinal = Math.round((form.pipeRate + panelData.panelRate + form.caulkingRate + (form.startDocsDone ? 100 : 0) + (form.finishDocsDone ? 100 : 0)) / 5);
-
-  const saveProgress = async () => {
+  const handleSave = async () => {
     setSaving(true);
-    const nextDescription = buildProductionDescription(site.description, form);
+    let nextDescription = site.description || '';
+    nextDescription = upsertLabeledValue(nextDescription, '하지파이프 진행률', String(toNumber(pipeRate)));
+    nextDescription = upsertLabeledValue(nextDescription, '판넬 입고 진행률', String(panelRate));
+    nextDescription = upsertLabeledValue(nextDescription, '코킹작업 진행률', String(toNumber(caulkingRate)));
+    nextDescription = upsertLabeledValue(nextDescription, '착수서류 완료', startDocsDone ? 'Y' : 'N');
+    nextDescription = upsertLabeledValue(nextDescription, '준공서류 완료', finishDocsDone ? 'Y' : 'N');
+    nextDescription = upsertLabeledValue(nextDescription, '최종 공정률', String(overall));
+
     await fetch(`/api/sites/${siteId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ description: nextDescription }),
     });
     setSaving(false);
-    onMutate();
+    onMutate?.();
   };
 
   return (
     <div className="space-y-4">
-      <button type="button" onClick={() => setExpanded((prev) => !prev)} className="w-full rounded-2xl border border-blue-900/40 bg-blue-950/20 p-4 text-left">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <button type="button" onClick={() => setOpen((prev) => !prev)} className="w-full rounded-2xl border border-gray-800 bg-black/10 p-5 text-left">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm text-blue-200">최종 공정률</p>
-            <p className="mt-1 text-3xl font-bold text-white">{previewFinal}%</p>
+            <p className="text-sm text-gray-400">최종 공정률</p>
+            <p className="mt-2 text-3xl font-bold">{overall}%</p>
           </div>
-          <div className="w-full md:w-[260px]">
-            <ProgressBar value={previewFinal} />
-            <p className="mt-2 text-xs text-gray-300">카드를 누르면 세부 공정률을 펼칩니다.</p>
+          <div className="w-full sm:w-56">
+            <div className="h-2 overflow-hidden rounded-full bg-gray-800">
+              <div className="h-full rounded-full bg-blue-600" style={{ width: `${overall}%` }} />
+            </div>
+            <p className="mt-2 text-xs text-gray-500">터치하면 세부 공정률을 펼칩니다.</p>
           </div>
         </div>
       </button>
 
-      {expanded && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="rounded-2xl border border-gray-800 p-4">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <RangeInput label="하지파이프 진행률" value={form.pipeRate} onChange={(v) => setForm({ ...form, pipeRate: v })} disabled={!canManage} />
-              <div className="rounded-xl border border-gray-800 p-4">
-                <p className="text-sm text-gray-400">판넬 입고 진행률</p>
-                <p className="mt-2 text-2xl font-bold">{panelData.panelRate}%</p>
-                <p className="mt-2 text-xs text-gray-500">{panelData.shippedQty.toLocaleString()} / {panelData.contractQty.toLocaleString()}</p>
-              </div>
-              <RangeInput label="코킹작업 진행률" value={form.caulkingRate} onChange={(v) => setForm({ ...form, caulkingRate: v })} disabled={!canManage} />
-              <div className="rounded-xl border border-gray-800 p-4">
-                <p className="text-sm text-gray-400">서류 체크</p>
-                <div className="mt-4 space-y-3">
-                  <label className="flex items-center justify-between"><span>착수서류 완료</span><input type="checkbox" className="checkbox checkbox-sm" checked={form.startDocsDone} onChange={(e) => setForm({ ...form, startDocsDone: e.target.checked })} disabled={!canManage} /></label>
-                  <label className="flex items-center justify-between"><span>준공서류 완료</span><input type="checkbox" className="checkbox checkbox-sm" checked={form.finishDocsDone} onChange={(e) => setForm({ ...form, finishDocsDone: e.target.checked })} disabled={!canManage} /></label>
-                </div>
-              </div>
+      {open ? (
+        <div className="rounded-2xl border border-gray-800 bg-black/10 p-5">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="하지파이프 진행률 (%)">
+              <input type="number" className="input input-bordered w-full" value={pipeRate} onChange={(e) => setPipeRate(e.target.value)} disabled={!canManage} />
+            </Field>
+            <Field label="판넬 입고 진행률 (%) 자동계산">
+              <input type="text" className="input input-bordered w-full" value={`${panelRate}  (출고 ${shippedQty} / 계약 ${contractQty || 0})`} disabled />
+            </Field>
+            <Field label="코킹작업 진행률 (%)">
+              <input type="number" className="input input-bordered w-full" value={caulkingRate} onChange={(e) => setCaulkingRate(e.target.value)} disabled={!canManage} />
+            </Field>
+            <div className="rounded-xl border border-gray-800 p-4">
+              <p className="text-sm text-gray-400">서류 체크</p>
+              <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={startDocsDone} onChange={(e) => setStartDocsDone(e.target.checked)} disabled={!canManage} /> 착수서류 완료</label>
+              <label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={finishDocsDone} onChange={(e) => setFinishDocsDone(e.target.checked)} disabled={!canManage} /> 준공서류 완료</label>
             </div>
           </div>
-
-          <div className="rounded-2xl border border-gray-800 bg-black/20 p-4">
-            <p className="text-sm text-gray-400">최종 공정률 구성</p>
-            <div className="mt-3 space-y-3">
-              <ScoreRow label="하지파이프" value={form.pipeRate} />
-              <ScoreRow label="판넬 입고" value={panelData.panelRate} />
-              <ScoreRow label="코킹" value={form.caulkingRate} />
-              <ScoreRow label="착수서류" value={form.startDocsDone ? 100 : 0} />
-              <ScoreRow label="준공서류" value={form.finishDocsDone ? 100 : 0} />
-            </div>
-            {canManage && <div className="mt-4 flex justify-end"><Button color="primary" size="sm" loading={saving} onClick={saveProgress}>세부 공정률 저장</Button></div>}
-          </div>
+          {canManage ? <div className="mt-4 flex justify-end"><Button color="primary" loading={saving} onClick={handleSave}>세부 공정률 저장</Button></div> : null}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
+
+const Field = ({ label, children }: { label: string; children: ReactNode }) => (
+  <label className="form-control">
+    <span className="mb-1 text-sm text-gray-300">{label}</span>
+    {children}
+  </label>
+);

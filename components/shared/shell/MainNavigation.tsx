@@ -9,7 +9,7 @@ import {
   UserCircleIcon,
   UserPlusIcon,
   BellAlertIcon,
-  MagnifyingGlassIcon,
+  CheckBadgeIcon,
 } from '@heroicons/react/24/outline';
 import { useTranslation } from 'next-i18next';
 import NavigationItems from './NavigationItems';
@@ -19,19 +19,18 @@ import fetcher from '@/lib/fetcher';
 
 const MainNavigation = ({ activePathname }: NavigationProps) => {
   const { t } = useTranslation('common');
-
   const { data: profileData } = useSWR('/api/my/profile', fetcher);
   const profile = profileData?.data;
-  const userRole = profile?.teamMembers?.[0]?.role || 'USER';
+  const userRole = profile?.role || profile?.teamMembers?.[0]?.role || 'USER';
+  const permissions = profile?.permissions || {};
 
   const isSuperAdmin = userRole === 'SUPER_ADMIN' || userRole === 'OWNER';
   const isAdminHR = userRole === 'ADMIN_HR' || isSuperAdmin;
   const isManager = userRole === 'MANAGER' || isAdminHR;
   const isUser = userRole === 'USER' || isManager;
   const isPartner = userRole === 'PARTNER';
-  const isGuest = userRole === 'GUEST';
+  const isGuest = userRole === 'GUEST' || userRole === 'VIEWER';
 
-  // GUEST
   if (isGuest) {
     return <NavigationItems menus={[
       { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: activePathname === '/dashboard' },
@@ -41,7 +40,6 @@ const MainNavigation = ({ activePathname }: NavigationProps) => {
     ]} />;
   }
 
-  // PARTNER — 게스트 생성 메뉴 추가
   if (isPartner) {
     return <NavigationItems menus={[
       { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: activePathname === '/dashboard' },
@@ -54,7 +52,6 @@ const MainNavigation = ({ activePathname }: NavigationProps) => {
     ]} />;
   }
 
-  // USER 이상
   const menus: MenuItem[] = [
     { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: activePathname === '/dashboard' },
   ];
@@ -63,10 +60,14 @@ const MainNavigation = ({ activePathname }: NavigationProps) => {
     menus.push({ name: t('nav-admin-hr'), href: '/admin-hr', icon: BuildingLibraryIcon, active: activePathname?.startsWith('/admin-hr') || false });
   }
 
-  if (isUser) {
-    menus.push({ name: t('nav-sites'), href: '/sites', icon: BuildingOffice2Icon, active: activePathname?.startsWith('/sites') || false });
-    menus.push({ name: '업무일지', href: '/worklogs', icon: MagnifyingGlassIcon, active: activePathname?.startsWith('/worklogs') || false });
+  menus.push({ name: t('nav-sites'), href: '/sites', icon: BuildingOffice2Icon, active: activePathname?.startsWith('/sites') || false });
+
+  if (permissions.production || permissions.painting || permissions.shipping || isUser) {
     menus.push({ name: t('nav-production-dashboard'), href: '/production', icon: WrenchScrewdriverIcon, active: activePathname?.startsWith('/production') || false });
+  }
+
+  if (permissions.approvals) {
+    menus.push({ name: '전자결재', href: '/approvals', icon: CheckBadgeIcon, active: activePathname?.startsWith('/approvals') || false });
   }
 
   menus.push(
@@ -74,7 +75,7 @@ const MainNavigation = ({ activePathname }: NavigationProps) => {
     { name: t('noti-title'), href: '/notifications', icon: BellAlertIcon, active: activePathname?.startsWith('/notifications') || false },
   );
 
-  if (isAdminHR) {
+  if (isManager) {
     menus.push({ name: t('admin-users'), href: '/admin/users', icon: UsersIcon, active: activePathname?.startsWith('/admin') || false });
   }
 

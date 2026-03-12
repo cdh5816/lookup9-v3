@@ -1,4 +1,3 @@
-/* eslint-disable i18next/no-literal-string */
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
@@ -8,10 +7,9 @@ import { useRouter } from 'next/router';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 import { Button } from 'react-daisyui';
-import { PlusIcon, TrashIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, MagnifyingGlassIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { canReadTab, getDepartmentAccessMap } from '@/lib/team-helper';
 import ProductionProgressPanel from '@/components/sites/ProductionProgressPanel';
-import { getFinalProgress } from '@/lib/site-progress';
-import { canAccessSiteTab, canManageByDept } from '@/lib/team-helper';
 
 // 상태 신호등 색상
 const STATUS_DOT: Record<string, string> = {
@@ -24,10 +22,6 @@ const StatusDot = ({ status }: { status: string }) => (
 );
 
 const allTabs = ['overview', 'sales', 'contract', 'production', 'painting', 'shipping', 'documents', 'requests', 'issues', 'changes', 'schedule', 'history', 'comments'];
-const hiddenTabsByRole: Record<string, string[]> = {
-  PARTNER: ['sales', 'contract'],
-  GUEST: ['sales', 'contract', 'production', 'painting', 'shipping', 'requests', 'issues', 'changes', 'schedule', 'history'],
-};
 
 const SiteDetail = () => {
   const { t } = useTranslation('common');
@@ -42,23 +36,11 @@ const SiteDetail = () => {
   const { data: profileData } = useSWR('/api/my/profile', fetcher);
   const userRole = profileData?.data?.role || profileData?.data?.teamMembers?.[0]?.role || 'USER';
   const userDepartment = profileData?.data?.department || '';
+  const permissions = getDepartmentAccessMap(userRole, userDepartment);
 
-  const hidden = hiddenTabsByRole[userRole] || [];
-  const tabs = allTabs.filter((tab) => !hidden.includes(tab)).filter((tab) => canAccessSiteTab(userRole, userDepartment, tab));
+  const tabs = allTabs.filter((tab) => canReadTab(tab, userRole, userDepartment));
   const canManage = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER'].includes(userRole);
   const canDelete = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN'].includes(userRole);
-  const canManageProduction = canManageByDept(userRole, userDepartment, 'production');
-  const canManagePainting = canManageByDept(userRole, userDepartment, 'painting');
-  const canManageShipping = canManageByDept(userRole, userDepartment, 'shipping');
-  const canManageRequest = canManageByDept(userRole, userDepartment, 'request');
-  const canManageChange = canManageByDept(userRole, userDepartment, 'change');
-  const progress = getFinalProgress(site);
-
-  useEffect(() => {
-    if (typeof router.query.tab === 'string' && tabs.includes(router.query.tab)) {
-      setActiveTab(router.query.tab);
-    }
-  }, [router.query.tab, tabs]);
 
   const handleAddComment = useCallback(async () => {
     if (!comment.trim() || !id) return;
@@ -73,6 +55,13 @@ const SiteDetail = () => {
     router.push('/sites');
   };
 
+  useEffect(() => {
+    const queryTab = typeof router.query.tab === 'string' ? router.query.tab : '';
+    if (queryTab && allTabs.includes(queryTab) && canReadTab(queryTab, userRole, userDepartment)) {
+      setActiveTab(queryTab);
+    }
+  }, [router.query.tab, userRole, userDepartment]);
+
   if (!site) return <div className="text-center py-10"><span className="loading loading-spinner loading-md"></span></div>;
 
   return (
@@ -83,12 +72,13 @@ const SiteDetail = () => {
         <div className="rounded-lg border border-gray-800 p-4">
           <div className="flex items-start justify-between">
             <div>
-              <div className="flex items-center">
+              <div className="flex flex-wrap items-center gap-2">
                 <StatusDot status={site.status} />
-                <h2 className="text-xl font-bold">{site.name}</h2>
-                <span className="ml-2 text-sm text-gray-400">{site.status}</span>
+                <h2 className="break-words text-xl font-bold leading-7">{site.name}</h2>
+                <span className="text-sm text-gray-400">{site.status}</span>
+                {permissions.approvals ? <Link href="/approvals" className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-300">전자결재</Link> : null}
               </div>
-              <p className="mt-1 break-words whitespace-normal text-sm leading-6 text-gray-400">
+              <p className="mt-1 break-words text-sm leading-6 text-gray-400">
                 {site.client?.name && <span className="mr-3">{site.client.name}</span>}
                 {site.address && <span className="mr-3">{site.address}</span>}
                 <span>{site.createdBy.position ? `${site.createdBy.position} ${site.createdBy.name}` : site.createdBy.name}</span>
@@ -100,7 +90,7 @@ const SiteDetail = () => {
             </div>
           </div>
           {/* 요약 수치 */}
-          <div className="grid grid-cols-2 gap-3 mt-3 md:grid-cols-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
             <div className="text-center p-2 rounded bg-gray-800/30">
               <p className="text-xs text-gray-500">{t('v2-assignments')}</p>
               <p className="text-lg font-bold">{site.assignments?.length || 0}</p>
@@ -116,10 +106,6 @@ const SiteDetail = () => {
             <div className="text-center p-2 rounded bg-gray-800/30">
               <p className="text-xs text-gray-500">{t('tab-documents')}</p>
               <p className="text-lg font-bold">{site._count?.documents || 0}</p>
-            </div>
-            <div className="rounded bg-blue-950/20 p-2 text-center">
-              <p className="text-xs text-blue-200">최종 공정률</p>
-              <p className="text-lg font-bold">{progress.finalRate}%</p>
             </div>
           </div>
         </div>
@@ -140,19 +126,19 @@ const SiteDetail = () => {
         {activeTab === 'overview' && <OverviewPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'sales' && <SalesPanel siteId={id as string} sales={site.sales} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'contract' && <ContractPanel siteId={id as string} contracts={site.contracts} canManage={canManage} onMutate={mutate} />}
-        {activeTab === 'production' && <ProductionProgressPanel site={site} siteId={id as string} canManage={canManageProduction} onMutate={mutate} />}
-        {activeTab === 'painting' && <PaintPanel siteId={id as string} specs={site.paintSpecs || []} canManage={canManagePainting} onMutate={mutate} />}
-        {activeTab === 'shipping' && <ShipmentPanel siteId={id as string} shipments={site.shipments || []} canManage={canManageShipping} onMutate={mutate} />}
+        {activeTab === 'production' && <ProductionProgressPanel siteId={id as string} site={site} canManage={permissions.production || canManage} onMutate={mutate} />}
+        {activeTab === 'painting' && <PaintPanel siteId={id as string} specs={site.paintSpecs || []} canManage={canManage} onMutate={mutate} />}
+        {activeTab === 'shipping' && <ShipmentPanel siteId={id as string} shipments={site.shipments || []} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'documents' && <DocumentPanel siteId={id as string} canManage={canManage} />}
-        {activeTab === 'requests' && <RequestPanel siteId={id as string} requests={site.requests || []} canManage={canManageRequest} onMutate={mutate} />}
+        {activeTab === 'requests' && <RequestPanel siteId={id as string} requests={site.requests || []} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'issues' && <IssuePanel siteId={id as string} issues={site.issues || []} canManage={canManage} onMutate={mutate} />}
-        {activeTab === 'changes' && <ChangePanel siteId={id as string} changes={site.changeLogs || []} canManage={canManageChange} onMutate={mutate} />}
+        {activeTab === 'changes' && <ChangePanel siteId={id as string} changes={site.changeLogs || []} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'schedule' && <SchedulePanel siteId={id as string} schedules={site.schedules || []} canManage={canManage} onMutate={mutate} />}
         {activeTab === 'history' && <HistoryPanel history={site.statusHistory || []} />}
         {activeTab === 'comments' && (
           <div className="space-y-4">
             <div className="flex gap-3">
-              <textarea className="textarea textarea-bordered flex-1 break-words whitespace-normal" placeholder={t('comment-placeholder')} value={comment} onChange={(e) => setComment(e.target.value)} rows={2} />
+              <textarea className="textarea textarea-bordered flex-1" placeholder={t('comment-placeholder')} value={comment} onChange={(e) => setComment(e.target.value)} rows={2} />
               <Button color="primary" size="sm" loading={submitting} onClick={handleAddComment}>{t('comment-submit')}</Button>
             </div>
             {(site.comments || []).length === 0 ? <p className="text-sm text-gray-500">{t('comment-none')}</p> : (
@@ -163,7 +149,7 @@ const SiteDetail = () => {
                       <span className="text-sm font-medium">{c.author.position ? `${c.author.position} ` : ''}{c.author.name}{c.author.department && <span className="text-gray-500 ml-1">({c.author.department})</span>}</span>
                       <span className="text-xs text-gray-500">{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span>
                     </div>
-                    <p className="break-words whitespace-pre-wrap text-sm leading-6">{c.content}</p>
+                    <p className="text-sm whitespace-pre-wrap">{c.content}</p>
                     {c.replies?.length > 0 && <div className="mt-3 ml-4 space-y-2 border-l-2 border-gray-800 pl-4">{c.replies.map((r: any) => <div key={r.id}><span className="text-xs font-medium">{r.author.position ? `${r.author.position} ` : ''}{r.author.name}</span><p className="text-sm">{r.content}</p></div>)}</div>}
                   </div>
                 ))}
@@ -215,7 +201,7 @@ const OverviewPanel = ({ site, siteId, canManage, onMutate }: any) => {
           <p className="text-xs text-gray-500">{t('site-description')}</p>
           {canManage && !editing && <button className="btn btn-ghost btn-xs" onClick={() => setEditing(true)}>{t('edit')}</button>}
         </div>
-        {editing ? <textarea className="textarea textarea-bordered w-full text-sm" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /> : <p className="break-words whitespace-pre-wrap text-sm leading-6">{site.description || '-'}</p>}
+        {editing ? <textarea className="textarea textarea-bordered w-full text-sm" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /> : <p className="text-sm whitespace-pre-wrap">{site.description || '-'}</p>}
         {editing && <div className="flex gap-2 justify-end mt-2"><Button size="xs" onClick={() => setEditing(false)}>{t('cancel')}</Button><Button size="xs" color="primary" loading={saving} onClick={handleSave}>{t('save-changes')}</Button></div>}
       </div>
       <AssignmentPanel siteId={siteId} assignments={site.assignments} canManage={canManage} onMutate={onMutate} />
@@ -253,7 +239,7 @@ const SalesPanel = ({ siteId, sales, canManage, onMutate }: any) => {
     <div className="rounded-lg border border-gray-800 p-6">
       <div className="flex items-center justify-between mb-4"><h3 className="font-semibold">{t('tab-sales')}</h3>{canManage && <Button size="xs" color="primary" onClick={() => setShowForm(!showForm)}>{showForm ? t('cancel') : <><PlusIcon className="w-4 h-4 mr-1" />{t('sales-add')}</>}</Button>}</div>
       {showForm && <div className="border border-gray-700 rounded-lg p-4 mb-4 space-y-3"><div className="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label className="label"><span className="label-text text-xs">{t('sales-status')}</span></label><select className="select select-bordered select-sm w-full" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>{salesStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div><div><label className="label"><span className="label-text text-xs">{t('site-estimate')}</span></label><input type="number" className="input input-bordered input-sm w-full" value={form.estimateAmount} onChange={(e) => setForm({ ...form, estimateAmount: e.target.value })} /></div></div><div><label className="label"><span className="label-text text-xs">{t('sales-notes')}</span></label><textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.meetingNotes} onChange={(e) => setForm({ ...form, meetingNotes: e.target.value })} /></div><div className="flex justify-end"><Button size="sm" color="primary" loading={sub} onClick={handleSubmit}>{t('save-changes')}</Button></div></div>}
-      {sales.length === 0 ? <p className="text-sm text-gray-500">{t('site-no-data')}</p> : sales.map((s: any) => <div key={s.id} className="border-b border-gray-800 py-3 last:border-0"><div className="flex justify-between items-center"><span className="badge badge-sm">{s.status}</span><div className="flex items-center gap-2"><span className="text-xs text-gray-500">{new Date(s.createdAt).toLocaleDateString('ko-KR')}</span>{canManage && <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDel(s.id)}><TrashIcon className="w-3 h-3" /></button>}</div></div>{s.estimateAmount && <p className="text-sm mt-1">{t('site-estimate')}: {Number(s.estimateAmount).toLocaleString()}</p>}{s.meetingNotes && <p className="mt-1 break-words text-sm leading-6 text-gray-400">{s.meetingNotes}</p>}</div>)}
+      {sales.length === 0 ? <p className="text-sm text-gray-500">{t('site-no-data')}</p> : sales.map((s: any) => <div key={s.id} className="border-b border-gray-800 py-3 last:border-0"><div className="flex justify-between items-center"><span className="badge badge-sm">{s.status}</span><div className="flex items-center gap-2"><span className="text-xs text-gray-500">{new Date(s.createdAt).toLocaleDateString('ko-KR')}</span>{canManage && <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDel(s.id)}><TrashIcon className="w-3 h-3" /></button>}</div></div>{s.estimateAmount && <p className="text-sm mt-1">{t('site-estimate')}: {Number(s.estimateAmount).toLocaleString()}</p>}{s.meetingNotes && <p className="text-sm text-gray-400 mt-1">{s.meetingNotes}</p>}</div>)}
     </div>
   );
 };
@@ -271,7 +257,7 @@ const ContractPanel = ({ siteId, contracts, canManage, onMutate }: any) => {
     <div className="rounded-lg border border-gray-800 p-6">
       <div className="flex items-center justify-between mb-4"><h3 className="font-semibold">{t('tab-contract')}</h3>{canManage && <Button size="xs" color="primary" onClick={() => setShowForm(!showForm)}>{showForm ? t('cancel') : <><PlusIcon className="w-4 h-4 mr-1" />{t('contract-add')}</>}</Button>}</div>
       {showForm && <div className="border border-gray-700 rounded-lg p-4 mb-4 space-y-3"><div className="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label className="label"><span className="label-text text-xs">{t('contract-status')}</span></label><select className="select select-bordered select-sm w-full" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>{contractStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div><div><label className="label"><span className="label-text text-xs">{t('site-contract-amount')}</span></label><input type="number" className="input input-bordered input-sm w-full" value={form.contractAmount} onChange={(e) => setForm({ ...form, contractAmount: e.target.value })} /></div></div><div><label className="label"><span className="label-text text-xs">{t('contract-notes')}</span></label><textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.specialNotes} onChange={(e) => setForm({ ...form, specialNotes: e.target.value })} /></div><div className="flex justify-end"><Button size="sm" color="primary" loading={sub} onClick={handleSubmit}>{t('save-changes')}</Button></div></div>}
-      {contracts.length === 0 ? <p className="text-sm text-gray-500">{t('site-no-data')}</p> : contracts.map((c: any) => <div key={c.id} className="border-b border-gray-800 py-3 last:border-0"><div className="flex justify-between items-center"><span className="badge badge-sm">{c.status}</span><div className="flex items-center gap-2"><span className="text-xs text-gray-500">{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span>{canManage && <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDel(c.id)}><TrashIcon className="w-3 h-3" /></button>}</div></div>{c.contractAmount && <p className="text-sm mt-1">{t('site-contract-amount')}: {Number(c.contractAmount).toLocaleString()}</p>}{c.specialNotes && <p className="mt-1 break-words text-sm leading-6 text-gray-400">{c.specialNotes}</p>}</div>)}
+      {contracts.length === 0 ? <p className="text-sm text-gray-500">{t('site-no-data')}</p> : contracts.map((c: any) => <div key={c.id} className="border-b border-gray-800 py-3 last:border-0"><div className="flex justify-between items-center"><span className="badge badge-sm">{c.status}</span><div className="flex items-center gap-2"><span className="text-xs text-gray-500">{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span>{canManage && <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDel(c.id)}><TrashIcon className="w-3 h-3" /></button>}</div></div>{c.contractAmount && <p className="text-sm mt-1">{t('site-contract-amount')}: {Number(c.contractAmount).toLocaleString()}</p>}{c.specialNotes && <p className="text-sm text-gray-400 mt-1">{c.specialNotes}</p>}</div>)}
     </div>
   );
 };
@@ -373,7 +359,7 @@ const ShipmentPanel = ({ siteId, shipments, canManage, onMutate }: any) => {
 };
 
 // ========= 요청사항 =========
-const reqTypes = ['고객 요청', '현장 요청', '내부 요청', '협력사 요청', '긴급 요청'];
+const reqTypes = ['고객 요청', '현장 요청', '내부 요청', '협력사 요청', '긴급 요청', '미팅요청', '전자결재'];
 const reqPriorities = ['낮음', '보통', '높음', '긴급'];
 const reqStatuses = ['등록', '확인중', '처리중', '완료', '반려', '보류'];
 const RequestPanel = ({ siteId, requests, canManage, onMutate }: any) => {
@@ -392,6 +378,7 @@ const RequestPanel = ({ siteId, requests, canManage, onMutate }: any) => {
             <div><label className="label"><span className="label-text text-xs">{t('v2-req-title')} *</span></label><input type="text" className="input input-bordered input-sm w-full" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
             <div><label className="label"><span className="label-text text-xs">{t('v2-req-type')}</span></label><select className="select select-bordered select-sm w-full" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{reqTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
             <div><label className="label"><span className="label-text text-xs">{t('v2-req-priority')}</span></label><select className="select select-bordered select-sm w-full" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>{reqPriorities.map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
+            <div><label className="label"><span className="label-text text-xs">대상부서</span></label><input type="text" className="input input-bordered input-sm w-full" value={form.targetDept} onChange={(e) => setForm({ ...form, targetDept: e.target.value })} placeholder="영업부 / 수주팀 / 생산관리팀" /></div>
             <div><label className="label"><span className="label-text text-xs">{t('v2-req-deadline')}</span></label><input type="date" className="input input-bordered input-sm w-full" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} /></div>
           </div>
           <div><label className="label"><span className="label-text text-xs">{t('site-description')}</span></label><textarea className="textarea textarea-bordered w-full text-sm" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
@@ -405,8 +392,8 @@ const RequestPanel = ({ siteId, requests, canManage, onMutate }: any) => {
               <div className="flex items-center gap-2"><span className={`badge badge-xs ${r.priority === '긴급' ? 'badge-error' : r.priority === '높음' ? 'badge-warning' : 'badge-ghost'}`}>{r.priority}</span><span className="text-sm font-medium">{r.title}</span><span className="text-xs text-gray-500">{r.type}</span></div>
               <div className="flex items-center gap-2">{canManage && <select className="select select-bordered select-xs" value={r.status} onChange={(e) => handleStatus(r.id, e.target.value)}>{reqStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>}{!canManage && <span className="badge badge-sm">{r.status}</span>}</div>
             </div>
-            {r.description && <p className="mt-1 break-words text-sm leading-6 text-gray-400">{r.description}</p>}
-            <div className="flex items-center gap-3 mt-2 text-xs text-gray-500"><span>{r.createdBy?.position ? `${r.createdBy.position} ` : ''}{r.createdBy?.name}</span>{r.deadline && <span>{t('v2-req-deadline')}: {new Date(r.deadline).toLocaleDateString('ko-KR')}</span>}<span>{new Date(r.createdAt).toLocaleDateString('ko-KR')}</span></div>
+            {r.description && <p className="text-sm text-gray-400 mt-1 break-words leading-6">{r.description}</p>}
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500"><span>{r.createdBy?.position ? `${r.createdBy.position} ` : ''}{r.createdBy?.name}</span>{r.targetDept && <span>대상부서: {r.targetDept}</span>}{r.deadline && <span>{t('v2-req-deadline')}: {new Date(r.deadline).toLocaleDateString('ko-KR')}</span>}<span>{new Date(r.createdAt).toLocaleDateString('ko-KR')}</span></div>
           </div>
         ))}</div>
       )}
@@ -467,7 +454,7 @@ const IssuePanel = ({ siteId, issues, canManage, onMutate }: any) => {
               <div className="flex items-center gap-2"><span className="badge badge-xs badge-error">{i.type}</span><span className="text-sm font-medium">{i.title}</span></div>
               <div className="flex items-center gap-2">{canManage && <select className="select select-bordered select-xs" value={i.status} onChange={(e) => handleStatus(i.id, e.target.value)}>{issueStatuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>}{canManage && <button className="btn btn-ghost btn-xs text-error" onClick={() => handleDel(i.id)}><TrashIcon className="w-3 h-3" /></button>}</div>
             </div>
-            {i.description && <p className="mt-1 break-words text-sm leading-6 text-gray-400">{i.description}</p>}
+            {i.description && <p className="text-sm text-gray-400 mt-1">{i.description}</p>}
             <div className="flex gap-3 mt-1 text-xs text-gray-500">{i.location && <span>{t('v2-issue-location')}: {i.location}</span>}{i.occurredAt && <span>{new Date(i.occurredAt).toLocaleDateString('ko-KR')}</span>}<span>{i.createdBy?.position ? `${i.createdBy.position} ` : ''}{i.createdBy?.name}</span></div>
           </div>
         ))}</div>
@@ -511,7 +498,7 @@ const ChangePanel = ({ siteId, changes, canManage, onMutate }: any) => {
             </div>
             {c.beforeValue && <p className="text-sm"><span className="text-gray-500">{t('v2-change-before')}:</span> {c.beforeValue}</p>}
             {c.afterValue && <p className="text-sm"><span className="text-gray-500">{t('v2-change-after')}:</span> {c.afterValue}</p>}
-            {c.reason && <p className="mt-1 break-words text-sm leading-6 text-gray-400">{c.reason}</p>}
+            {c.reason && <p className="text-sm text-gray-400 mt-1">{c.reason}</p>}
             <div className="flex gap-3 mt-2 text-xs text-gray-500"><span>{c.requester?.position ? `${c.requester.position} ` : ''}{c.requester?.name}</span>{c.approver && <span>{t('v2-approver')}: {c.approver.position ? `${c.approver.position} ` : ''}{c.approver.name}</span>}<span>{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span></div>
           </div>
         ))}</div>
@@ -577,7 +564,7 @@ const HistoryPanel = ({ history }: { history: any[] }) => {
           <div key={h.id} className="flex items-start gap-3 border-l-2 border-gray-700 pl-4 py-2">
             <div className="flex-1">
               <div className="flex items-center gap-2"><StatusDot status={h.fromStatus} /><span className="text-sm">{h.fromStatus}</span><span className="text-gray-500">→</span><StatusDot status={h.toStatus} /><span className="text-sm font-medium">{h.toStatus}</span></div>
-              {h.reason && <p className="mt-1 break-words text-sm leading-6 text-gray-400">{h.reason}</p>}
+              {h.reason && <p className="text-sm text-gray-400 mt-1">{h.reason}</p>}
             </div>
             <div className="text-right shrink-0"><p className="text-xs text-gray-500">{h.changedBy?.position ? `${h.changedBy.position} ` : ''}{h.changedBy?.name}</p><p className="text-xs text-gray-500">{new Date(h.createdAt).toLocaleString('ko-KR')}</p></div>
           </div>

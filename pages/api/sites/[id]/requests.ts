@@ -3,33 +3,20 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { verifySiteAccess } from '@/lib/team-helper';
 
-async function notifyTargetUsers(siteId: string, title: string, message: string, targetDept?: string | null, entityId?: string) {
-  const site = await prisma.site.findUnique({ where: { id: siteId }, select: { teamId: true } });
-  if (!site?.teamId) return;
-
-  const teamMembers = await prisma.teamMember.findMany({
-    where: { teamId: site.teamId },
-    select: { userId: true, user: { select: { department: true } } },
+async function notifyByDepartment(teamId: string, senderId: string, targetDept: string | null | undefined, title: string, content: string) {
+  const users = await prisma.user.findMany({
+    where: {
+      id: { not: senderId },
+      teamMembers: { some: { teamId } },
+      ...(targetDept
+        ? { OR: [{ department: { contains: targetDept, mode: 'insensitive' } }, { position: { contains: '팀장', mode: 'insensitive' } }, { position: { contains: '부장', mode: 'insensitive' } }] }
+        : {}),
+    },
+    select: { id: true },
   });
-
-  const targetUserIds = (targetDept
-    ? teamMembers.filter((item) => (item.user.department || '').includes(targetDept)).map((item) => item.userId)
-    : teamMembers.map((item) => item.userId)
-  ).slice(0, 30);
-
-  if (!targetUserIds.length) return;
-
-  await prisma.notification.createMany({
-    data: targetUserIds.map((userId) => ({
-      userId,
-      type: 'SITE_REQUEST',
-      title,
-      message,
-      link: `/sites/${siteId}`,
-      siteId,
-      entityType: 'Request',
-      entityId,
-    })),
+  if (!users.length) return;
+  await prisma.message.createMany({
+    data: users.map((user) => ({ senderId, receiverId: user.id, title, content })),
   });
 }
 
@@ -39,6 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { id } = req.query;
   if (!id || typeof id !== 'string') return res.status(400).json({ error: { message: 'Invalid site id' } });
+
   const tm = await verifySiteAccess(session.user.id, id);
   if (!tm) return res.status(403).json({ error: { message: 'Forbidden' } });
 
@@ -58,39 +46,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             description: description || null,
             createdById: session.user.id,
           },
-          include: {
-            createdBy: { select: { name: true, position: true } },
-            handledBy: { select: { name: true, position: true } },
-          },
+          include: { createdBy: { select: { name: true, position: true } }, handledBy: { select: { name: true, position: true } }, site: { select: { name: true } } },
         });
-        await notifyTargetUsers(
-          id,
-          type === '미팅요청' ? '현장 미팅 요청' : '현장 요청사항 등록',
-          `${title}${targetDept ? ` / 대상부서: ${targetDept}` : ''}`,
-          targetDept || null,
-          request.id
-        );
+
+        const messageTitle = `[${type || '요청사항'}] ${title}`;
+        const messageContent = `${request.site.name} 현장 요청이 등록되었습니다.${targetDept ? `\n대상부서: ${targetDept}` : ''}`;
+        await notifyByDepartment(tm.teamId, session.user.id, targetDept, messageTitle, messageContent);
+
         return res.status(201).json({ data: request });
       }
       case 'PUT': {
         const { requestId, status, handledById, result, ...fields } = req.body;
         if (!requestId) return res.status(400).json({ error: { message: 'requestId is required' } });
+        const existing = await prisma.request.findUnique({ where: { id: requestId }, include: { site: { select: { name: true } }, createdBy: { select: { id: true } } } });
+        if (!existing) return res.status(404).json({ error: { message: 'Request not found' } });
         const data: any = { ...fields, updatedAt: new Date() };
         if (status) data.status = status;
         if (handledById) data.handledById = handledById;
         if (result) data.result = result;
         if (fields.deadline) data.deadline = new Date(fields.deadline);
-        const request = await prisma.request.update({
-          where: { id: requestId },
-          data,
-          include: {
-            createdBy: { select: { name: true, position: true } },
-            handledBy: { select: { name: true, position: true } },
+        const request = await prisma.request.update({ where: { id: requestId }, data, include: { createdBy: { select: { name: true, position: true } }, handledBy: { select: { name: true, position: true } } } });
+
+        await prisma.message.create({
+          data: {
+            senderId: session.user.id,
+            receiverId: existing.createdBy.id,
+            title: `[요청사항 ${status || '수정'}] ${existing.title}`,
+            content: `${existing.site.name} 현장 요청사항이 ${status || '수정'} 처리되었습니다.${result ? `\n처리내용: ${result}` : ''}`,
           },
         });
-        if (status) {
-          await notifyTargetUsers(id, '요청사항 상태 변경', `${request.title} / ${status}`, request.targetDept || null, request.id);
-        }
         return res.status(200).json({ data: request });
       }
       case 'DELETE': {

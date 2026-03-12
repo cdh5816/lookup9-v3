@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { getTeamMemberByUserId, isExternalRole } from '@/lib/team-helper';
+import { getDepartmentAccessMap, getTeamMemberByUserId, isExternalRole } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -46,8 +46,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ]);
 
   const role = user?.teamMembers?.[0]?.role || 'USER';
-  const teamName = user?.teamMembers?.[0]?.team?.name || null;
-  const companyDisplayName = user?.company || teamName || 'LOOKUP9';
+  const companyDisplayName = user?.company || tm?.team?.name || 'LOOKUP9';
+  const permissions = getDepartmentAccessMap(role, user?.department);
 
   return res.status(200).json({
     data: {
@@ -55,6 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       role,
       isExternal: isExternalRole(role),
       companyDisplayName,
+      permissions,
       mySites: Array.isArray(mySites) ? mySites.map((a: any) => a.site) : [],
       unreadMessages: unreadCount,
       myComments,

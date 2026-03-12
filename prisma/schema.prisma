@@ -94,6 +94,8 @@ model User {
   requestsHandled  Request[]      @relation("RequestHandler")
   notifications    Notification[] @relation("NotifyUser")
   workLogs         WorkLog[]      @relation("WorkLogAuthor")
+  workLogViews     WorkLogViewLog[] @relation("WorkLogViewer")
+  workLogViewedBy  WorkLogViewLog[] @relation("WorkLogTarget")
   issues           Issue[]        @relation("IssueCreator")
   issuesHandled    Issue[]        @relation("IssueHandler")
   changeLogs       ChangeLog[]    @relation("ChangeRequester")
@@ -678,4 +680,19 @@ model LeaveRequest {
   @@index([userId])
   @@index([status])
   @@index([currentStep])
+}
+
+
+model WorkLogViewLog {
+  id           String   @id @default(uuid())
+  viewerId     String
+  targetUserId String
+  keyword      String?
+  viewedAt     DateTime @default(now())
+
+  viewer     User @relation("WorkLogViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  targetUser User @relation("WorkLogTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@index([viewerId, viewedAt])
+  @@index([targetUserId, viewedAt])
 }

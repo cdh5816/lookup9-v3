@@ -9,6 +9,7 @@ import {
   UserCircleIcon,
   UserPlusIcon,
   BellAlertIcon,
+  ClipboardDocumentCheckIcon,
 } from '@heroicons/react/24/outline';
 import { useTranslation } from 'next-i18next';
 import NavigationItems from './NavigationItems';
@@ -18,18 +19,14 @@ import fetcher from '@/lib/fetcher';
 
 const MainNavigation = ({ activePathname, onNavigate }: NavigationProps) => {
   const { t } = useTranslation('common');
-
   const { data: profileData } = useSWR('/api/my/profile', fetcher);
   const profile = profileData?.data;
-  const userRole =
-    profile?.role ||
-    profile?.teamMembers?.[0]?.role ||
-    'USER';
+  const userRole = profile?.role || profile?.teamMembers?.[0]?.role || 'USER';
+  const permissions = profile?.permissions || {};
 
   const isSuperAdmin = userRole === 'SUPER_ADMIN' || userRole === 'OWNER';
   const isAdminHR = userRole === 'ADMIN_HR' || isSuperAdmin;
   const isManager = userRole === 'MANAGER' || isAdminHR;
-  const isUser = userRole === 'USER' || isManager;
   const isPartner = userRole === 'PARTNER';
   const isGuest = userRole === 'GUEST' || userRole === 'VIEWER';
 
@@ -66,15 +63,12 @@ const MainNavigation = ({ activePathname, onNavigate }: NavigationProps) => {
 
   const menus: MenuItem[] = [
     { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: activePathname === '/dashboard' },
+    { name: t('nav-sites'), href: '/sites', icon: BuildingOffice2Icon, active: activePathname?.startsWith('/sites') || false },
+    { name: t('nav-production-dashboard'), href: '/production', icon: WrenchScrewdriverIcon, active: activePathname?.startsWith('/production') || false },
   ];
 
-  if (isAdminHR) {
-    menus.push({ name: t('nav-admin-hr'), href: '/admin-hr', icon: BuildingLibraryIcon, active: activePathname?.startsWith('/admin-hr') || false });
-  }
-
-  if (isUser) {
-    menus.push({ name: t('nav-sites'), href: '/sites', icon: BuildingOffice2Icon, active: activePathname?.startsWith('/sites') || false });
-    menus.push({ name: t('nav-production-dashboard'), href: '/production', icon: WrenchScrewdriverIcon, active: activePathname?.startsWith('/production') || false });
+  if (permissions.canApprove) {
+    menus.push({ name: '전자결재', href: '/approvals', icon: ClipboardDocumentCheckIcon, active: activePathname?.startsWith('/approvals') || false });
   }
 
   menus.push(
@@ -82,7 +76,11 @@ const MainNavigation = ({ activePathname, onNavigate }: NavigationProps) => {
     { name: t('noti-title'), href: '/notifications', icon: BellAlertIcon, active: activePathname?.startsWith('/notifications') || false },
   );
 
-  if (isAdminHR || isManager) {
+  if (isAdminHR) {
+    menus.push({ name: t('nav-admin-hr'), href: '/admin-hr', icon: BuildingLibraryIcon, active: activePathname?.startsWith('/admin-hr') || false });
+  }
+
+  if (permissions.canManageAccounts || isManager) {
     menus.push({ name: t('admin-users'), href: '/admin/users', icon: UsersIcon, active: activePathname?.startsWith('/admin') || false });
   }
 

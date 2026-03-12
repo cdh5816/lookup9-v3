@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { getTeamMemberByUserId, getPermissionFlags } from '@/lib/team-helper';
+import { getPermissionFlags, getTeamMemberByUserId } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);

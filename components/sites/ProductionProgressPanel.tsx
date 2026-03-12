@@ -4,7 +4,7 @@
  * Owner: AIRX / choe DONGHYUN. All rights reserved.
  */
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from 'react-daisyui';
 import { getProductionMetrics, patchProductionDescription } from '@/lib/site-progress';
 
@@ -135,7 +135,7 @@ function MetaCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
       <span className="mb-1 block text-sm text-gray-400">{label}</span>

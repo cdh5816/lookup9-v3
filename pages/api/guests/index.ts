@@ -6,7 +6,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { getTeamMemberByUserId } from '@/lib/team-helper';
 
 const EXTERNAL_ROLES = ['PARTNER', 'GUEST', 'VIEWER'] as const;
 const CREATOR_ROLES = ['ADMIN_HR', 'MANAGER', 'USER', 'PARTNER'] as const;

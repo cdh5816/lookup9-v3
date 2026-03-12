@@ -1,7 +1,47 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { verifySiteAccess, findUsersByTargetDept, getPermissionProfile } from '@/lib/team-helper';
+import { verifySiteAccess } from '@/lib/team-helper';
+
+async function notifyTargetUsers(siteId: string, senderId: string, title: string, content: string, targetDept?: string | null) {
+  const site = await prisma.site.findUnique({ where: { id: siteId }, select: { teamId: true, name: true } });
+  if (!site?.teamId) return;
+
+  const users = await prisma.user.findMany({
+    where: {
+      teamMembers: { some: { teamId: site.teamId } },
+      ...(targetDept ? { department: targetDept } : {}),
+      NOT: { id: senderId },
+    },
+    select: { id: true },
+    take: 50,
+  });
+
+  if (!users.length) return;
+
+  await prisma.message.createMany({
+    data: users.map((user) => ({
+      senderId,
+      receiverId: user.id,
+      title,
+      content,
+    })),
+    skipDuplicates: true,
+  });
+
+  await prisma.notification.createMany({
+    data: users.map((user) => ({
+      userId: user.id,
+      type: 'REQUEST',
+      title,
+      message: content,
+      link: `/sites/${siteId}`,
+      siteId,
+      entityType: 'Request',
+    })),
+    skipDuplicates: true,
+  });
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -10,15 +50,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { id } = req.query;
   if (!id || typeof id !== 'string') return res.status(400).json({ error: { message: 'Invalid site id' } });
 
-  const tm = await verifySiteAccess(session.user.id, id);
-  if (!tm) return res.status(403).json({ error: { message: 'Forbidden' } });
+  if (!(await verifySiteAccess(session.user.id, id))) return res.status(403).json({ error: { message: 'Forbidden' } });
 
   try {
     switch (req.method) {
       case 'POST': {
         const { title, type, priority, targetDept, deadline, description } = req.body;
         if (!title) return res.status(400).json({ error: { message: '제목을 입력해주세요.' } });
-
         const request = await prisma.request.create({
           data: {
             siteId: id,
@@ -33,46 +71,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           include: { createdBy: { select: { name: true, position: true } }, handledBy: { select: { name: true, position: true } } },
         });
 
-        const site = await prisma.site.findUnique({ where: { id }, select: { name: true, teamId: true } });
-        if (site) {
-          const deptUsers = await findUsersByTargetDept(site.teamId || tm.teamId, targetDept || null);
-          const receivers = deptUsers.filter((user) => user.id !== session.user.id);
-          if (receivers.length > 0) {
-            await prisma.message.createMany({
-              data: receivers.map((user) => ({
-                senderId: session.user.id,
-                receiverId: user.id,
-                title: `[요청사항] ${title}`,
-                content: `${site.name}\n유형: ${type || '내부 요청'}\n${description || ''}`,
-              })),
-            });
-          }
-        }
+        await notifyTargetUsers(
+          id,
+          session.user.id,
+          `[요청사항] ${request.title}`,
+          `${request.type} / 우선순위 ${request.priority}${request.targetDept ? ` / 대상부서 ${request.targetDept}` : ''}`,
+          request.targetDept
+        );
 
         return res.status(201).json({ data: request });
       }
       case 'PUT': {
         const { requestId, status, handledById, result, ...fields } = req.body;
         if (!requestId) return res.status(400).json({ error: { message: 'requestId is required' } });
+        const before = await prisma.request.findUnique({ where: { id: requestId }, select: { title: true, createdById: true, type: true } });
         const data: any = { ...fields, updatedAt: new Date() };
         if (status) data.status = status;
         if (handledById) data.handledById = handledById;
-        if (result !== undefined) data.result = result;
+        if (result) data.result = result;
         if (fields.deadline) data.deadline = new Date(fields.deadline);
+        const request = await prisma.request.update({ where: { id: requestId }, data, include: { createdBy: { select: { name: true, position: true } }, handledBy: { select: { name: true, position: true } } } });
 
-        const request = await prisma.request.update({
-          where: { id: requestId },
-          data,
-          include: { createdBy: { select: { id: true, name: true, position: true } }, handledBy: { select: { name: true, position: true } } },
-        });
-
-        if (status && request.createdBy?.id && request.createdBy.id !== session.user.id) {
+        if (before?.createdById && before.createdById !== session.user.id && status) {
           await prisma.message.create({
             data: {
               senderId: session.user.id,
-              receiverId: request.createdBy.id,
-              title: `[요청사항 ${status}] ${request.title}`,
-              content: result || `${request.title} 요청 상태가 ${status}로 변경되었습니다.`,
+              receiverId: before.createdById,
+              title: `[처리완료] ${before.title}`,
+              content: `${before.type} 요청이 ${status} 상태로 변경되었습니다.${result ? `\n결과: ${result}` : ''}`,
             },
           });
         }
@@ -80,12 +106,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(200).json({ data: request });
       }
       case 'DELETE': {
-        const permission = getPermissionProfile(tm.role, tm.user?.department);
         const { requestId } = req.body;
         if (!requestId) return res.status(400).json({ error: { message: 'requestId is required' } });
-        if (!permission.canManageApprovals && tm.userId !== session.user.id) {
-          return res.status(403).json({ error: { message: '삭제 권한이 없습니다.' } });
-        }
         await prisma.request.delete({ where: { id: requestId } });
         return res.status(200).json({ data: { message: 'Deleted' } });
       }

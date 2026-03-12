@@ -1,7 +1,25 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { verifySiteAccess, findUsersByTargetDept } from '@/lib/team-helper';
+import { verifySiteAccess } from '@/lib/team-helper';
+
+async function notifyPaintUsers(siteId: string, senderId: string, title: string, content: string) {
+  const site = await prisma.site.findUnique({ where: { id: siteId }, select: { teamId: true } });
+  if (!site?.teamId) return;
+  const users = await prisma.user.findMany({
+    where: {
+      teamMembers: { some: { teamId: site.teamId } },
+      department: { in: ['도장팀', '생산관리팀', '경영지원부'] },
+      NOT: { id: senderId },
+    },
+    select: { id: true },
+  });
+  if (!users.length) return;
+  await prisma.notification.createMany({
+    data: users.map((user) => ({ userId: user.id, type: 'PAINT', title, message: content, link: `/sites/${siteId}`, siteId, entityType: 'PaintSpec' })),
+    skipDuplicates: true,
+  });
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -10,8 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { id } = req.query;
   if (!id || typeof id !== 'string') return res.status(400).json({ error: { message: 'Invalid site id' } });
 
-  const tm = await verifySiteAccess(session.user.id, id);
-  if (!tm) return res.status(403).json({ error: { message: 'Forbidden' } });
+  if (!(await verifySiteAccess(session.user.id, id))) return res.status(403).json({ error: { message: 'Forbidden' } });
 
   try {
     switch (req.method) {
@@ -33,24 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           },
           include: { confirmedBy: { select: { name: true, position: true } } },
         });
-
-        const site = await prisma.site.findUnique({ where: { id }, select: { name: true, teamId: true } });
-        if (site) {
-          const receivers = await findUsersByTargetDept(site.teamId || tm.teamId, '도장팀');
-          if (receivers.length > 0) {
-            await prisma.message.createMany({
-              data: receivers
-                .filter((user) => user.id !== session.user.id)
-                .map((user) => ({
-                  senderId: session.user.id,
-                  receiverId: user.id,
-                  title: `[도료발주] ${colorName}`,
-                  content: `${site.name}\n코드: ${colorCode}\n수량: ${quantity || '-'}\n상태: 도료발주대기`,
-                })),
-            });
-          }
-        }
-
+        await notifyPaintUsers(id, session.user.id, `[도장] ${colorName}`, `도료 발주대기 항목이 등록되었습니다. 코드 ${colorCode}`);
         return res.status(201).json({ data: spec });
       }
       case 'PUT': {
@@ -65,6 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         }
         const spec = await prisma.paintSpec.update({ where: { id: specId }, data, include: { confirmedBy: { select: { name: true, position: true } } } });
+        await notifyPaintUsers(id, session.user.id, `[도장상태변경] ${spec.colorName}`, `${spec.colorCode} 항목이 ${spec.status} 상태로 변경되었습니다.`);
         return res.status(200).json({ data: spec });
       }
       case 'DELETE': {

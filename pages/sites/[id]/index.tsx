@@ -1,3 +1,4 @@
+/* eslint-disable i18next/no-literal-string */
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
@@ -203,95 +204,6 @@ const OverviewPanel = ({ site, siteId, canManage, onMutate }: any) => {
   );
 };
 
-// ========= 영업 =========
-const SalesPanel = ({ sales }: any) => {
-  const { t } = useTranslation('common');
-  const rows = Array.isArray(sales) ? sales : [];
-  return (
-    <div className="rounded-lg border border-gray-800 p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="font-semibold">{t('tab-sales')}</h3>
-        <span className="text-xs text-gray-500">{rows.length}{t('count-suffix', { defaultValue: '건' })}</span>
-      </div>
-      {rows.length === 0 ? (
-        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
-      ) : (
-        <div className="space-y-3">
-          {rows.map((item: any) => (
-            <div key={item.id} className="rounded border border-gray-800 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-medium">{item.title || item.name || t('tab-sales')}</p>
-                <span className="text-xs text-gray-500">{item.status || '-'}</span>
-              </div>
-              <p className="mt-2 text-sm text-gray-400 whitespace-pre-wrap">{item.notes || item.description || '-'}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ========= 계약 =========
-const ContractPanel = ({ contracts }: any) => {
-  const { t } = useTranslation('common');
-  const rows = Array.isArray(contracts) ? contracts : [];
-  return (
-    <div className="rounded-lg border border-gray-800 p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="font-semibold">{t('tab-contract')}</h3>
-        <span className="text-xs text-gray-500">{rows.length}{t('count-suffix', { defaultValue: '건' })}</span>
-      </div>
-      {rows.length === 0 ? (
-        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
-      ) : (
-        <div className="space-y-3">
-          {rows.map((item: any) => (
-            <div key={item.id} className="rounded border border-gray-800 p-4">
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                <div><span className="text-xs text-gray-500">{t('site-status-label')}</span><p className="text-sm">{item.status || '-'}</p></div>
-                <div><span className="text-xs text-gray-500">{t('amount', { defaultValue: '금액' })}</span><p className="text-sm">{item.amount ? Number(item.amount).toLocaleString() : '-'}</p></div>
-                <div><span className="text-xs text-gray-500">{t('date', { defaultValue: '일자' })}</span><p className="text-sm">{item.contractDate ? new Date(item.contractDate).toLocaleDateString('ko-KR') : '-'}</p></div>
-              </div>
-              <p className="mt-2 text-sm text-gray-400 whitespace-pre-wrap">{item.notes || item.description || '-'}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ========= 도장 =========
-const PaintPanel = ({ specs }: any) => {
-  const { t } = useTranslation('common');
-  const rows = Array.isArray(specs) ? specs : [];
-  return (
-    <div className="rounded-lg border border-gray-800 p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="font-semibold">{t('tab-painting')}</h3>
-        <span className="text-xs text-gray-500">{rows.length}{t('count-suffix', { defaultValue: '건' })}</span>
-      </div>
-      {rows.length === 0 ? (
-        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
-      ) : (
-        <div className="space-y-3">
-          {rows.map((item: any) => (
-            <div key={item.id} className="rounded border border-gray-800 p-4">
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                <div><span className="text-xs text-gray-500">{t('v2-color', { defaultValue: '색상' })}</span><p className="text-sm">{item.color || item.paintCode || '-'}</p></div>
-                <div><span className="text-xs text-gray-500">{t('v2-spec', { defaultValue: '사양' })}</span><p className="text-sm">{item.spec || item.coating || '-'}</p></div>
-                <div><span className="text-xs text-gray-500">{t('site-status-label')}</span><p className="text-sm">{item.status || '-'}</p></div>
-              </div>
-              <p className="mt-2 text-sm text-gray-400 whitespace-pre-wrap">{item.notes || item.description || '-'}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
 // ========= 배정 =========
 const AssignmentPanel = ({ siteId, assignments, canManage, onMutate }: any) => {
   const { t } = useTranslation('common');
@@ -461,6 +373,75 @@ const AssignmentPanel = ({ siteId, assignments, canManage, onMutate }: any) => {
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+};
+
+
+
+const SalesPanel = ({ sales }: any) => {
+  const { t } = useTranslation('common');
+  return (
+    <div className="rounded-lg border border-gray-800 p-6">
+      <h3 className="mb-4 font-semibold">{t('tab-sales')}</h3>
+      {Array.isArray(sales) && sales.length > 0 ? (
+        <div className="space-y-2">
+          {sales.map((item: any, index: number) => (
+            <div key={item?.id || index} className="rounded border border-gray-800 p-3">
+              <p className="text-sm font-medium">{item?.title || item?.name || item?.status || `${t('tab-sales')} ${index + 1}`}</p>
+              {item?.description ? <p className="mt-1 text-sm text-gray-400 whitespace-pre-wrap">{item.description}</p> : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
+      )}
+    </div>
+  );
+};
+
+const ContractPanel = ({ contracts }: any) => {
+  const { t } = useTranslation('common');
+  return (
+    <div className="rounded-lg border border-gray-800 p-6">
+      <h3 className="mb-4 font-semibold">{t('tab-contract')}</h3>
+      {Array.isArray(contracts) && contracts.length > 0 ? (
+        <div className="space-y-2">
+          {contracts.map((item: any, index: number) => (
+            <div key={item?.id || index} className="rounded border border-gray-800 p-3">
+              <p className="text-sm font-medium">{item?.title || item?.name || `${t('tab-contract')} ${index + 1}`}</p>
+              {item?.description ? <p className="mt-1 text-sm text-gray-400 whitespace-pre-wrap">{item.description}</p> : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
+      )}
+    </div>
+  );
+};
+
+const PaintPanel = ({ specs }: any) => {
+  const { t } = useTranslation('common');
+  return (
+    <div className="rounded-lg border border-gray-800 p-6">
+      <h3 className="mb-4 font-semibold">{t('tab-painting')}</h3>
+      {Array.isArray(specs) && specs.length > 0 ? (
+        <div className="space-y-2">
+          {specs.map((item: any, index: number) => (
+            <div key={item?.id || index} className="rounded border border-gray-800 p-3">
+              <p className="text-sm font-medium">{item?.colorName || item?.name || `${t('tab-painting')} ${index + 1}`}</p>
+              <div className="mt-1 text-sm text-gray-400">
+                {item?.colorCode ? <p>Code: {item.colorCode}</p> : null}
+                {item?.paintType ? <p>Type: {item.paintType}</p> : null}
+                {item?.notes ? <p className="whitespace-pre-wrap">{item.notes}</p> : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
       )}
     </div>
   );

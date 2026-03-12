@@ -1,26 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { verifySiteAccess } from '@/lib/team-helper';
-
-async function notifyPaintDept(teamId: string, senderId: string, title: string, content: string) {
-  const users = await prisma.user.findMany({
-    where: {
-      id: { not: senderId },
-      teamMembers: { some: { teamId } },
-      OR: [
-        { department: { contains: '도장', mode: 'insensitive' } },
-        { department: { contains: '생산', mode: 'insensitive' } },
-        { position: { contains: '팀장', mode: 'insensitive' } },
-      ],
-    },
-    select: { id: true },
-  });
-  if (!users.length) return;
-  await prisma.message.createMany({
-    data: users.map((user) => ({ senderId, receiverId: user.id, title, content })),
-  });
-}
+import { verifySiteAccess, findUsersByTargetDept } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -47,12 +28,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             area: area || null,
             quantity: quantity || null,
             isPrimary: isPrimary || false,
-            status: '발주대기',
             notes: notes || null,
+            status: '도료발주대기',
           },
-          include: { confirmedBy: { select: { name: true, position: true } }, site: { select: { name: true } } },
+          include: { confirmedBy: { select: { name: true, position: true } } },
         });
-        await notifyPaintDept(tm.teamId, session.user.id, `[도료발주대기] ${spec.site.name}`, `${colorName} (${colorCode}) / 수량 ${quantity || '-'} 등록됨`);
+
+        const site = await prisma.site.findUnique({ where: { id }, select: { name: true, teamId: true } });
+        if (site) {
+          const receivers = await findUsersByTargetDept(site.teamId || tm.teamId, '도장팀');
+          if (receivers.length > 0) {
+            await prisma.message.createMany({
+              data: receivers
+                .filter((user) => user.id !== session.user.id)
+                .map((user) => ({
+                  senderId: session.user.id,
+                  receiverId: user.id,
+                  title: `[도료발주] ${colorName}`,
+                  content: `${site.name}\n코드: ${colorCode}\n수량: ${quantity || '-'}\n상태: 도료발주대기`,
+                })),
+            });
+          }
+        }
+
         return res.status(201).json({ data: spec });
       }
       case 'PUT': {
@@ -61,7 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const data: any = { ...fields, updatedAt: new Date() };
         if (status) {
           data.status = status;
-          if (status === '확정' || status === '발주완료') {
+          if (status === '확정') {
             data.confirmedById = session.user.id;
             data.confirmedAt = new Date();
           }

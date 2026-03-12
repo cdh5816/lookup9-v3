@@ -3,15 +3,6 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { verifySiteAccess } from '@/lib/team-helper';
 
-async function notifyAssignees(siteId: string, senderId: string, title: string, content: string) {
-  const assignees = await prisma.siteAssignment.findMany({ where: { siteId }, select: { userId: true } });
-  const receiverIds = [...new Set(assignees.map((item) => item.userId).filter((id) => id !== senderId))];
-  if (!receiverIds.length) return;
-  await prisma.message.createMany({
-    data: receiverIds.map((receiverId) => ({ senderId, receiverId, title, content })),
-  });
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: { message: 'Unauthorized' } });
@@ -43,21 +34,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             notes: notes || null,
             createdById: session.user.id,
           },
-          include: { createdBy: { select: { name: true, position: true } }, site: { select: { name: true } } },
+          include: { createdBy: { select: { name: true, position: true } } },
         });
-        await notifyAssignees(id, session.user.id, `[출하등록] ${record.site.name}`, `차량: ${vehicleInfo || '-'} / 기사: ${driverInfo || '-'} / 수량: ${quantity || '-'} 등록됨`);
+
+        const assignees = await prisma.siteAssignment.findMany({
+          where: { siteId: id },
+          select: { userId: true },
+        });
+        const receiverIds = Array.from(new Set(assignees.map((item) => item.userId).filter((uid) => uid !== session.user.id)));
+        if (receiverIds.length > 0) {
+          await prisma.message.createMany({
+            data: receiverIds.map((receiverId) => ({
+              senderId: session.user.id,
+              receiverId,
+              title: `[출하 알림] ${shipmentNo || `SH-${sequence}`}`,
+              content: `차량: ${vehicleInfo || '-'}\n기사: ${driverInfo || '-'}\n수량: ${quantity || '-'}\n도착지: ${destination || '-'}`,
+            })),
+          });
+        }
+
         return res.status(201).json({ data: record });
       }
       case 'PUT': {
         const { recordId, status, ...fields } = req.body;
         if (!recordId) return res.status(400).json({ error: { message: 'recordId is required' } });
-        const existing = await prisma.shippingRecord.findUnique({ where: { id: recordId }, include: { site: { select: { name: true } } } });
-        if (!existing) return res.status(404).json({ error: { message: 'Not found' } });
         const data: any = { ...fields, updatedAt: new Date() };
         if (status) data.status = status;
         if (fields.shippedAt) data.shippedAt = new Date(fields.shippedAt);
         const record = await prisma.shippingRecord.update({ where: { id: recordId }, data, include: { createdBy: { select: { name: true, position: true } } } });
-        await notifyAssignees(id, session.user.id, `[출하상태] ${existing.site.name}`, `출하상태가 ${status || existing.status} 로 변경되었습니다.`);
         return res.status(200).json({ data: record });
       }
       case 'DELETE': {

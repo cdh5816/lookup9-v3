@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { getDepartmentAccessMap, getTeamMemberByUserId, isExternalRole } from '@/lib/team-helper';
+import { getTeamMemberByUserId, getPermissionProfile, isExternalRole } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -23,13 +23,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         position: true,
         phone: true,
         createdAt: true,
-        teamMembers: { select: { role: true, team: { select: { id: true, name: true } } } },
+        teamMembers: { select: { role: true, team: { select: { id: true, name: true, slug: true } } } },
       },
     }),
     tm
       ? prisma.siteAssignment.findMany({
           where: { userId, site: { teamId: tm.teamId } },
-          include: { site: { select: { id: true, name: true, status: true, address: true } } },
+          include: { site: { select: { id: true, name: true, status: true, address: true, updatedAt: true } } },
           orderBy: { assignedAt: 'desc' },
           take: 10,
         })
@@ -46,8 +46,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ]);
 
   const role = user?.teamMembers?.[0]?.role || 'USER';
-  const companyDisplayName = user?.company || tm?.team?.name || 'LOOKUP9';
-  const permissions = getDepartmentAccessMap(role, user?.department);
+  const companyDisplayName = user?.company || user?.teamMembers?.[0]?.team?.name || 'LOOKUP9';
+  const permissionProfile = getPermissionProfile(role, user?.department);
 
   return res.status(200).json({
     data: {
@@ -55,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       role,
       isExternal: isExternalRole(role),
       companyDisplayName,
-      permissions,
+      permissionProfile,
       mySites: Array.isArray(mySites) ? mySites.map((a: any) => a.site) : [],
       unreadMessages: unreadCount,
       myComments,

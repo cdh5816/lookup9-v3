@@ -13,26 +13,19 @@ const ROLE_LEVEL: Record<string, number> = {
   SUPER_ADMIN: 5,
 };
 
-export const INTERNAL_ROLES = ['USER', 'MANAGER', 'ADMIN_HR', 'ADMIN', 'OWNER', 'SUPER_ADMIN'];
+export const INTERNAL_ROLES = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'USER', 'MEMBER'];
 export const EXTERNAL_ROLES = ['PARTNER', 'GUEST', 'VIEWER'];
 
 export function getRoleLevel(role: string): number {
   return ROLE_LEVEL[role] ?? 0;
 }
 
-export function getRoleDisplayName(role: string): string {
-  const map: Record<string, string> = {
-    ADMIN_HR: 'COMPANY_ADMIN',
-    MANAGER: 'INTERNAL_MANAGER',
-    USER: 'INTERNAL_USER',
-    PARTNER: 'PARTNER',
-    GUEST: 'GUEST',
-    VIEWER: 'VIEWER',
-    OWNER: 'OWNER',
-    SUPER_ADMIN: 'SUPER_ADMIN',
-    ADMIN: 'ADMIN',
-  };
-  return map[role] || role;
+export function normalizeDepartment(department?: string | null): string {
+  return (department || '').replace(/\s+/g, '').trim();
+}
+
+export function isInternalRole(role?: string | null): boolean {
+  return !!role && INTERNAL_ROLES.includes(role);
 }
 
 export function isExternalRole(role?: string | null): boolean {
@@ -42,7 +35,10 @@ export function isExternalRole(role?: string | null): boolean {
 export async function getTeamMemberByUserId(userId: string) {
   return prisma.teamMember.findFirst({
     where: { userId },
-    include: { team: { select: { id: true, slug: true, name: true } } },
+    include: {
+      team: { select: { id: true, slug: true, name: true } },
+      user: { select: { id: true, name: true, department: true, company: true, email: true } },
+    },
   });
 }
 
@@ -50,53 +46,21 @@ export function hasMinRole(currentRole: string, minRole: string): boolean {
   return getRoleLevel(currentRole) >= getRoleLevel(minRole);
 }
 
-export function canDeleteUser(actorRole: string, actorUserId: string, targetRole: string, targetUserId: string): boolean {
+export function canDeleteUser(
+  actorRole: string,
+  actorUserId: string,
+  targetRole: string,
+  targetUserId: string
+): boolean {
   if (actorUserId === targetUserId) return false;
   if (getRoleLevel(actorRole) <= getRoleLevel(targetRole)) return false;
-  if (['OWNER', 'SUPER_ADMIN'].includes(targetRole)) return false;
   return true;
 }
 
 export function canAssignRole(actorRole: string, targetRole: string): boolean {
-  if (['SUPER_ADMIN', 'OWNER'].includes(targetRole)) return false;
+  if (targetRole === 'SUPER_ADMIN' || targetRole === 'OWNER') return false;
   if (actorRole === 'SUPER_ADMIN' || actorRole === 'OWNER') return true;
   if (getRoleLevel(targetRole) >= getRoleLevel(actorRole)) return false;
-  return true;
-}
-
-export function getDepartmentAccessMap(role: string, department?: string | null) {
-  const dept = department || '';
-  const isTop = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN'].includes(role);
-  const isManager = role === 'MANAGER';
-  const isInternal = INTERNAL_ROLES.includes(role);
-
-  return {
-    sales: isTop || dept.includes('영업') || dept.includes('경영'),
-    contract: isTop || dept.includes('영업') || dept.includes('수주') || dept.includes('경영'),
-    production: isTop || dept.includes('생산') || dept.includes('공사') || dept.includes('경영') || isManager,
-    painting: isTop || dept.includes('도장') || dept.includes('생산') || dept.includes('경영') || isManager,
-    shipping: isTop || dept.includes('출하') || dept.includes('생산') || dept.includes('경영') || isManager,
-    requests: isInternal || role === 'PARTNER' || role === 'GUEST',
-    changes: isTop || isManager || dept.includes('영업') || dept.includes('수주') || dept.includes('생산') || dept.includes('출하'),
-    approvals: isInternal,
-    manageAccounts: isTop || isManager,
-    canCreateCompanyAdmin: ['SUPER_ADMIN', 'OWNER'].includes(role),
-  };
-}
-
-export function canReadTab(tab: string, role: string, department?: string | null): boolean {
-  const access = getDepartmentAccessMap(role, department);
-  const always = ['overview', 'documents', 'comments', 'history'];
-  if (always.includes(tab)) return true;
-  if (tab === 'sales') return access.sales;
-  if (tab === 'contract') return access.contract;
-  if (tab === 'production') return access.production;
-  if (tab === 'painting') return access.painting;
-  if (tab === 'shipping') return access.shipping;
-  if (tab === 'requests') return access.requests;
-  if (tab === 'changes') return access.changes;
-  if (tab === 'schedule') return access.approvals || access.requests;
-  if (tab === 'issues') return access.production || access.painting || access.shipping || access.sales;
   return true;
 }
 
@@ -109,12 +73,101 @@ export async function verifySiteAccess(userId: string, siteId: string) {
     select: { id: true, teamId: true },
   });
   if (!site) return null;
+
   if (site.teamId && site.teamId !== tm.teamId) return null;
 
   if (tm.role === 'PARTNER' || tm.role === 'GUEST' || tm.role === 'VIEWER') {
-    const assignment = await prisma.siteAssignment.findFirst({ where: { siteId, userId } });
+    const assignment = await prisma.siteAssignment.findFirst({
+      where: { siteId, userId },
+    });
     if (!assignment) return null;
   }
 
   return tm;
+}
+
+export function getDepartmentFlags(department?: string | null) {
+  const value = normalizeDepartment(department);
+
+  const has = (...names: string[]) => names.some((name) => value.includes(normalizeDepartment(name)));
+
+  const isExecutive = has('경영진');
+  const isSupport = has('경영지원부');
+  const isSales = has('영업부');
+  const isContract = has('수주팀');
+  const isProduction = has('생산관리팀');
+  const isPaint = has('도장팀');
+  const isShipping = has('출하팀');
+  const isConstruction = has('공사팀');
+  const isPartnerDept = has('협력사');
+
+  return {
+    isExecutive,
+    isSupport,
+    isSales,
+    isContract,
+    isProduction,
+    isPaint,
+    isShipping,
+    isConstruction,
+    isPartnerDept,
+  };
+}
+
+export function getPermissionProfile(role?: string | null, department?: string | null) {
+  const level = getRoleLevel(role || 'GUEST');
+  const dept = getDepartmentFlags(department);
+  const internal = isInternalRole(role);
+  const admin = level >= getRoleLevel('ADMIN_HR');
+  const manager = level >= getRoleLevel('MANAGER');
+
+  const canViewSales = internal && (admin || dept.isExecutive || dept.isSupport || dept.isSales || dept.isContract);
+  const canViewContract = internal && (admin || dept.isExecutive || dept.isSupport || dept.isSales || dept.isContract);
+  const canViewProduction = internal && (admin || dept.isExecutive || dept.isProduction || dept.isPaint || dept.isShipping || dept.isConstruction);
+  const canViewPainting = internal && (admin || dept.isExecutive || dept.isProduction || dept.isPaint);
+  const canViewShipping = internal && (admin || dept.isExecutive || dept.isProduction || dept.isShipping);
+  const canManageApprovals = internal && (admin || dept.isExecutive || dept.isSupport || manager);
+
+  return {
+    role,
+    level,
+    internal,
+    external: isExternalRole(role),
+    admin,
+    manager,
+    departmentFlags: dept,
+    canViewSales,
+    canViewContract,
+    canViewProduction,
+    canViewPainting,
+    canViewShipping,
+    canManageApprovals,
+  };
+}
+
+export async function findUsersByTargetDept(teamId: string, targetDept?: string | null) {
+  const normalized = normalizeDepartment(targetDept);
+
+  const members = await prisma.teamMember.findMany({
+    where: { teamId },
+    include: {
+      user: {
+        select: { id: true, name: true, department: true, position: true, email: true },
+      },
+    },
+  });
+
+  if (!normalized) {
+    return members
+      .filter((member) => isInternalRole(member.role))
+      .map((member) => member.user);
+  }
+
+  return members
+    .filter((member) => {
+      if (!isInternalRole(member.role)) return false;
+      const dept = normalizeDepartment(member.user.department);
+      return dept.includes(normalized);
+    })
+    .map((member) => member.user);
 }

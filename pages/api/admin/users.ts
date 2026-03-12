@@ -2,7 +2,13 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 import { getSession } from '@/lib/session';
-import { getTeamMemberByUserId, hasMinRole, canDeleteUser, canAssignRole, getDepartmentAccessMap } from '@/lib/team-helper';
+import {
+  getTeamMemberByUserId,
+  hasMinRole,
+  canDeleteUser,
+  canAssignRole,
+  getPermissionProfile,
+} from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -10,12 +16,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const tm = await getTeamMemberByUserId(session.user.id);
   if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
-  if (!hasMinRole(tm.role, 'MANAGER')) return res.status(403).json({ error: { message: 'Forbidden' } });
+
+  if (!hasMinRole(tm.role, 'ADMIN_HR')) {
+    return res.status(403).json({ error: { message: 'Forbidden' } });
+  }
 
   try {
     switch (req.method) {
       case 'GET':
-        return await handleGET(tm.teamId, tm.role, res);
+        return await handleGET(tm.teamId, res);
       case 'POST':
         return await handlePOST(req, res, tm);
       case 'DELETE':
@@ -29,7 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-const handleGET = async (teamId: string, actorRole: string, res: NextApiResponse) => {
+const handleGET = async (teamId: string, res: NextApiResponse) => {
   const members = await prisma.teamMember.findMany({
     where: { teamId },
     include: {
@@ -49,21 +58,15 @@ const handleGET = async (teamId: string, actorRole: string, res: NextApiResponse
     orderBy: { createdAt: 'desc' },
   });
 
-  const companyAdminExists = members.some((m) => m.role === 'ADMIN_HR');
-  const users = members
-    .filter((m) => !['SUPER_ADMIN', 'OWNER'].includes(m.role))
-    .map((m) => ({
-      ...m.user,
-      teamMembers: [{ role: m.role, team: { name: '' } }],
-    }));
+  const companyAdminExists = members.some((member) => member.role === 'ADMIN_HR');
 
-  return res.status(200).json({
-    data: users,
-    meta: {
-      companyAdminExists,
-      canCreateCompanyAdmin: getDepartmentAccessMap(actorRole).canCreateCompanyAdmin,
-    },
-  });
+  const users = members.map((member) => ({
+    ...member.user,
+    teamMembers: [{ role: member.role, team: { name: member.teamId } }],
+    permissionProfile: getPermissionProfile(member.role, member.user.department),
+  }));
+
+  return res.status(200).json({ data: users, meta: { companyAdminExists } });
 };
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: any) => {
@@ -73,6 +76,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
   }
 
   const targetRole = role || 'USER';
+
   if (!canAssignRole(actorTm.role, targetRole)) {
     return res.status(403).json({ error: { message: `${targetRole} 역할을 부여할 수 없습니다.` } });
   }
@@ -80,13 +84,15 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
   if (targetRole === 'ADMIN_HR') {
     const existingCompanyAdmin = await prisma.teamMember.findFirst({
       where: { teamId: actorTm.teamId, role: 'ADMIN_HR' },
-      select: { id: true },
+      include: { user: { select: { name: true, email: true } } },
     });
+
     if (existingCompanyAdmin) {
-      return res.status(400).json({ error: { message: 'COMPANY_ADMIN은 회사당 1명만 생성할 수 있습니다.' } });
-    }
-    if (!['SUPER_ADMIN', 'OWNER'].includes(actorTm.role)) {
-      return res.status(403).json({ error: { message: 'COMPANY_ADMIN 생성은 최상위 관리자만 가능합니다.' } });
+      return res.status(400).json({
+        error: {
+          message: `이 회사에는 이미 COMPANY_ADMIN(${existingCompanyAdmin.user.name})이 있습니다. 회사당 1명만 생성할 수 있습니다.`,
+        },
+      });
     }
   }
 
@@ -99,14 +105,16 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
       name,
       email,
       password: hashedPassword,
-      company: company || null,
+      company: company || actorTm.user?.company || null,
       department: department || null,
       position: position || null,
       phone: phone || null,
     },
   });
 
-  await prisma.teamMember.create({ data: { teamId: actorTm.teamId, userId: user.id, role: targetRole } });
+  await prisma.teamMember.create({
+    data: { teamId: actorTm.teamId, userId: user.id, role: targetRole },
+  });
 
   return res.status(201).json({ data: user });
 };
@@ -115,13 +123,17 @@ const handleDELETE = async (req: NextApiRequest, res: NextApiResponse, actorTm: 
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ error: { message: 'userId is required' } });
 
-  const targetTm = await prisma.teamMember.findFirst({ where: { teamId: actorTm.teamId, userId } });
+  const targetTm = await prisma.teamMember.findFirst({
+    where: { teamId: actorTm.teamId, userId },
+  });
   if (!targetTm) return res.status(404).json({ error: { message: 'User not found in team' } });
+
   if (!canDeleteUser(actorTm.role, actorTm.userId, targetTm.role, userId)) {
     return res.status(403).json({ error: { message: '이 사용자를 삭제할 권한이 없습니다.' } });
   }
 
   await prisma.teamMember.delete({ where: { id: targetTm.id } });
+
   const otherMemberships = await prisma.teamMember.count({ where: { userId } });
   if (otherMemberships === 0) {
     await prisma.user.delete({ where: { id: userId } });

@@ -1,132 +1,184 @@
+/*
+ * AIRX (individual business) proprietary source.
+ * Owner: AIRX / choe DONGHYUN. All rights reserved.
+ */
+
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
-import { hashPassword } from '@/lib/auth';
 import { getSession } from '@/lib/session';
-import { canManageGuests, getTeamMemberByUserId, getRoleDisplayName, isSystemRole } from '@/lib/team-helper';
+import { getTeamMemberByUserId } from '@/lib/team-helper';
 
-const GUEST_ROLES = ['GUEST', 'VIEWER'];
+const EXTERNAL_ROLES = ['PARTNER', 'GUEST', 'VIEWER'] as const;
+const CREATOR_ROLES = ['ADMIN_HR', 'MANAGER', 'USER', 'PARTNER'] as const;
+
+type CreatorRole = (typeof CREATOR_ROLES)[number] | 'SUPER_ADMIN' | 'OWNER' | 'ADMIN';
+
+function canCreateGuest(role: string) {
+  return [...CREATOR_ROLES, 'SUPER_ADMIN', 'OWNER', 'ADMIN'].includes(role as CreatorRole);
+}
+
+function isExternalRole(role: string) {
+  return EXTERNAL_ROLES.includes(role as (typeof EXTERNAL_ROLES)[number]);
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
-  if (!session) return res.status(401).json({ error: { message: 'Unauthorized' } });
-  const tm = await getTeamMemberByUserId(session.user.id);
-  if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
-  if (!canManageGuests(tm.role)) return res.status(403).json({ error: { message: '게스트 관리 권한이 없습니다.' } });
-
-  try {
-    switch (req.method) {
-      case 'GET':
-        return await handleGET(tm, res);
-      case 'POST':
-        return await handlePOST(req, res, tm);
-      default:
-        res.setHeader('Allow', 'GET, POST');
-        return res.status(405).json({ error: { message: `Method ${req.method} Not Allowed` } });
-    }
-  } catch (error: any) {
-    return res.status(500).json({ error: { message: error.message || 'Internal server error' } });
-  }
-}
-
-async function getAllowedSites(tm: any, userId?: string) {
-  if (tm.role === 'PARTNER') {
-    return prisma.siteAssignment.findMany({
-      where: { userId: userId || tm.userId || undefined },
-      include: { site: { select: { id: true, name: true, status: true } } },
-      orderBy: { assignedAt: 'desc' },
-    });
+  if (!session?.user?.id) {
+    return res.status(401).json({ error: { message: 'Unauthorized' } });
   }
 
-  const sites = await prisma.site.findMany({
-    where: { teamId: tm.teamId },
-    select: { id: true, name: true, status: true },
-    orderBy: { updatedAt: 'desc' },
+  const me = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      company: true,
+      teamMembers: {
+        take: 1,
+        select: {
+          role: true,
+          teamId: true,
+        },
+      },
+    },
   });
-  return sites.map((site) => ({ site }));
-}
 
-const handleGET = async (tm: any, res: NextApiResponse) => {
-  const [members, siteOptions] = await Promise.all([
-    prisma.teamMember.findMany({
-      where: { teamId: tm.teamId, role: { in: ['GUEST', 'VIEWER', 'PARTNER'] } },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            position: true,
-            department: true,
-            company: true,
-            createdAt: true,
-            siteAssignments: { include: { site: { select: { id: true, name: true } } } },
+  const myTeamMember = me?.teamMembers?.[0];
+  const myRole = myTeamMember?.role || 'USER';
+  const myTeamId = myTeamMember?.teamId;
+
+  if (!myTeamId) {
+    return res.status(400).json({ error: { message: '소속 회사 정보가 없습니다.' } });
+  }
+
+  if (!canCreateGuest(myRole)) {
+    return res.status(403).json({ error: { message: '게스트를 생성할 권한이 없습니다.' } });
+  }
+
+  if (req.method === 'GET') {
+    const users = await prisma.user.findMany({
+      where: {
+        teamMembers: {
+          some: {
+            teamId: myTeamId,
+            role: { in: ['PARTNER', 'GUEST', 'VIEWER'] },
           },
         },
       },
       orderBy: { createdAt: 'desc' },
-    }),
-    getAllowedSites(tm, tm.userId),
-  ]);
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        company: true,
+        department: true,
+        position: true,
+        createdAt: true,
+        siteAssignments: {
+          select: {
+            site: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        teamMembers: {
+          take: 1,
+          select: {
+            role: true,
+          },
+        },
+      },
+    });
 
-  const data = members.filter((m) => !isSystemRole(m.role)).map((m) => ({
-    ...m.user,
-    role: m.role,
-    roleLabel: getRoleDisplayName(m.role),
-    assignedSites: m.user.siteAssignments.map((a) => ({ id: a.site?.id, name: a.site?.name })).filter((a) => a.id),
-  }));
-
-  return res.status(200).json({
-    data,
-    meta: {
-      siteOptions: siteOptions.map((row: any) => row.site),
-      creatableRoles: tm.role === 'PARTNER' ? ['GUEST', 'VIEWER'] : ['PARTNER', 'GUEST', 'VIEWER'],
-    },
-  });
-};
-
-const handlePOST = async (req: NextApiRequest, res: NextApiResponse, tm: any) => {
-  const { name, email, password, position, phone, company, role, siteIds } = req.body;
-  const targetRole = String(role || 'GUEST');
-
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: { message: '이름, 이메일, 비밀번호는 필수입니다.' } });
-  }
-  if (!Array.isArray(siteIds) || siteIds.length === 0) {
-    return res.status(400).json({ error: { message: '최소 1개 현장을 지정해야 합니다.' } });
-  }
-  if (tm.role === 'PARTNER' && targetRole === 'PARTNER') {
-    return res.status(403).json({ error: { message: '협력사는 다른 협력사 계정을 만들 수 없습니다.' } });
+    return res.status(200).json({ data: users });
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return res.status(400).json({ error: { message: '이미 존재하는 이메일입니다.' } });
-  }
-
-  const allowedSiteRows = await getAllowedSites(tm, tm.userId);
-  const allowedSiteIds = new Set(allowedSiteRows.map((row: any) => row.site?.id).filter(Boolean));
-  const normalizedSiteIds = siteIds.filter((id: string) => allowedSiteIds.has(id));
-  if (normalizedSiteIds.length === 0) {
-    return res.status(400).json({ error: { message: '지정 가능한 현장이 없습니다.' } });
-  }
-
-  const user = await prisma.user.create({
-    data: {
+  if (req.method === 'POST') {
+    const {
       name,
       email,
-      password: await hashPassword(password),
-      position: position || null,
-      phone: phone || null,
-      company: company || null,
-      department: targetRole === 'PARTNER' ? '협력사' : '외부열람',
-    },
-  });
+      password,
+      phone,
+      role = 'GUEST',
+      siteIds = [],
+    } = req.body || {};
 
-  await prisma.teamMember.create({ data: { teamId: tm.teamId, userId: user.id, role: targetRole } });
-  await prisma.siteAssignment.createMany({
-    data: normalizedSiteIds.map((siteId: string) => ({ siteId, userId: user.id, assignedRole: targetRole })),
-    skipDuplicates: true,
-  });
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: { message: '이름, 이메일, 비밀번호는 필수입니다.' } });
+    }
 
-  return res.status(201).json({ data: user });
-};
+    if (!isExternalRole(role)) {
+      return res.status(400).json({ error: { message: '게스트/협력사 역할만 생성할 수 있습니다.' } });
+    }
+
+    if (!Array.isArray(siteIds) || siteIds.length === 0) {
+      return res.status(400).json({ error: { message: '최소 1개 이상 현장을 지정해야 합니다.' } });
+    }
+
+    const allowedSites = await prisma.site.findMany({
+      where: {
+        id: { in: siteIds },
+        teamId: myTeamId,
+      },
+      select: { id: true },
+    });
+
+    const allowedSiteIds = allowedSites.map((s) => s.id);
+
+    if (allowedSiteIds.length !== siteIds.length) {
+      return res.status(400).json({ error: { message: '같은 회사 현장만 지정할 수 있습니다.' } });
+    }
+
+    if (myRole === 'PARTNER') {
+      const myAssignments = await prisma.siteAssignment.findMany({
+        where: { userId: session.user.id },
+        select: { siteId: true },
+      });
+      const mySiteIds = new Set(myAssignments.map((a) => a.siteId));
+      const invalid = allowedSiteIds.some((siteId) => !mySiteIds.has(siteId));
+      if (invalid) {
+        return res.status(403).json({ error: { message: '협력사는 본인 배정 현장 안에서만 게스트를 생성할 수 있습니다.' } });
+      }
+    }
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return res.status(400).json({ error: { message: '이미 존재하는 이메일입니다.' } });
+    }
+
+    const bcrypt = await import('bcryptjs');
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const created = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        phone: phone || null,
+        company: me?.company || null,
+        department: role === 'PARTNER' ? '협력사' : '게스트',
+        position: null,
+        teamMembers: {
+          create: {
+            role,
+            teamId: myTeamId,
+          },
+        },
+        siteAssignments: {
+          create: allowedSiteIds.map((siteId) => ({ siteId })),
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+
+    return res.status(200).json({ data: created });
+  }
+
+  return res.status(405).json({ error: { message: 'Method not allowed' } });
+}

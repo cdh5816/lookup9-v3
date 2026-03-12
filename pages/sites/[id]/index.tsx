@@ -40,8 +40,7 @@ const upsertLabeledValue = (text: string | null | undefined, label: string, valu
   } else {
     rows.push(nextRow);
   }
-  return rows.join('
-');
+  return rows.join('\n');
 };
 const parseNumberValue = (value: string | number | null | undefined) => {
   if (value === null || value === undefined) return 0;

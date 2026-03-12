@@ -1,3 +1,4 @@
+/* eslint-disable i18next/no-literal-string */
 /*
  * AIRX (individual business) proprietary source.
  * Owner: AIRX / choe DONGHYUN. All rights reserved.

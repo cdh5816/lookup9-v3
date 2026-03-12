@@ -8,7 +8,7 @@ export const parseLabeledValue = (
   label: string
 ): string => {
   if (!text) return '';
-  const escaped = label.replace(/[.*+?^${}()|[\]\]/g, '\\$&');
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`${escaped}\\s*[:：]\\s*([^\\n\\r]+)`, 'i');
   const match = text.match(pattern);
   return match?.[1]?.trim() || '';
@@ -26,7 +26,7 @@ export const upsertLabeledValue = (
   const normalized =
     typeof value === 'boolean' ? (value ? '완료' : '미완료') : String(value ?? '').trim();
 
-  const escaped = label.replace(/[.*+?^${}()|[\]\]/g, '\\$&');
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const regex = new RegExp(`^${escaped}\\s*[:：]`, 'i');
   const filtered = lines.filter((line) => !regex.test(line.trim()));
 

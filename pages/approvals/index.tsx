@@ -2,7 +2,7 @@
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import Head from 'next/head';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from 'react-daisyui';
 
 const statusTone: Record<string, string> = {
@@ -19,7 +19,7 @@ export default function ApprovalsPage() {
   const [processingId, setProcessingId] = useState('');
   const [error, setError] = useState('');
 
-  const fetchItems = async (nextBox = box) => {
+  const fetchItems = useCallback(async (nextBox = box) => {
     setLoading(true);
     setError('');
     try {
@@ -32,11 +32,11 @@ export default function ApprovalsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [box]);
 
   useEffect(() => {
     fetchItems(box);
-  }, [box]);
+  }, [box, fetchItems]);
 
   const pendingCount = useMemo(() => items.filter((item) => item.status === '등록').length, [items]);
 

@@ -178,22 +178,13 @@ async function handleDELETE(req: NextApiRequest, res: NextApiResponse, actorTm: 
   const now = Date.now();
   const originalEmail = targetTm.user.email;
   const safeDeletedEmail = `deleted+${now}_${originalEmail}`.slice(0, 190);
+  const randomPw = await hashPassword(`deleted-${now}-${Math.random().toString(36).slice(2)}`);
 
   await prisma.$transaction(async (tx) => {
-    await tx.siteAssignment.deleteMany({ where: { userId } });
+    await tx.siteAssignment.deleteMany({ where: { userId, site: { teamId: actorTm.teamId } } as any });
     await tx.session.deleteMany({ where: { userId } });
     await tx.account.deleteMany({ where: { userId } });
     await tx.notification.deleteMany({ where: { userId } });
-
-    await tx.message.deleteMany({ where: { OR: [{ senderId: userId }, { receiverId: userId }] } });
-
-    await tx.request.updateMany({ where: { handledById: userId }, data: { handledById: null } });
-    await tx.issue.updateMany({ where: { handledById: userId }, data: { handledById: null } });
-    await tx.changeLog.updateMany({ where: { approverId: userId }, data: { approverId: null } });
-    await tx.schedule.updateMany({ where: { assigneeId: userId }, data: { assigneeId: null } });
-    await tx.leaveRequest.updateMany({ where: { managerId: userId }, data: { managerId: null } });
-    await tx.leaveRequest.updateMany({ where: { adminId: userId }, data: { adminId: null } });
-    await tx.paintSpec.updateMany({ where: { confirmedById: userId }, data: { confirmedById: null } });
 
     await tx.teamMember.deleteMany({ where: { userId, teamId: actorTm.teamId } });
 
@@ -203,7 +194,7 @@ async function handleDELETE(req: NextApiRequest, res: NextApiResponse, actorTm: 
         where: { id: userId },
         data: {
           email: safeDeletedEmail,
-          password: await hashPassword(`deleted-${now}-${Math.random().toString(36).slice(2)}`),
+          password: randomPw,
           name: `[삭제됨] ${targetTm.user.name}`,
           company: null,
           department: null,

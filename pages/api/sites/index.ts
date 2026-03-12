@@ -1,13 +1,9 @@
-/*
- * AIRX (individual business) proprietary source.
- * Owner: AIRX / choe DONGHYUN. All rights reserved.
- */
-
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { getTeamMemberByUserId } from '@/lib/team-helper';
-import { isExternalRole, isInternalRole } from '@/lib/lookup9-role';
+
+const EXTERNAL_ROLES = ['PARTNER', 'GUEST', 'VIEWER'];
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -33,17 +29,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => {
   const { status, search } = req.query;
-  const where: any = { teamId: tm.teamId };
 
+  const where: any = { teamId: tm.teamId };
   if (status && status !== 'all') where.status = status;
   if (search) {
     where.OR = [
       { name: { contains: search as string, mode: 'insensitive' } },
       { address: { contains: search as string, mode: 'insensitive' } },
+      { description: { contains: search as string, mode: 'insensitive' } },
     ];
   }
 
-  if (isExternalRole(tm.role)) {
+  if (EXTERNAL_ROLES.includes(tm.role)) {
     where.assignments = { some: { userId: tm.userId } };
   }
 
@@ -52,17 +49,18 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     include: {
       client: { select: { name: true } },
       createdBy: { select: { name: true, position: true } },
+      shipments: { select: { quantity: true, updatedAt: true, createdAt: true } },
       _count: { select: { assignments: true, comments: true } },
     },
-    orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+    orderBy: { createdAt: 'desc' },
   });
 
   return res.status(200).json({ data: sites });
 };
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: any, tm: any) => {
-  if (!isInternalRole(tm.role)) {
-    return res.status(403).json({ error: { message: '내부 사용자만 현장을 생성할 수 있습니다.' } });
+  if (EXTERNAL_ROLES.includes(tm.role)) {
+    return res.status(403).json({ error: { message: '외부 계정은 현장을 생성할 수 없습니다.' } });
   }
 
   const { name, address, clientId, status, description } = req.body;
@@ -77,7 +75,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
       status: status || '대기',
       description: description || null,
       createdById: session.user.id,
-      updatedAt: new Date(),
     },
   });
 

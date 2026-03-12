@@ -1,6 +1,8 @@
 import React from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
-import Brand from './Brand';
+import app from '@/lib/app';
+import useSWR from 'swr';
+import fetcher from '@/lib/fetcher';
 import Navigation from './Navigation';
 import { useTranslation } from 'next-i18next';
 import { useSession } from 'next-auth/react';
@@ -13,6 +15,8 @@ interface DrawerProps {
 const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
   const { t } = useTranslation('common');
   const { data } = useSession();
+  const { data: profileData } = useSWR('/api/my/profile', fetcher);
+  const companyDisplayName = profileData?.data?.companyDisplayName || app.name;
 
   return (
     <>
@@ -37,7 +41,7 @@ const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
               </div>
 
               <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-800 bg-black px-5 pb-4 shadow-2xl">
-                <Brand />
+                <div className="flex min-w-0 shrink-0 items-center pt-6 text-xl font-bold tracking-tight dark:text-gray-100"><span className="block max-w-[190px] truncate lg:max-w-[220px]">{companyDisplayName}</span></div>
                 {data?.user && (
                   <div className="-mt-3 break-words text-xs leading-5 text-gray-500">
                     {data.user.name}
@@ -52,7 +56,7 @@ const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
 
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
         <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-800 bg-black px-6">
-          <Brand />
+          <div className="flex min-w-0 shrink-0 items-center pt-6 text-xl font-bold tracking-tight dark:text-gray-100"><span className="block max-w-[190px] truncate lg:max-w-[220px]">{companyDisplayName}</span></div>
           {data?.user && (
             <div className="-mt-3 break-words text-xs leading-5 text-gray-500">
               {data.user.name}

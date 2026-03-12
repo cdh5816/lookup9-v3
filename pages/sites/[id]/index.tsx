@@ -1,4 +1,3 @@
-/* eslint-disable i18next/no-literal-string */
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
@@ -8,8 +7,8 @@ import { useRouter } from 'next/router';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 import { Button } from 'react-daisyui';
-import { PlusIcon, TrashIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import ProductionProgressPanel from '@/components/sites/ProductionProgressPanel';
+import { PlusIcon, TrashIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 // 상태 신호등 색상
 const STATUS_DOT: Record<string, string> = {
@@ -378,75 +377,6 @@ const AssignmentPanel = ({ siteId, assignments, canManage, onMutate }: any) => {
   );
 };
 
-
-
-const SalesPanel = ({ sales }: any) => {
-  const { t } = useTranslation('common');
-  return (
-    <div className="rounded-lg border border-gray-800 p-6">
-      <h3 className="mb-4 font-semibold">{t('tab-sales')}</h3>
-      {Array.isArray(sales) && sales.length > 0 ? (
-        <div className="space-y-2">
-          {sales.map((item: any, index: number) => (
-            <div key={item?.id || index} className="rounded border border-gray-800 p-3">
-              <p className="text-sm font-medium">{item?.title || item?.name || item?.status || `${t('tab-sales')} ${index + 1}`}</p>
-              {item?.description ? <p className="mt-1 text-sm text-gray-400 whitespace-pre-wrap">{item.description}</p> : null}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
-      )}
-    </div>
-  );
-};
-
-const ContractPanel = ({ contracts }: any) => {
-  const { t } = useTranslation('common');
-  return (
-    <div className="rounded-lg border border-gray-800 p-6">
-      <h3 className="mb-4 font-semibold">{t('tab-contract')}</h3>
-      {Array.isArray(contracts) && contracts.length > 0 ? (
-        <div className="space-y-2">
-          {contracts.map((item: any, index: number) => (
-            <div key={item?.id || index} className="rounded border border-gray-800 p-3">
-              <p className="text-sm font-medium">{item?.title || item?.name || `${t('tab-contract')} ${index + 1}`}</p>
-              {item?.description ? <p className="mt-1 text-sm text-gray-400 whitespace-pre-wrap">{item.description}</p> : null}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
-      )}
-    </div>
-  );
-};
-
-const PaintPanel = ({ specs }: any) => {
-  const { t } = useTranslation('common');
-  return (
-    <div className="rounded-lg border border-gray-800 p-6">
-      <h3 className="mb-4 font-semibold">{t('tab-painting')}</h3>
-      {Array.isArray(specs) && specs.length > 0 ? (
-        <div className="space-y-2">
-          {specs.map((item: any, index: number) => (
-            <div key={item?.id || index} className="rounded border border-gray-800 p-3">
-              <p className="text-sm font-medium">{item?.colorName || item?.name || `${t('tab-painting')} ${index + 1}`}</p>
-              <div className="mt-1 text-sm text-gray-400">
-                {item?.colorCode ? <p>Code: {item.colorCode}</p> : null}
-                {item?.paintType ? <p>Type: {item.paintType}</p> : null}
-                {item?.notes ? <p className="whitespace-pre-wrap">{item.notes}</p> : null}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-gray-500">{t('site-no-data')}</p>
-      )}
-    </div>
-  );
-};
-
 // ========= 출하 =========
 const shipStatuses = ['출하예정', '상차완료', '출발', '현장도착', '인수완료', '반송', '취소'];
 const ShipmentPanel = ({ siteId, shipments, canManage, onMutate }: any) => {
@@ -711,6 +641,27 @@ const HistoryPanel = ({ history }: { history: any[] }) => {
     </div>
   );
 };
+
+
+function SimpleSoonPanel({ label }: { label: string }) {
+  return (
+    <div className="rounded-lg border border-gray-800 p-6 text-center">
+      <p className="text-gray-500">{label}</p>
+    </div>
+  );
+}
+
+function SalesPanel(_: any) {
+  return <SimpleSoonPanel label="영업 탭은 준비 중입니다." />;
+}
+
+function ContractPanel(_: any) {
+  return <SimpleSoonPanel label="공사수주 탭은 준비 중입니다." />;
+}
+
+function PaintPanel(_: any) {
+  return <SimpleSoonPanel label="도장 탭은 준비 중입니다." />;
+}
 
 export async function getServerSideProps({ locale }: GetServerSidePropsContext) {
   return { props: { ...(locale ? await serverSideTranslations(locale, ['common']) : {}) } };

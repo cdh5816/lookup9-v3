@@ -3,14 +3,44 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { verifySiteAccess } from '@/lib/team-helper';
 
+async function notifyTargetUsers(siteId: string, title: string, message: string, targetDept?: string | null, entityId?: string) {
+  const site = await prisma.site.findUnique({ where: { id: siteId }, select: { teamId: true } });
+  if (!site?.teamId) return;
+
+  const teamMembers = await prisma.teamMember.findMany({
+    where: { teamId: site.teamId },
+    select: { userId: true, user: { select: { department: true } } },
+  });
+
+  const targetUserIds = (targetDept
+    ? teamMembers.filter((item) => (item.user.department || '').includes(targetDept)).map((item) => item.userId)
+    : teamMembers.map((item) => item.userId)
+  ).slice(0, 30);
+
+  if (!targetUserIds.length) return;
+
+  await prisma.notification.createMany({
+    data: targetUserIds.map((userId) => ({
+      userId,
+      type: 'SITE_REQUEST',
+      title,
+      message,
+      link: `/sites/${siteId}`,
+      siteId,
+      entityType: 'Request',
+      entityId,
+    })),
+  });
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
   if (!session) return res.status(401).json({ error: { message: 'Unauthorized' } });
 
   const { id } = req.query;
   if (!id || typeof id !== 'string') return res.status(400).json({ error: { message: 'Invalid site id' } });
-
-  if (!(await verifySiteAccess(session.user.id, id))) return res.status(403).json({ error: { message: 'Forbidden' } });
+  const tm = await verifySiteAccess(session.user.id, id);
+  if (!tm) return res.status(403).json({ error: { message: 'Forbidden' } });
 
   try {
     switch (req.method) {
@@ -18,9 +48,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const { title, type, priority, targetDept, deadline, description } = req.body;
         if (!title) return res.status(400).json({ error: { message: '제목을 입력해주세요.' } });
         const request = await prisma.request.create({
-          data: { siteId: id, title, type: type || '내부 요청', priority: priority || '보통', targetDept: targetDept || null, deadline: deadline ? new Date(deadline) : null, description: description || null, createdById: session.user.id },
-          include: { createdBy: { select: { name: true, position: true } }, handledBy: { select: { name: true, position: true } } },
+          data: {
+            siteId: id,
+            title,
+            type: type || '내부 요청',
+            priority: priority || '보통',
+            targetDept: targetDept || null,
+            deadline: deadline ? new Date(deadline) : null,
+            description: description || null,
+            createdById: session.user.id,
+          },
+          include: {
+            createdBy: { select: { name: true, position: true } },
+            handledBy: { select: { name: true, position: true } },
+          },
         });
+        await notifyTargetUsers(
+          id,
+          type === '미팅요청' ? '현장 미팅 요청' : '현장 요청사항 등록',
+          `${title}${targetDept ? ` / 대상부서: ${targetDept}` : ''}`,
+          targetDept || null,
+          request.id
+        );
         return res.status(201).json({ data: request });
       }
       case 'PUT': {
@@ -31,7 +80,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (handledById) data.handledById = handledById;
         if (result) data.result = result;
         if (fields.deadline) data.deadline = new Date(fields.deadline);
-        const request = await prisma.request.update({ where: { id: requestId }, data, include: { createdBy: { select: { name: true, position: true } }, handledBy: { select: { name: true, position: true } } } });
+        const request = await prisma.request.update({
+          where: { id: requestId },
+          data,
+          include: {
+            createdBy: { select: { name: true, position: true } },
+            handledBy: { select: { name: true, position: true } },
+          },
+        });
+        if (status) {
+          await notifyTargetUsers(id, '요청사항 상태 변경', `${request.title} / ${status}`, request.targetDept || null, request.id);
+        }
         return res.status(200).json({ data: request });
       }
       case 'DELETE': {

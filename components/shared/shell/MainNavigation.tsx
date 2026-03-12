@@ -1,4 +1,8 @@
-/* eslint-disable i18next/no-literal-string */
+/*
+ * AIRX (individual business) proprietary source.
+ * Owner: AIRX / choe DONGHYUN. All rights reserved.
+ */
+
 import {
   HomeIcon,
   BuildingOffice2Icon,
@@ -10,7 +14,6 @@ import {
   UserCircleIcon,
   UserPlusIcon,
   BellAlertIcon,
-  ClipboardDocumentCheckIcon,
 } from '@heroicons/react/24/outline';
 import { useTranslation } from 'next-i18next';
 import NavigationItems from './NavigationItems';
@@ -18,78 +21,123 @@ import { MenuItem, NavigationProps } from './NavigationItems';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 
-const MainNavigation = ({ activePathname }: NavigationProps) => {
+interface MainNavigationProps extends NavigationProps {
+  onNavigate?: () => void;
+}
+
+const MainNavigation = ({ activePathname, onNavigate }: MainNavigationProps) => {
   const { t } = useTranslation('common');
   const { data: profileData } = useSWR('/api/my/profile', fetcher);
   const profile = profileData?.data;
   const userRole = profile?.role || profile?.teamMembers?.[0]?.role || 'USER';
-  const permissionProfile = profile?.permissionProfile;
 
   const isSuperAdmin = userRole === 'SUPER_ADMIN' || userRole === 'OWNER';
-  const isAdminHR = userRole === 'ADMIN_HR' || isSuperAdmin;
-  const isManager = userRole === 'MANAGER' || isAdminHR;
-  const isUser = userRole === 'USER' || isManager;
+  const isCompanyAdmin = userRole === 'ADMIN_HR' || userRole === 'ADMIN' || isSuperAdmin;
+  const isManager = userRole === 'MANAGER';
+  const isInternalUser = ['USER', 'MEMBER'].includes(userRole);
   const isPartner = userRole === 'PARTNER';
-  const isGuest = userRole === 'GUEST' || userRole === 'VIEWER';
-  const canManageApprovals = permissionProfile?.canManageApprovals || isAdminHR;
-
-  if (isGuest) {
-    return (
-      <NavigationItems
-        menus={[
-          { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: activePathname === '/dashboard' },
-          { name: t('nav-my-sites'), href: '/my/sites', icon: BuildingOffice2Icon, active: activePathname?.startsWith('/my/sites') || false },
-          { name: t('nav-messages'), href: '/messages', icon: EnvelopeIcon, active: activePathname?.startsWith('/messages') || false },
-          { name: t('my-page-title'), href: '/my', icon: UserCircleIcon, active: activePathname === '/my' },
-        ]}
-      />
-    );
-  }
-
-  if (isPartner) {
-    return (
-      <NavigationItems
-        menus={[
-          { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: activePathname === '/dashboard' },
-          { name: t('nav-my-sites'), href: '/my/sites', icon: BuildingOffice2Icon, active: activePathname?.startsWith('/my/sites') || false },
-          { name: t('nav-production-dashboard'), href: '/production', icon: WrenchScrewdriverIcon, active: activePathname?.startsWith('/production') || false },
-          { name: t('nav-guest-manage'), href: '/partner/guests', icon: UserPlusIcon, active: activePathname?.startsWith('/partner/guests') || false },
-          { name: t('nav-messages'), href: '/messages', icon: EnvelopeIcon, active: activePathname?.startsWith('/messages') || false },
-          { name: t('my-page-title'), href: '/my', icon: UserCircleIcon, active: activePathname === '/my' },
-          { name: t('security'), href: '/settings/security', icon: ShieldCheckIcon, active: activePathname === '/settings/security' },
-        ]}
-      />
-    );
-  }
+  const isGuest = ['GUEST', 'VIEWER'].includes(userRole);
+  const isInternal = isCompanyAdmin || isManager || isInternalUser || isSuperAdmin;
 
   const menus: MenuItem[] = [
-    { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: activePathname === '/dashboard' },
-    { name: t('nav-sites'), href: '/sites', icon: BuildingOffice2Icon, active: activePathname?.startsWith('/sites') || false },
-    { name: t('nav-production-dashboard'), href: '/production', icon: WrenchScrewdriverIcon, active: activePathname?.startsWith('/production') || false },
+    {
+      name: t('nav-dashboard'),
+      href: '/dashboard',
+      icon: HomeIcon,
+      active: activePathname === '/dashboard',
+    },
   ];
 
-  if (canManageApprovals) {
+  if (isInternal) {
     menus.push({
-      name: '전자결재',
-      href: '/approvals',
-      icon: ClipboardDocumentCheckIcon,
-      active: activePathname?.startsWith('/approvals') || false,
+      name: t('nav-admin-hr'),
+      href: '/admin-hr',
+      icon: BuildingLibraryIcon,
+      active: activePathname?.startsWith('/admin-hr') || false,
+    });
+
+    menus.push({
+      name: t('nav-sites'),
+      href: '/sites',
+      icon: BuildingOffice2Icon,
+      active: activePathname?.startsWith('/sites') || false,
+    });
+
+    menus.push({
+      name: t('nav-production-dashboard'),
+      href: '/production',
+      icon: WrenchScrewdriverIcon,
+      active: activePathname?.startsWith('/production') || false,
     });
   }
 
-  if (isAdminHR) {
-    menus.push({ name: t('nav-admin-hr'), href: '/admin-hr', icon: BuildingLibraryIcon, active: activePathname?.startsWith('/admin-hr') || false });
-    menus.push({ name: t('admin-users'), href: '/admin/users', icon: UsersIcon, active: activePathname?.startsWith('/admin') || false });
+  if (isPartner || isGuest) {
+    menus.push({
+      name: t('nav-my-sites'),
+      href: '/my/sites',
+      icon: BuildingOffice2Icon,
+      active: activePathname?.startsWith('/my/sites') || false,
+    });
+  }
+
+  if (isPartner) {
+    menus.push({
+      name: t('nav-production-dashboard'),
+      href: '/production',
+      icon: WrenchScrewdriverIcon,
+      active: activePathname?.startsWith('/production') || false,
+    });
+  }
+
+  if (isCompanyAdmin || isManager || isPartner) {
+    menus.push({
+      name: t('nav-guest-manage'),
+      href: '/partner/guests',
+      icon: UserPlusIcon,
+      active: activePathname?.startsWith('/partner/guests') || false,
+    });
   }
 
   menus.push(
-    { name: t('nav-messages'), href: '/messages', icon: EnvelopeIcon, active: activePathname?.startsWith('/messages') || false },
-    { name: t('noti-title'), href: '/notifications', icon: BellAlertIcon, active: activePathname?.startsWith('/notifications') || false },
-    { name: t('my-page-title'), href: '/my', icon: UserCircleIcon, active: activePathname === '/my' },
-    { name: t('security'), href: '/settings/security', icon: ShieldCheckIcon, active: activePathname === '/settings/security' }
+    {
+      name: t('nav-messages'),
+      href: '/messages',
+      icon: EnvelopeIcon,
+      active: activePathname?.startsWith('/messages') || false,
+    },
+    {
+      name: t('noti-title'),
+      href: '/notifications',
+      icon: BellAlertIcon,
+      active: activePathname?.startsWith('/notifications') || false,
+    }
   );
 
-  return <NavigationItems menus={menus} />;
+  if (isCompanyAdmin) {
+    menus.push({
+      name: t('admin-users'),
+      href: '/admin/users',
+      icon: UsersIcon,
+      active: activePathname?.startsWith('/admin/users') || false,
+    });
+  }
+
+  menus.push(
+    {
+      name: t('my-page-title'),
+      href: '/my',
+      icon: UserCircleIcon,
+      active: activePathname === '/my',
+    },
+    {
+      name: t('security'),
+      href: '/settings/security',
+      icon: ShieldCheckIcon,
+      active: activePathname?.startsWith('/settings/security') || false,
+    }
+  );
+
+  return <NavigationItems menus={menus} onNavigate={onNavigate} />;
 };
 
 export default MainNavigation;

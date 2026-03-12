@@ -59,9 +59,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
   const handleSearch = useCallback((q: string) => {
     setQuery(q);
 
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (q.length < 1) {
       setResults(null);
@@ -101,7 +99,9 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
           <span className="sr-only">{t('open-sidebar')}</span>
           <Bars3Icon className="h-6 w-6" aria-hidden="true" />
         </button>
-        <span className="block max-w-[180px] truncate text-base font-bold">{companyDisplayName}</span>
+        <span className="block max-w-[180px] truncate text-base font-bold">
+          {companyDisplayName}
+        </span>
       </div>
 
       <div className="flex flex-1 items-center justify-end">
@@ -117,8 +117,9 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                 <MagnifyingGlassIcon className="h-5 w-5" />
               )}
             </button>
+
             {showSearch && (
-              <div className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-gray-700 bg-gray-900 shadow-xl">
+              <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-gray-700 bg-gray-900 shadow-xl">
                 <input
                   type="text"
                   autoFocus
@@ -144,7 +145,8 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                             }}
                           >
                             <div className="cursor-pointer rounded px-3 py-2 text-sm hover:bg-gray-800">
-                              {s.name} <span className="text-xs text-gray-500">{s.status}</span>
+                              <span className="block truncate">{s.name}</span>
+                              <span className="text-xs text-gray-500">{s.status}</span>
                             </div>
                           </Link>
                         ))}
@@ -156,9 +158,11 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                         <p className="px-2 py-1 text-xs text-gray-500">{t('members')}</p>
                         {results.users.map((u: any) => (
                           <div key={u.id} className="rounded px-3 py-2 text-sm hover:bg-gray-800">
-                            {u.position ? `${u.position} ` : ''}
-                            {u.name}
-                            <span className="ml-2 text-xs text-gray-500">{u.department || ''}</span>
+                            <span className="block truncate">
+                              {u.position ? `${u.position} ` : ''}
+                              {u.name}
+                            </span>
+                            <span className="text-xs text-gray-500">{u.department || ''}</span>
                           </div>
                         ))}
                       </div>
@@ -169,7 +173,8 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                         <p className="px-2 py-1 text-xs text-gray-500">{t('admin-tab-clients')}</p>
                         {results.clients.map((c: any) => (
                           <div key={c.id} className="rounded px-3 py-2 text-sm hover:bg-gray-800">
-                            {c.name} <span className="text-xs text-gray-500">{c.type}</span>
+                            <span className="block truncate">{c.name}</span>
+                            <span className="text-xs text-gray-500">{c.type}</span>
                           </div>
                         ))}
                       </div>
@@ -192,18 +197,16 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
           >
             <BellIcon className="h-5 w-5" />
             {unreadCount > 0 && (
-              <span className="absolute right-1 top-1 inline-flex min-w-[16px] items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
-                {unreadCount > 99 ? '99+' : unreadCount}
+              <span className="absolute right-1 top-1 inline-flex min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </Link>
 
           {env.darkModeEnabled && (
             <button
-              type="button"
-              onClick={toggleTheme}
               className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white"
-              title="테마 변경"
+              onClick={toggleTheme}
             >
               <SunIcon className="h-5 w-5" />
             </button>
@@ -214,10 +217,8 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
           </Link>
 
           <button
-            type="button"
+            className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-red-400"
             onClick={handleLogout}
-            className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white"
-            title={t('logout')}
           >
             <ArrowRightOnRectangleIcon className="h-5 w-5" />
           </button>

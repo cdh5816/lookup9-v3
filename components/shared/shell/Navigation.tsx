@@ -1,23 +1,14 @@
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
+import { usePathname } from 'next/navigation';
 import MainNavigation from './MainNavigation';
 
-const Navigation = () => {
-  const { asPath, isReady } = useRouter();
-  const [activePathname, setActivePathname] = useState<null | string>(null);
+interface NavigationProps {
+  onNavigate?: () => void;
+}
 
-  useEffect(() => {
-    if (isReady && asPath) {
-      const activePathname = new URL(asPath, location.href).pathname;
-      setActivePathname(activePathname);
-    }
-  }, [asPath, isReady]);
+const Navigation = ({ onNavigate }: NavigationProps) => {
+  const pathname = usePathname();
 
-  return (
-    <nav className="flex flex-1 flex-col">
-      <MainNavigation activePathname={activePathname} />
-    </nav>
-  );
+  return <MainNavigation activePathname={pathname} onNavigate={onNavigate} />;
 };
 
 export default Navigation;

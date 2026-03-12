@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { getPermissionFlags, getTeamMemberByUserId } from '@/lib/team-helper';
+import { getPermissions, getTeamMemberByUserId } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -11,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const userId = session.user.id;
   const tm = await getTeamMemberByUserId(userId);
 
-  const [user, mySites, unreadCount, myComments] = await Promise.all([
+  const [user, mySites, unreadMessages, unreadNotifications, myComments] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         position: true,
         phone: true,
         createdAt: true,
-        teamMembers: { select: { role: true, team: { select: { id: true, name: true, slug: true } } } },
+        teamMembers: { select: { role: true, team: { select: { id: true, name: true } } } },
       },
     }),
     tm
@@ -31,10 +31,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           where: { userId, site: { teamId: tm.teamId } },
           include: { site: { select: { id: true, name: true, status: true, address: true } } },
           orderBy: { assignedAt: 'desc' },
-          take: 10,
+          take: 20,
         })
       : [],
     prisma.message.count({ where: { receiverId: userId, isRead: false } }),
+    prisma.notification.count({ where: { userId, isRead: false } }),
     tm
       ? prisma.comment.findMany({
           where: { authorId: userId, site: { teamId: tm.teamId } },
@@ -46,18 +47,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ]);
 
   const role = user?.teamMembers?.[0]?.role || 'USER';
-  const permissions = getPermissionFlags(role, user?.department);
   const companyDisplayName = user?.company || user?.teamMembers?.[0]?.team?.name || 'LOOKUP9';
+  const permissions = getPermissions(role, user?.department);
 
   return res.status(200).json({
     data: {
       ...user,
       role,
-      permissions,
-      isExternal: permissions.isExternal,
       companyDisplayName,
+      permissions,
       mySites: Array.isArray(mySites) ? mySites.map((a: any) => a.site) : [],
-      unreadMessages: unreadCount,
+      unreadMessages,
+      unreadNotifications,
       myComments,
     },
   });

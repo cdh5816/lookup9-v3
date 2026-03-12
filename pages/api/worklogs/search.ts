@@ -1,8 +1,3 @@
-/*
- * AIRX (individual business) proprietary source.
- * Owner: AIRX / choe DONGHYUN. All rights reserved.
- */
-
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
@@ -23,19 +18,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     where: { id: session.user.id },
     select: {
       id: true,
-      name: true,
-      teamMembers: {
-        select: { role: true, teamId: true },
-        take: 1,
-      },
+      teamMembers: { select: { role: true, teamId: true }, take: 1 },
     },
   });
 
-  if (!me) {
-    return res.status(404).json({ error: { message: 'User not found' } });
-  }
-
-  const myTeamMember = me.teamMembers?.[0];
+  const myTeamMember = me?.teamMembers?.[0];
   const myRole = myTeamMember?.role || 'USER';
   const myTeamId = myTeamMember?.teamId;
 
@@ -57,47 +44,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         id: targetUserId,
         teamMembers: { some: { teamId: myTeamId } },
       },
-      select: {
-        id: true,
-        name: true,
-        department: true,
-        position: true,
-        email: true,
-      },
+      select: { id: true, name: true, department: true, position: true, email: true },
     });
 
     if (!targetUser) {
       return res.status(404).json({ error: { message: '같은 회사 직원만 열람할 수 있습니다.' } });
     }
 
-    await prisma.workLogViewLog.create({
-      data: {
-        viewerId: me.id,
-        targetUserId: targetUser.id,
-        keyword: q || null,
-      },
-    });
-
-    const workLogs = await prisma.workLog.findMany({
+    const comments = await prisma.comment.findMany({
       where: {
-        userId: targetUser.id,
+        authorId: targetUser.id,
+        site: { teamId: myTeamId },
         ...(q
           ? {
-              content: { contains: q, mode: 'insensitive' },
+              OR: [
+                { content: { contains: q, mode: 'insensitive' } },
+                { site: { name: { contains: q, mode: 'insensitive' } } },
+              ],
             }
           : {}),
       },
-      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      orderBy: { createdAt: 'desc' },
       take: limit,
       include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            department: true,
-            position: true,
-          },
-        },
+        site: { select: { id: true, name: true, status: true } },
+        author: { select: { id: true, name: true, department: true, position: true } },
       },
     });
 
@@ -105,7 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       data: {
         mode: 'detail',
         targetUser,
-        items: workLogs,
+        items: comments,
       },
     });
   }
@@ -130,56 +101,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       department: true,
       position: true,
       email: true,
-      _count: {
-        select: {
-          workLogs: true,
-        },
-      },
+      _count: { select: { comments: true } },
     },
     orderBy: [{ name: 'asc' }],
     take: 30,
   });
 
-  const recentViews = await prisma.workLogViewLog.findMany({
-    where: {
-      viewerId: me.id,
-      targetUser: {
-        teamMembers: { some: { teamId: myTeamId } },
-      },
-    },
-    orderBy: { viewedAt: 'desc' },
-    take: 20,
-    include: {
-      targetUser: {
-        select: {
-          id: true,
-          name: true,
-          department: true,
-          position: true,
-        },
-      },
-    },
-  });
-
-  const dedupedRecentViews = Array.from(
-    new Map(
-      recentViews.map((item) => [
-        item.targetUserId,
-        {
-          targetUserId: item.targetUserId,
-          viewedAt: item.viewedAt,
-          keyword: item.keyword,
-          targetUser: item.targetUser,
-        },
-      ])
-    ).values()
-  );
-
-  return res.status(200).json({
-    data: {
-      mode: 'search',
-      users: teamUsers,
-      recentViews: dedupedRecentViews,
-    },
-  });
+  return res.status(200).json({ data: { mode: 'search', users: teamUsers } });
 }

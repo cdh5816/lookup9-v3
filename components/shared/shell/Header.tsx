@@ -4,6 +4,7 @@ import {
   ArrowRightOnRectangleIcon,
   Bars3Icon,
   BellIcon,
+  EnvelopeIcon,
   MagnifyingGlassIcon,
   SunIcon,
   UserCircleIcon,
@@ -29,10 +30,9 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
   const [results, setResults] = useState<any>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const { data: profileData } = useSWR('/api/my/profile', fetcher, {
-    refreshInterval: 30000,
-  });
-  const unreadCount = profileData?.data?.unreadMessages || 0;
+  const { data: profileData } = useSWR('/api/my/profile', fetcher, { refreshInterval: 30000 });
+  const unreadMessageCount = profileData?.data?.unreadMessages || 0;
+  const unreadNotificationCount = profileData?.data?.unreadNotifications || 0;
   const companyDisplayName = profileData?.data?.companyDisplayName || app.name;
 
   const handleLogout = async () => {
@@ -80,30 +80,21 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
   return (
     <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center border-b border-gray-800 bg-black px-4 text-white sm:px-6 lg:px-8">
       <div className="flex min-w-0 items-center gap-3 lg:hidden">
-        <button
-          type="button"
-          className="-m-2.5 rounded-md p-2.5 text-gray-400"
-          onClick={() => setSidebarOpen(true)}
-        >
+        <button type="button" className="-m-2.5 p-2.5 text-gray-400" onClick={() => setSidebarOpen(true)}>
           <span className="sr-only">{t('open-sidebar')}</span>
           <Bars3Icon className="h-6 w-6" aria-hidden="true" />
         </button>
-        <span className="block max-w-[180px] truncate text-base font-bold leading-6">
-          {companyDisplayName}
-        </span>
+        <span className="block max-w-[180px] truncate text-base font-bold">{companyDisplayName}</span>
       </div>
 
       <div className="flex flex-1 items-center justify-end">
         <div className="flex items-center gap-x-1">
           <div className="relative" ref={searchRef}>
-            <button
-              className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white"
-              onClick={() => setShowSearch(!showSearch)}
-            >
+            <button className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white" onClick={() => setShowSearch(!showSearch)}>
               {showSearch ? <XMarkIcon className="h-5 w-5" /> : <MagnifyingGlassIcon className="h-5 w-5" />}
             </button>
             {showSearch && (
-              <div className="absolute right-0 top-full mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-gray-700 bg-gray-900 shadow-xl">
+              <div className="absolute right-0 top-full mt-2 w-[min(20rem,85vw)] rounded-lg border border-gray-700 bg-gray-900 shadow-xl">
                 <input
                   type="text"
                   autoFocus
@@ -118,19 +109,8 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                       <div className="mb-2">
                         <p className="px-2 py-1 text-xs text-gray-500">{t('nav-sites')}</p>
                         {results.sites.map((s: any) => (
-                          <Link
-                            key={s.id}
-                            href={`/sites/${s.id}`}
-                            onClick={() => {
-                              setShowSearch(false);
-                              setResults(null);
-                              setQuery('');
-                            }}
-                          >
-                            <div className="cursor-pointer rounded px-3 py-2 text-sm hover:bg-gray-800">
-                              <span className="block break-words leading-6">{s.name}</span>
-                              <span className="text-xs text-gray-500">{s.status}</span>
-                            </div>
+                          <Link key={s.id} href={`/sites/${s.id}`} onClick={() => { setShowSearch(false); setResults(null); setQuery(''); }}>
+                            <div className="cursor-pointer rounded px-3 py-2 text-sm hover:bg-gray-800">{s.name} <span className="text-xs text-gray-500">{s.status}</span></div>
                           </Link>
                         ))}
                       </div>
@@ -139,29 +119,9 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                       <div className="mb-2">
                         <p className="px-2 py-1 text-xs text-gray-500">{t('members')}</p>
                         {results.users.map((u: any) => (
-                          <div key={u.id} className="rounded px-3 py-2 text-sm hover:bg-gray-800">
-                            <span className="block break-words leading-6">
-                              {u.position ? `${u.position} ` : ''}
-                              {u.name}
-                            </span>
-                            <span className="text-xs text-gray-500">{u.department || ''}</span>
-                          </div>
+                          <div key={u.id} className="rounded px-3 py-2 text-sm hover:bg-gray-800">{u.position ? `${u.position} ` : ''}{u.name}<span className="ml-2 text-xs text-gray-500">{u.department || ''}</span></div>
                         ))}
                       </div>
-                    )}
-                    {results.clients?.length > 0 && (
-                      <div>
-                        <p className="px-2 py-1 text-xs text-gray-500">{t('admin-tab-clients')}</p>
-                        {results.clients.map((c: any) => (
-                          <div key={c.id} className="rounded px-3 py-2 text-sm hover:bg-gray-800">
-                            <span className="block break-words leading-6">{c.name}</span>
-                            <span className="text-xs text-gray-500">{c.type}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {results.sites?.length === 0 && results.users?.length === 0 && results.clients?.length === 0 && (
-                      <p className="px-3 py-4 text-center text-sm text-gray-500">{t('search-no-results')}</p>
                     )}
                   </div>
                 )}
@@ -171,9 +131,18 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
 
           <Link href="/notifications" className="relative rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white">
             <BellIcon className="h-5 w-5" />
-            {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                {unreadCount > 9 ? '9+' : unreadCount}
+            {unreadNotificationCount > 0 && (
+              <span className="absolute right-1 top-1 inline-flex min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+              </span>
+            )}
+          </Link>
+
+          <Link href="/messages" className="relative rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white">
+            <EnvelopeIcon className="h-5 w-5" />
+            {unreadMessageCount > 0 && (
+              <span className="absolute right-1 top-1 inline-flex min-w-[16px] items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
+                {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
               </span>
             )}
           </Link>
@@ -183,7 +152,6 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
               <SunIcon className="h-5 w-5" />
             </button>
           )}
-
           <Link href="/my" className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white">
             <UserCircleIcon className="h-5 w-5" />
           </Link>

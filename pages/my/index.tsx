@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useState, useCallback, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { UserCircleIcon, EnvelopeIcon, PencilSquareIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { UserCircleIcon, EnvelopeIcon, PencilSquareIcon, PlusIcon, ClipboardDocumentCheckIcon, UserPlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 import { Button } from 'react-daisyui';
@@ -15,7 +15,7 @@ const STATUS_DOT: Record<string, string> = {
   '진행중': 'bg-green-500', '부분완료': 'bg-green-300', '완료': 'bg-gray-400', '보류': 'bg-gray-600',
 };
 
-type MyTab = 'profile' | 'leave' | 'worklog' | 'sites' | 'activity';
+type MyTab = 'profile' | 'leave' | 'worklog' | 'sites' | 'activity' | 'approvals';
 
 const MyPage = () => {
   const { t } = useTranslation('common');
@@ -31,6 +31,7 @@ const MyPage = () => {
     { key: 'worklog', label: t('my-tab-worklog') },
     { key: 'sites', label: t('my-sites') },
     { key: 'activity', label: t('my-tab-activity') },
+    { key: 'approvals', label: '전자결재' },
   ];
 
   return (
@@ -76,6 +77,7 @@ const MyPage = () => {
         {activeTab === 'worklog' && <WorkLogTab />}
         {activeTab === 'sites' && <MySitesTab sites={profile.mySites || []} />}
         {activeTab === 'activity' && <ActivityTab comments={profile.myComments || []} />}
+        {activeTab === 'approvals' && <ApprovalsTab />}
       </div>
     </>
   );
@@ -98,6 +100,56 @@ const ProfileTab = ({ profile }: { profile: any }) => {
             <p className="text-sm font-medium">{item.value || '-'}</p>
           </div>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Link href="/approvals" className="rounded-lg border border-gray-800 p-4 hover:border-gray-700">
+          <div className="flex items-center gap-2 font-semibold">
+            <ClipboardDocumentCheckIcon className="w-5 h-5 text-blue-400" />
+            전자결재
+          </div>
+          <p className="mt-2 text-sm text-gray-400 break-words">승인/반려가 필요한 요청을 확인합니다.</p>
+        </Link>
+        <Link href="/guests" className="rounded-lg border border-gray-800 p-4 hover:border-gray-700">
+          <div className="flex items-center gap-2 font-semibold">
+            <UserPlusIcon className="w-5 h-5 text-blue-400" />
+            게스트관리
+          </div>
+          <p className="mt-2 text-sm text-gray-400 break-words">협력사/게스트 계정을 만들고 현장을 배정합니다.</p>
+        </Link>
+        <Link href="/worklogs" className="rounded-lg border border-gray-800 p-4 hover:border-gray-700">
+          <div className="flex items-center gap-2 font-semibold">
+            <MagnifyingGlassIcon className="w-5 h-5 text-blue-400" />
+            업무일지
+          </div>
+          <p className="mt-2 text-sm text-gray-400 break-words">같은 회사 직원의 업무일지를 검색하고 열람합니다.</p>
+        </Link>
+      </div>
+    </div>
+  );
+};
+
+const ApprovalsTab = () => {
+  return (
+    <div className="rounded-lg border border-gray-800 p-5 space-y-4">
+      <div>
+        <h3 className="text-lg font-semibold">전자결재</h3>
+        <p className="mt-2 text-sm text-gray-400 break-words leading-6">미팅요청, 변경승인, 전자결재 요청을 승인하거나 반려할 수 있습니다.</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-lg border border-gray-800 p-4">
+          <p className="font-medium">할 수 있는 것</p>
+          <ul className="mt-2 text-sm text-gray-400 space-y-1 leading-6">
+            <li>• 미팅요청 승인 / 반려</li>
+            <li>• 변경승인 처리</li>
+            <li>• 전자결재 승인 / 반려</li>
+            <li>• 처리 결과 알림 자동 발송</li>
+          </ul>
+        </div>
+        <Link href="/approvals" className="rounded-lg border border-blue-800 bg-blue-900/10 p-4 hover:border-blue-600">
+          <p className="font-medium text-blue-300">승인함 바로가기</p>
+          <p className="mt-2 text-sm text-gray-300">승인 대기 목록을 바로 확인합니다.</p>
+        </Link>
       </div>
     </div>
   );

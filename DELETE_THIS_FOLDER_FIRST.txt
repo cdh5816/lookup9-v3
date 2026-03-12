@@ -1,0 +1,5 @@
+Delete this folder from your repo before commit if it exists:
+
+mnt/
+
+That nested folder was being type-checked by Next/TS and caused repeated false build failures.

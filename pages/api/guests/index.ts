@@ -17,12 +17,10 @@ function canActorManageGuests(role: string) {
 }
 
 async function getActorContext(userId: string) {
-  const member = await prisma.teamMember.findFirst({
+  return prisma.teamMember.findFirst({
     where: { userId },
     include: { team: { select: { id: true, name: true, slug: true } } },
   });
-
-  return member;
 }
 
 async function getVisibleSiteIds(userId: string, role: string, teamId: string) {
@@ -36,10 +34,7 @@ async function getVisibleSiteIds(userId: string, role: string, teamId: string) {
 
   if (role === 'PARTNER') {
     const assignments = await prisma.siteAssignment.findMany({
-      where: {
-        userId,
-        site: { teamId },
-      },
+      where: { userId, site: { teamId } },
       select: { siteId: true },
     });
     return assignments.map((a) => a.siteId);
@@ -106,17 +101,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === 'POST') {
-    const {
-      name,
-      email,
-      password,
-      company,
-      department,
-      position,
-      phone,
-      role,
-      siteIds,
-    } = req.body || {};
+    const { name, email, password, company, department, position, phone, role, siteIds } = req.body || {};
 
     if (!name || !email || !password || !role) {
       return res.status(400).json({ error: { message: '필수값이 비어 있습니다.' } });

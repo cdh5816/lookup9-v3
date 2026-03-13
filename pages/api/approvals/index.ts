@@ -7,14 +7,13 @@ const APPROVAL_TYPES = ['전자결재', '미팅요청', '변경승인'];
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
-  if (!session) return res.status(401).json({ error: { message: 'Unauthorized' } });
+  if (!session?.user?.id) return res.status(401).json({ error: { message: 'Unauthorized' } });
 
   const tm = await getTeamMemberByUserId(session.user.id);
-  if (!tm) return res.status(403).json({ error: { message: 'Forbidden' } });
+  if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
 
-  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, department: true, position: true, name: true } });
-  const permissions = getPermissionFlags(tm.role, me?.department);
-  if (!permissions.canUseApprovals) {
+  const permissions = getPermissionFlags(tm.role, tm.user?.department);
+  if (!permissions.canApprove) {
     return res.status(403).json({ error: { message: '승인함 접근 권한이 없습니다.' } });
   }
 
@@ -29,39 +28,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         createdBy: { select: { id: true, name: true, department: true, position: true } },
         handledBy: { select: { id: true, name: true, department: true, position: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       take: 100,
     });
-    return res.status(200).json({ data: items });
+
+    const myDept = tm.user?.department || '';
+    const visible = items.filter((item) => {
+      if (permissions.isCompanyAdmin || permissions.isManager) return true;
+      if (!item.targetDept) return true;
+      return myDept.includes(item.targetDept) || item.targetDept.includes(myDept);
+    });
+
+    return res.status(200).json({ data: visible });
   }
 
   if (req.method === 'PUT') {
     const { requestId, action, result } = req.body;
-    if (!requestId || !action) return res.status(400).json({ error: { message: 'requestId, action이 필요합니다.' } });
+    if (!requestId || !action) return res.status(400).json({ error: { message: 'requestId, action is required' } });
+    if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: { message: 'Invalid action' } });
 
-    const target = await prisma.request.findUnique({ where: { id: requestId }, include: { site: true } });
-    if (!target || target.site.teamId !== tm.teamId) {
-      return res.status(404).json({ error: { message: '대상을 찾을 수 없습니다.' } });
-    }
+    const current = await prisma.request.findUnique({ where: { id: requestId }, include: { site: { select: { teamId: true, name: true } }, createdBy: true } });
+    if (!current || current.site.teamId !== tm.teamId) return res.status(404).json({ error: { message: 'Request not found' } });
 
-    const status = action === 'approve' ? '승인' : '반려';
     const updated = await prisma.request.update({
       where: { id: requestId },
       data: {
-        status,
-        result: result || null,
+        status: action === 'approve' ? '승인완료' : '반려',
         handledById: session.user.id,
+        result: result || (action === 'approve' ? '승인 처리되었습니다.' : '반려 처리되었습니다.'),
         updatedAt: new Date(),
+      },
+      include: {
+        site: { select: { id: true, name: true, status: true } },
+        createdBy: { select: { id: true, name: true, department: true, position: true } },
+        handledBy: { select: { id: true, name: true, department: true, position: true } },
       },
     });
 
-    await prisma.notification.create({
+    await prisma.message.create({
       data: {
-        userId: target.createdById,
-        title: action === 'approve' ? '전자결재 승인' : '전자결재 반려',
-        message: `${target.title} - ${status}`,
-        type: 'approval',
-        link: '/approvals',
+        senderId: session.user.id,
+        receiverId: current.createdById,
+        title: `[${updated.type}] ${action === 'approve' ? '승인' : '반려'}`,
+        content: `${updated.site.name} / ${updated.title}\n${updated.result || ''}`,
       },
     });
 

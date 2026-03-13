@@ -28,15 +28,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       case 'POST': {
-        const { name, email, password, phone, company } = req.body;
-        if (!name || !email || !password) return res.status(400).json({ error: { message: '이름, 이메일, 비밀번호는 필수입니다.' } });
+        const { name, username, email, password, phone, company } = req.body;
+        if (!name || !username || !password) return res.status(400).json({ error: { message: '이름, 아이디, 비밀번호는 필수입니다.' } });
 
-        const existing = await prisma.user.findUnique({ where: { email } });
-        if (existing) return res.status(400).json({ error: { message: '이미 등록된 이메일입니다.' } });
+        const existingUsername = await prisma.user.findUnique({ where: { username } });
+        if (existingUsername) return res.status(400).json({ error: { message: '이미 등록된 아이디입니다.' } });
+
+        const finalEmail = email && email.trim() ? email.trim() : `${username}@internal.lookup9`;
+        const existingEmail = await prisma.user.findUnique({ where: { email: finalEmail } });
+        if (existingEmail) return res.status(400).json({ error: { message: '이미 등록된 이메일입니다.' } });
 
         const hashedPassword = await hashPassword(password);
         const user = await prisma.user.create({
-          data: { name, email, password: hashedPassword, phone: phone || null, company: company || null },
+          data: { name, username, email: finalEmail, password: hashedPassword, phone: phone || null, company: company || null },
         });
 
         await prisma.teamMember.create({

@@ -67,20 +67,20 @@ const Login: NextPageWithLayout<
 
   const formik = useFormik({
     initialValues: {
-      email: '',
+      username: '',
       password: '',
     },
     validationSchema: Yup.object().shape({
-      email: Yup.string().required().email().max(maxLengthPolicies.email),
-      password: Yup.string().required().max(maxLengthPolicies.password),
+      username: Yup.string().required('아이디를 입력하세요.').max(100),
+      password: Yup.string().required('비밀번호를 입력하세요.').max(maxLengthPolicies.password),
     }),
     onSubmit: async (values) => {
-      const { email, password } = values;
+      const { username, password } = values;
 
       setMessage({ text: null, status: null });
 
       const response = await signIn('credentials', {
-        email,
+        username,
         password,
         csrfToken,
         redirect: false,
@@ -120,12 +120,12 @@ const Login: NextPageWithLayout<
         <form onSubmit={formik.handleSubmit}>
           <div className="space-y-5">
             <InputWithLabel
-              type="email"
-              label="Email"
-              name="email"
-              placeholder={t('email')}
-              value={formik.values.email}
-              error={formik.touched.email ? formik.errors.email : undefined}
+              type="text"
+              label="아이디"
+              name="username"
+              placeholder="아이디를 입력하세요"
+              value={formik.values.username}
+              error={formik.touched.username ? formik.errors.username : undefined}
               onChange={formik.handleChange}
             />
             <div className="relative flex">

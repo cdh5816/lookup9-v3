@@ -57,6 +57,7 @@ const AdminUsers = () => {
 
   const [form, setForm] = useState({
     name: '',
+    username: '',
     email: '',
     password: '',
     company: '',
@@ -115,6 +116,7 @@ const AdminUsers = () => {
   const resetForm = () => {
     setForm({
       name: '',
+      username: '',
       email: '',
       password: '',
       company: '',
@@ -245,7 +247,7 @@ const AdminUsers = () => {
                     return (
                       <tr key={user.id} className="border-t border-gray-800 align-top">
                         <td className="px-4 py-3 font-medium">{user.name}</td>
-                        <td className="px-4 py-3">{user.email}</td>
+                        <td className="px-4 py-3 text-gray-400">{(user as any).username || user.email}</td>
                         <td className="px-4 py-3">
                           <div>{user.department || '-'}</div>
                           <div className="mt-1 text-xs text-gray-500">{user.position || '-'}</div>
@@ -294,7 +296,8 @@ const AdminUsers = () => {
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="이름"><input className="input input-bordered w-full bg-[#1a1a1a]" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-                <Field label="이메일"><input className="input input-bordered w-full bg-[#1a1a1a]" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+                <Field label="아이디 (로그인용)"><input className="input input-bordered w-full bg-[#1a1a1a]" placeholder="영문/숫자 조합" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value.trim() })} /></Field>
+                <Field label="이메일 (선택)"><input className="input input-bordered w-full bg-[#1a1a1a]" placeholder="입력 안 하면 자동 생성" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
                 <Field label="비밀번호"><input type="password" className="input input-bordered w-full bg-[#1a1a1a]" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
                 <Field label="권한">
                   <select className="select select-bordered w-full bg-[#1a1a1a]" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value, assignedSiteIds: ['PARTNER', 'GUEST', 'VIEWER'].includes(e.target.value) ? form.assignedSiteIds : [] })}>

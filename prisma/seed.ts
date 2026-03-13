@@ -15,6 +15,7 @@ async function main() {
     where: { email: 'admin@lookup9.com' },
     update: {
       name: 'LOOKUP9 SUPER ADMIN',
+      username: 'admin',
       password: hashed,
       company: 'LOOKUP9',
       department: '시스템관리',
@@ -23,6 +24,7 @@ async function main() {
     create: {
       name: 'LOOKUP9 SUPER ADMIN',
       email: 'admin@lookup9.com',
+      username: 'admin',
       password: hashed,
       company: 'LOOKUP9',
       department: '시스템관리',
@@ -66,7 +68,7 @@ async function main() {
     where: { email: 'hr@dukein.co.kr' },
   });
 
-  console.log('✅ SUPER_ADMIN: admin@lookup9.com / lookup9!@#');
+  console.log('✅ SUPER_ADMIN: 아이디 admin / 비밀번호 lookup9!@#');
   console.log('✅ Seed cleaned test ADMIN_HR account');
 }
 

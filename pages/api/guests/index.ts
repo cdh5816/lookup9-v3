@@ -62,11 +62,16 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
 };
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: any, tm: any) => {
-  const { name, email, password, company, position, phone, role, assignedSiteIds } = req.body;
+  const { name, username, email, password, company, position, phone, role, assignedSiteIds } = req.body;
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: { message: '이름, 이메일, 비밀번호는 필수입니다.' } });
+  if (!name || !username || !password) {
+    return res.status(400).json({ error: { message: '이름, 아이디, 비밀번호는 필수입니다.' } });
   }
+
+  const existingUsername = await prisma.user.findUnique({ where: { username } });
+  if (existingUsername) return res.status(400).json({ error: { message: '이미 사용 중인 아이디입니다.' } });
+
+  const finalEmail = email && email.trim() ? email.trim() : `${username}@internal.lookup9`;
 
   const guestRole = role === 'VIEWER' ? 'VIEWER' : 'GUEST';
 
@@ -80,15 +85,15 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
     allowedSiteIds = myAssignments.map((a: any) => a.siteId);
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return res.status(400).json({ error: { message: '이미 사용중인 이메일입니다.' } });
+  const existing = await prisma.user.findUnique({ where: { email: finalEmail } });
+  if (existing) return res.status(400).json({ error: { message: '이미 사용 중인 이메일입니다.' } });
 
   const hashed = await hashPassword(password);
 
   const user = await prisma.$transaction(async (tx) => {
     const newUser = await tx.user.create({
       data: {
-        name, email, password: hashed,
+        name, username, email: finalEmail, password: hashed,
         company: company || null,
         position: position || null,
         phone: phone || null,

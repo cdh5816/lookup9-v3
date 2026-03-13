@@ -94,10 +94,17 @@ const handleGET = async (teamId: string, actorRole: string, actorUserId: string,
 };
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: any) => {
-  const { name, email, password, company, department, position, phone, role, siteIds } = req.body;
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: { message: 'Name, email, password are required' } });
+  const { name, username, email, password, company, department, position, phone, role, siteIds } = req.body;
+  if (!name || !username || !password) {
+    return res.status(400).json({ error: { message: '이름, 아이디, 비밀번호는 필수입니다.' } });
   }
+
+  // username 중복 체크
+  const existingUsername = await prisma.user.findUnique({ where: { username } });
+  if (existingUsername) return res.status(400).json({ error: { message: '이미 사용 중인 아이디입니다.' } });
+
+  // 내부 이메일 생성 (email 미입력 시 username@internal.lookup9 으로 자동 생성)
+  const finalEmail = email && email.trim() ? email.trim() : `${username}@internal.lookup9`;
 
   const targetRole = role || 'USER';
 
@@ -141,7 +148,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
     }
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await prisma.user.findUnique({ where: { email: finalEmail } });
   if (existing) return res.status(400).json({ error: { message: '이미 사용 중인 이메일입니다.' } });
 
   const hashedPassword = await hashPassword(password);
@@ -150,7 +157,8 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
     const created = await tx.user.create({
       data: {
         name,
-        email,
+        username,
+        email: finalEmail,
         password: hashedPassword,
         company: company || actorTm.team?.name || null,
         department: department || null,

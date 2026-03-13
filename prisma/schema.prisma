@@ -62,6 +62,7 @@ model User {
   id                     String    @id @default(uuid())
   name                   String
   email                  String    @unique
+  username               String?   @unique
   emailVerified          DateTime?
   password               String?
   image                  String?

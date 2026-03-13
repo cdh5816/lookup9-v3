@@ -48,7 +48,7 @@ if (isAuthProviderEnabled('credentials')) {
     CredentialsProvider({
       id: 'credentials',
       credentials: {
-        email: { type: 'email' },
+        username: { type: 'text' },
         password: { type: 'password' },
         recaptchaToken: { type: 'text' },
       },
@@ -57,15 +57,24 @@ if (isAuthProviderEnabled('credentials')) {
           throw new Error('no-credentials');
         }
 
-        const { email, password, recaptchaToken } = credentials;
+        const { username, password, recaptchaToken } = credentials;
 
         await validateRecaptcha(recaptchaToken);
 
-        if (!email || !password) {
+        if (!username || !password) {
           return null;
         }
 
-        const user = await getUser({ email });
+        // username 또는 email로 조회 (이메일 형식이면 email로, 아니면 username으로)
+        const isEmail = username.includes('@');
+        let user = isEmail
+          ? await getUser({ email: username })
+          : await getUser({ username }).catch(() => null);
+
+        // username으로 못 찾으면 email fallback (기존 계정 호환)
+        if (!user && !isEmail) {
+          user = await getUser({ email: `${username}@internal.lookup9` }).catch(() => null);
+        }
 
         if (!user) {
           throw new Error('invalid-credentials');

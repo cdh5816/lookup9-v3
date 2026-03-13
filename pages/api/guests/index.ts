@@ -11,10 +11,6 @@ type SessionUser = {
 const EXTERNAL_ROLES = ['PARTNER', 'GUEST', 'VIEWER'] as const;
 const INTERNAL_MANAGER_ROLES = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'USER'] as const;
 
-function isExternalRole(role?: string | null): boolean {
-  return !!role && EXTERNAL_ROLES.includes(role as (typeof EXTERNAL_ROLES)[number]);
-}
-
 function canManageGuests(role?: string | null): boolean {
   return !!role && INTERNAL_MANAGER_ROLES.includes(role as (typeof INTERNAL_MANAGER_ROLES)[number]);
 }
@@ -211,7 +207,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await prisma.$transaction(async (tx) => {
       await tx.siteAssignment.deleteMany({ where: { userId } });
       await tx.teamMember.deleteMany({ where: { userId, teamId: actor.teamId } });
-      await tx.session.deleteMany({ where: { userId } }).catch(() => undefined as any);
+      try {
+        await tx.session.deleteMany({ where: { userId } });
+      } catch {}
       const remainTeams = await tx.teamMember.count({ where: { userId } });
       if (remainTeams === 0) {
         await tx.user.update({

@@ -35,7 +35,6 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     ];
   }
 
-  // PARTNER/GUEST는 배정된 현장만
   if (tm.role === 'PARTNER' || tm.role === 'GUEST' || tm.role === 'VIEWER') {
     where.assignments = { some: { userId: tm.userId } };
   }
@@ -45,6 +44,19 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     include: {
       client: { select: { name: true } },
       createdBy: { select: { name: true, position: true } },
+      contracts: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          contractAmount: true,
+          quantity: true,
+          unitPrice: true,
+          specification: true,
+          isAdditional: true,
+          contractDate: true,
+          createdAt: true,
+        },
+      },
       shipments: {
         select: { quantity: true, shippedAt: true, status: true },
         orderBy: [{ sequence: 'desc' }, { createdAt: 'desc' }],
@@ -58,19 +70,62 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
 };
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: any, tm: any) => {
-  const { name, address, clientId, status, description } = req.body;
+  const {
+    name, address, clientId, status, description,
+    specification, quantity, unitPrice, contractAmount,
+    contractDate, deliveryDeadline, installer, siteType,
+  } = req.body;
+
   if (!name) return res.status(400).json({ error: { message: 'Name is required' } });
 
-  const site = await prisma.site.create({
-    data: {
-      name,
-      address: address || null,
-      clientId: clientId || null,
-      teamId: tm.teamId,
-      status: status || '대기',
-      description: description || null,
-      createdById: session.user.id,
-    },
+  // description: 메모용으로만 (핵심 수치는 Contract로 분리)
+  const descLines = [
+    siteType ? `현장구분: ${siteType}` : '',
+    installer ? `전문시공사: ${installer}` : '',
+    deliveryDeadline ? `납품기한: ${deliveryDeadline}` : '',
+    description || '',
+  ].filter(Boolean);
+
+  const site = await prisma.$transaction(async (tx) => {
+    const newSite = await tx.site.create({
+      data: {
+        name,
+        address: address || null,
+        clientId: clientId || null,
+        teamId: tm.teamId,
+        status: status || '대기',
+        description: descLines.join('\n') || null,
+        createdById: session.user.id,
+      },
+    });
+
+    // 계약 정보가 하나라도 있으면 Contract 레코드 생성
+    const hasContractInfo = quantity || unitPrice || contractAmount || specification;
+    if (hasContractInfo) {
+      const parsedQty = quantity ? parseFloat(String(quantity).replace(/,/g, '')) : null;
+      const parsedUnit = unitPrice ? parseFloat(String(unitPrice).replace(/,/g, '')) : null;
+      const parsedAmt = contractAmount
+        ? parseFloat(String(contractAmount).replace(/,/g, ''))
+        : parsedQty && parsedUnit
+          ? Math.round(parsedQty * parsedUnit)
+          : null;
+
+      await tx.contract.create({
+        data: {
+          siteId: newSite.id,
+          status: '수주등록',
+          contractAmount: parsedAmt,
+          quantity: parsedQty,
+          unitPrice: parsedUnit,
+          specification: specification || null,
+          contractDate: contractDate ? new Date(contractDate) : null,
+          isAdditional: false,
+          createdById: session.user.id,
+        },
+      });
+    }
+
+    return newSite;
   });
 
   return res.status(201).json({ data: site });

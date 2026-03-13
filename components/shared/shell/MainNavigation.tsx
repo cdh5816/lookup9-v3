@@ -7,8 +7,6 @@ import {
   WrenchScrewdriverIcon,
   UserCircleIcon,
   UserPlusIcon,
-  ClipboardDocumentCheckIcon,
-  DocumentTextIcon,
 } from '@heroicons/react/24/outline';
 import { useTranslation } from 'next-i18next';
 import NavigationItems from './NavigationItems';
@@ -40,7 +38,6 @@ const MainNavigation = ({ activePathname, onNavigate }: NavigationProps) => {
         onNavigate={onNavigate}
         menus={[
           { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: exact('/dashboard') },
-          { name: '내 현장', href: '/my', icon: BuildingOffice2Icon, active: exact('/my') },
           { name: t('my-page-title'), href: '/my', icon: UserCircleIcon, active: exact('/my') },
         ]}
       />
@@ -64,65 +61,23 @@ const MainNavigation = ({ activePathname, onNavigate }: NavigationProps) => {
     );
   }
 
-  // ── 내부 직원 (USER 이상) ──
+  // ── 내부 직원 ──
   const menus: MenuItem[] = [
     { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: exact('/dashboard') },
   ];
 
-  // 경영지원 (ADMIN_HR 이상)
   if (isAdminHR) {
-    menus.push({
-      name: t('nav-admin-hr'),
-      href: '/admin-hr',
-      icon: BuildingLibraryIcon,
-      active: active('/admin-hr'),
-    });
+    menus.push({ name: t('nav-admin-hr'), href: '/admin-hr', icon: BuildingLibraryIcon, active: active('/admin-hr') });
   }
 
-  // 현장관리 (USER 이상)
   if (isUser) {
-    menus.push({
-      name: t('nav-sites'),
-      href: '/sites',
-      icon: BuildingOffice2Icon,
-      active: active('/sites'),
-    });
-    menus.push({
-      name: t('nav-production-dashboard'),
-      href: '/production',
-      icon: WrenchScrewdriverIcon,
-      active: active('/production'),
-    });
-  }
-
-  // 업무일지 열람 (매니저 이상)
-  if (isManager) {
-    menus.push({
-      name: '업무일지',
-      href: '/worklogs',
-      icon: DocumentTextIcon,
-      active: active('/worklogs'),
-    });
-  }
-
-  // 전자결재 (권한 있는 경우)
-  if (permissions.canApprove) {
-    menus.push({
-      name: '전자결재',
-      href: '/approvals',
-      icon: ClipboardDocumentCheckIcon,
-      active: active('/approvals'),
-    });
+    menus.push({ name: t('nav-sites'), href: '/sites', icon: BuildingOffice2Icon, active: active('/sites') });
+    menus.push({ name: t('nav-production-dashboard'), href: '/production', icon: WrenchScrewdriverIcon, active: active('/production') });
   }
 
   // 계정관리 (매니저 이상)
   if (isManager) {
-    menus.push({
-      name: t('admin-users'),
-      href: '/admin/users',
-      icon: UsersIcon,
-      active: active('/admin'),
-    });
+    menus.push({ name: t('admin-users'), href: '/admin/users', icon: UsersIcon, active: active('/admin') });
   }
 
   menus.push(

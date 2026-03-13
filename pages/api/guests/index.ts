@@ -16,6 +16,16 @@ function canActorManageGuests(role: string) {
   return (MANAGEABLE_ACTOR_ROLES as readonly string[]).includes(role);
 }
 
+function getCreatableRolesForActor(role: string): string[] {
+  if (['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'USER'].includes(role)) {
+    return ['PARTNER', 'GUEST', 'VIEWER'];
+  }
+  if (role === 'PARTNER') {
+    return ['GUEST', 'VIEWER'];
+  }
+  return [];
+}
+
 async function getActorContext(userId: string) {
   return prisma.teamMember.findFirst({
     where: { userId },
@@ -25,13 +35,9 @@ async function getActorContext(userId: string) {
 
 async function getVisibleSiteIds(userId: string, role: string, teamId: string) {
   if (['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'USER'].includes(role)) {
-    const sites = await prisma.site.findMany({
-      where: { teamId },
-      select: { id: true },
-    });
+    const sites = await prisma.site.findMany({ where: { teamId }, select: { id: true } });
     return sites.map((s) => s.id);
   }
-
   if (role === 'PARTNER') {
     const assignments = await prisma.siteAssignment.findMany({
       where: { userId, site: { teamId } },
@@ -39,7 +45,6 @@ async function getVisibleSiteIds(userId: string, role: string, teamId: string) {
     });
     return assignments.map((a) => a.siteId);
   }
-
   return [];
 }
 
@@ -62,6 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const actorRole = actor.role;
   const visibleSiteIds = await getVisibleSiteIds(session.user.id, actorRole, teamId);
 
+  // ── GET ──
   if (req.method === 'GET') {
     const users = await prisma.user.findMany({
       where: {
@@ -97,9 +103,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
 
-    return res.status(200).json({ data: users });
+    // 현장 목록 (현장 지정용)
+    const siteOptions = await prisma.site.findMany({
+      where: { id: { in: visibleSiteIds } },
+      select: { id: true, name: true, status: true },
+      orderBy: { name: 'asc' },
+    });
+
+    const creatableRoles = getCreatableRolesForActor(actorRole);
+
+    const formatted = users.map((u) => ({
+      ...u,
+      role: u.teamMembers[0]?.role || 'GUEST',
+      assignedSites: u.siteAssignments.map((a) => a.site),
+    }));
+
+    return res.status(200).json({
+      data: formatted,
+      meta: { siteOptions, creatableRoles },
+    });
   }
 
+  // ── POST ──
   if (req.method === 'POST') {
     const { name, email, password, company, department, position, phone, role, siteIds } = req.body || {};
 
@@ -109,6 +134,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!isCreatableRole(role)) {
       return res.status(400).json({ error: { message: '생성 가능한 외부 역할이 아닙니다.' } });
+    }
+
+    // 역할 생성 권한 확인
+    const creatableForActor = getCreatableRolesForActor(actorRole);
+    if (!creatableForActor.includes(role)) {
+      return res.status(403).json({ error: { message: `${actorRole}는 ${role} 역할을 생성할 수 없습니다.` } });
     }
 
     const normalizedSiteIds = Array.isArray(siteIds)
@@ -145,11 +176,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
       await tx.teamMember.create({
-        data: {
-          teamId,
-          userId: user.id,
-          role,
-        },
+        data: { teamId, userId: user.id, role },
       });
 
       await tx.siteAssignment.createMany({
@@ -166,28 +193,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(201).json({ data: created });
   }
 
+  // ── DELETE ──
   if (req.method === 'DELETE') {
     const id = String(req.query.id || '').trim();
-    if (!id) {
-      return res.status(400).json({ error: { message: '삭제할 계정 ID가 없습니다.' } });
-    }
+    if (!id) return res.status(400).json({ error: { message: '삭제할 계정 ID가 없습니다.' } });
 
     const target = await prisma.user.findFirst({
       where: {
         id,
-        teamMembers: {
-          some: {
-            teamId,
-            role: { in: ['PARTNER', 'GUEST', 'VIEWER'] },
-          },
-        },
+        teamMembers: { some: { teamId, role: { in: ['PARTNER', 'GUEST', 'VIEWER'] } } },
       },
       select: { id: true, email: true, name: true },
     });
 
-    if (!target) {
-      return res.status(404).json({ error: { message: '대상 계정을 찾을 수 없습니다.' } });
-    }
+    if (!target) return res.status(404).json({ error: { message: '대상 계정을 찾을 수 없습니다.' } });
 
     try {
       await prisma.$transaction(async (tx) => {
@@ -200,28 +219,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (remainTeams === 0) {
           try {
             await tx.user.delete({ where: { id: target.id } });
-          } catch (error) {
-            void error;
+          } catch {
             await tx.user.update({
               where: { id: target.id },
               data: {
                 email: `deleted_${Date.now()}_${target.email}`,
                 name: `[삭제됨] ${target.name}`,
                 password: null,
-                lockedAt: new Date(),
-                invalid_login_attempts: 999,
               },
             });
           }
         }
       });
-
       return res.status(200).json({ ok: true });
-    } catch (error) {
-      console.error(error);
-      return res.status(500).json({ error: { message: '계정 삭제 중 오류가 발생했습니다.' } });
+    } catch (error: any) {
+      return res.status(500).json({ error: { message: error.message || '삭제에 실패했습니다.' } });
     }
   }
 
+  res.setHeader('Allow', 'GET, POST, DELETE');
   return res.status(405).json({ error: { message: 'Method not allowed' } });
 }

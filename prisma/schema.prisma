@@ -352,6 +352,11 @@ model Contract {
   id             String   @id @default(uuid())
   siteId         String
   contractAmount Decimal? @db.Decimal(15, 0)
+  quantity       Decimal? @db.Decimal(12, 2)   // 계약물량 (m2)
+  unitPrice      Decimal? @db.Decimal(15, 0)   // 단가 (원/m2)
+  specification  String?                        // 사양 (예: AL 3T)
+  contractDate   DateTime?                      // 계약일
+  isAdditional   Boolean  @default(false)       // 추가계약 여부
   specialNotes   String?  @db.Text
   status         String   @default("수주등록")
   createdById    String

@@ -11,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const userId = session.user.id;
   const tm = await getTeamMemberByUserId(userId);
 
-  const [user, mySites, unreadCount, myComments] = await Promise.all([
+  const [user, mySites, unreadMessages, unreadNotifications, myComments] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -23,18 +23,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         position: true,
         phone: true,
         createdAt: true,
-        teamMembers: { select: { role: true, team: { select: { id: true, name: true, slug: true } } } },
+        teamMembers: {
+          select: { role: true, team: { select: { id: true, name: true, slug: true } } },
+        },
       },
     }),
     tm
       ? prisma.siteAssignment.findMany({
           where: { userId, site: { teamId: tm.teamId } },
-          include: { site: { select: { id: true, name: true, status: true, address: true, updatedAt: true } } },
+          include: {
+            site: { select: { id: true, name: true, status: true, address: true, updatedAt: true } },
+          },
           orderBy: { assignedAt: 'desc' },
           take: 20,
         })
       : [],
     prisma.message.count({ where: { receiverId: userId, isRead: false } }),
+    prisma.notification.count({ where: { userId, isRead: false } }),
     tm
       ? prisma.comment.findMany({
           where: { authorId: userId, site: { teamId: tm.teamId } },
@@ -58,7 +63,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       companyDisplayName,
       permissions,
       mySites: Array.isArray(mySites) ? mySites.map((a: any) => a.site) : [],
-      unreadMessages: unreadCount,
+      unreadMessages,
+      unreadNotifications,
       myComments,
     },
   });

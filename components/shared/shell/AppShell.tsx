@@ -6,7 +6,7 @@ import Header from './Header';
 import Drawer from './Drawer';
 import { useRouter } from 'next/navigation';
 
-export default function AppShell({ children }) {
+export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { status } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -17,7 +17,7 @@ export default function AppShell({ children }) {
 
   if (status === 'unauthenticated') {
     router.push('/auth/login');
-    return;
+    return null;
   }
 
   return (

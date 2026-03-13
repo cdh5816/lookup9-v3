@@ -1,3 +1,4 @@
+/* eslint-disable i18next/no-literal-string */
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
@@ -5,14 +6,21 @@ import { useSession } from 'next-auth/react';
 import { useState, useCallback, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { UserCircleIcon, EnvelopeIcon, PencilSquareIcon, PlusIcon, ClipboardDocumentCheckIcon, UserPlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import {
+  UserCircleIcon,
+  EnvelopeIcon,
+  PencilSquareIcon,
+  ClipboardDocumentCheckIcon,
+  UserPlusIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+} from '@heroicons/react/24/outline';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
-import { Button } from 'react-daisyui';
 
 const STATUS_DOT: Record<string, string> = {
-  '영업중': 'bg-red-500', '대기': 'bg-red-400', '계약완료': 'bg-yellow-400',
-  '진행중': 'bg-green-500', '부분완료': 'bg-green-300', '완료': 'bg-gray-400', '보류': 'bg-gray-600',
+  영업중: 'bg-red-500', 대기: 'bg-red-400', 계약완료: 'bg-yellow-400',
+  진행중: 'bg-green-500', 부분완료: 'bg-green-300', 완료: 'bg-gray-400', 보류: 'bg-gray-600',
 };
 
 type MyTab = 'profile' | 'leave' | 'worklog' | 'sites' | 'activity' | 'approvals';
@@ -25,47 +33,62 @@ const MyPage = () => {
   const profile = userData?.data || {};
   const [activeTab, setActiveTab] = useState<MyTab>('profile');
 
+  const permissions = profile.permissions || {};
+  const showApprovals = permissions.canApprove;
+
   const tabs: { key: MyTab; label: string }[] = [
-    { key: 'profile', label: t('my-tab-profile') },
-    { key: 'leave', label: t('my-leave-status') },
-    { key: 'worklog', label: t('my-tab-worklog') },
-    { key: 'sites', label: t('my-sites') },
-    { key: 'activity', label: t('my-tab-activity') },
-    { key: 'approvals', label: '전자결재' },
+    { key: 'profile', label: '내 정보' },
+    { key: 'leave', label: '연차' },
+    { key: 'worklog', label: '업무일지' },
+    { key: 'sites', label: '내 현장' },
+    { key: 'activity', label: '활동' },
+    ...(showApprovals ? [{ key: 'approvals' as MyTab, label: '전자결재' }] : []),
   ];
 
   return (
     <>
-      <Head><title>{t('my-page-title')} | LOOKUP9</title></Head>
-      <div className="space-y-6">
-        {/* 헤더 카드 */}
-        <div className="rounded-lg border border-gray-800 p-5 flex items-center gap-4">
-          <UserCircleIcon className="w-14 h-14 text-gray-500 shrink-0" />
-          <div className="flex-1">
-            <h2 className="text-lg font-bold">{profile.position && `${profile.position} `}{user?.name}</h2>
-            <p className="text-sm text-gray-400">{user?.email}</p>
-            <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-              {profile.teamMembers?.[0]?.role && <span className="badge badge-sm badge-ghost">{profile.teamMembers[0].role}</span>}
+      <Head><title>내 정보 | LOOKUP9</title></Head>
+      <div className="space-y-5">
+
+        {/* 프로필 헤더 카드 */}
+        <div className="rounded-xl border border-gray-800 bg-black/20 p-5 flex items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gray-800">
+            <UserCircleIcon className="h-9 w-9 text-gray-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-bold truncate">
+              {profile.position ? `${profile.position} ` : ''}{user?.name}
+            </h2>
+            <p className="text-sm text-gray-400 truncate">{user?.email}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+              {profile.role && <span className="badge badge-sm badge-ghost">{profile.role}</span>}
               {profile.department && <span>{profile.department}</span>}
               {profile.company && <span>{profile.company}</span>}
             </div>
           </div>
-          <div className="flex flex-col items-end gap-1 shrink-0">
-            <Link href="/messages" className="flex items-center gap-1 text-sm text-gray-400 hover:text-white">
-              <EnvelopeIcon className="w-4 h-4" />
-              {(profile.unreadMessages || 0) > 0 && <span className="badge badge-xs badge-primary">{profile.unreadMessages}</span>}
+          <div className="shrink-0 flex flex-col items-end gap-2">
+            <Link href="/messages" className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition">
+              <EnvelopeIcon className="h-4 w-4" />
+              {(profile.unreadMessages || 0) > 0 && (
+                <span className="badge badge-xs badge-primary">{profile.unreadMessages}</span>
+              )}
             </Link>
           </div>
         </div>
 
         {/* 탭 */}
         <div className="border-b border-gray-800">
-          <div className="flex gap-1">
+          <div className="flex gap-0.5 overflow-x-auto">
             {tabs.map((tab) => (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.key ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-200'
-                }`}>
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`shrink-0 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.key
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-gray-400 hover:text-gray-200'
+                }`}
+              >
                 {tab.label}
               </button>
             ))}
@@ -88,69 +111,172 @@ const ProfileTab = ({ profile }: { profile: any }) => {
   const { t } = useTranslation('common');
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: t('admin-company'), value: profile.company },
-          { label: t('admin-department'), value: profile.department },
-          { label: t('admin-position'), value: profile.position },
-          { label: t('admin-phone'), value: profile.phone },
+          { label: '회사', value: profile.company },
+          { label: '부서', value: profile.department },
+          { label: '직책', value: profile.position },
+          { label: '연락처', value: profile.phone },
         ].map((item) => (
-          <div key={item.label} className="rounded-lg border border-gray-800 p-4">
+          <div key={item.label} className="rounded-xl border border-gray-800 bg-black/10 p-4">
             <p className="text-xs text-gray-500 mb-1">{item.label}</p>
             <p className="text-sm font-medium">{item.value || '-'}</p>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link href="/approvals" className="rounded-lg border border-gray-800 p-4 hover:border-gray-700">
-          <div className="flex items-center gap-2 font-semibold">
-            <ClipboardDocumentCheckIcon className="w-5 h-5 text-blue-400" />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Link href="/approvals" className="rounded-xl border border-gray-800 bg-black/10 p-4 hover:border-gray-600 transition">
+          <div className="flex items-center gap-2 font-semibold mb-1">
+            <ClipboardDocumentCheckIcon className="h-4 w-4 text-blue-400" />
             전자결재
           </div>
-          <p className="mt-2 text-sm text-gray-400 break-words">승인/반려가 필요한 요청을 확인합니다.</p>
+          <p className="text-xs text-gray-500 leading-5">승인/반려가 필요한 요청을 확인합니다.</p>
         </Link>
-        <Link href="/guests" className="rounded-lg border border-gray-800 p-4 hover:border-gray-700">
-          <div className="flex items-center gap-2 font-semibold">
-            <UserPlusIcon className="w-5 h-5 text-blue-400" />
-            게스트관리
+        <Link href="/guests" className="rounded-xl border border-gray-800 bg-black/10 p-4 hover:border-gray-600 transition">
+          <div className="flex items-center gap-2 font-semibold mb-1">
+            <UserPlusIcon className="h-4 w-4 text-blue-400" />
+            게스트 관리
           </div>
-          <p className="mt-2 text-sm text-gray-400 break-words">협력사/게스트 계정을 만들고 현장을 배정합니다.</p>
+          <p className="text-xs text-gray-500 leading-5">협력사/게스트 계정을 만들고 현장을 배정합니다.</p>
         </Link>
-        <Link href="/worklogs" className="rounded-lg border border-gray-800 p-4 hover:border-gray-700">
-          <div className="flex items-center gap-2 font-semibold">
-            <MagnifyingGlassIcon className="w-5 h-5 text-blue-400" />
-            업무일지
+        <Link href="/worklogs" className="rounded-xl border border-gray-800 bg-black/10 p-4 hover:border-gray-600 transition">
+          <div className="flex items-center gap-2 font-semibold mb-1">
+            <PencilSquareIcon className="h-4 w-4 text-blue-400" />
+            업무일지 열람
           </div>
-          <p className="mt-2 text-sm text-gray-400 break-words">같은 회사 직원의 업무일지를 검색하고 열람합니다.</p>
+          <p className="text-xs text-gray-500 leading-5">같은 회사 직원의 업무일지를 열람합니다.</p>
         </Link>
       </div>
     </div>
   );
 };
 
+// ========= 전자결재 탭 (실제 데이터) =========
 const ApprovalsTab = () => {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [working, setWorking] = useState('');
+
+  const fetchItems = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const res = await fetch('/api/approvals');
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error?.message || '승인함을 불러오지 못했습니다.');
+      setItems(json.data || []);
+    } catch (err: any) {
+      setError(err?.message || '승인함을 불러오지 못했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchItems(); }, [fetchItems]);
+
+  const act = async (requestId: string, action: 'approve' | 'reject') => {
+    const note = window.prompt(action === 'approve' ? '승인 코멘트 (선택)' : '반려 사유', '') ?? '';
+    setWorking(requestId);
+    try {
+      const res = await fetch('/api/approvals', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, action, result: note }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error?.message || '처리에 실패했습니다.');
+      await fetchItems();
+    } catch (err: any) {
+      setError(err?.message || '처리에 실패했습니다.');
+    } finally {
+      setWorking('');
+    }
+  };
+
+  const pending = items.filter((i) => !['승인완료', '반려'].includes(i.status));
+  const done = items.filter((i) => ['승인완료', '반려'].includes(i.status));
+
+  if (loading) return <div className="py-10 text-center"><span className="loading loading-spinner loading-md" /></div>;
+
   return (
-    <div className="rounded-lg border border-gray-800 p-5 space-y-4">
-      <div>
-        <h3 className="text-lg font-semibold">전자결재</h3>
-        <p className="mt-2 text-sm text-gray-400 break-words leading-6">미팅요청, 변경승인, 전자결재 요청을 승인하거나 반려할 수 있습니다.</p>
+    <div className="space-y-4">
+      {error && (
+        <div className="rounded-xl border border-red-800/50 bg-red-900/20 px-4 py-3 text-sm text-red-300">{error}</div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">전자결재 승인함</h3>
+        <Link href="/approvals" className="text-xs text-blue-400 hover:underline">전체 보기 →</Link>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-lg border border-gray-800 p-4">
-          <p className="font-medium">할 수 있는 것</p>
-          <ul className="mt-2 text-sm text-gray-400 space-y-1 leading-6">
-            <li>• 미팅요청 승인 / 반려</li>
-            <li>• 변경승인 처리</li>
-            <li>• 전자결재 승인 / 반려</li>
-            <li>• 처리 결과 알림 자동 발송</li>
-          </ul>
+
+      {pending.length === 0 && done.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-700 py-12 text-center text-sm text-gray-500">
+          처리할 결재 항목이 없습니다.
         </div>
-        <Link href="/approvals" className="rounded-lg border border-blue-800 bg-blue-900/10 p-4 hover:border-blue-600">
-          <p className="font-medium text-blue-300">승인함 바로가기</p>
-          <p className="mt-2 text-sm text-gray-300">승인 대기 목록을 바로 확인합니다.</p>
-        </Link>
-      </div>
+      ) : (
+        <>
+          {pending.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-500 font-medium">대기중 ({pending.length})</p>
+              {pending.map((item) => (
+                <div key={item.id} className="rounded-xl border border-yellow-800/40 bg-yellow-900/10 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className="badge badge-xs badge-warning">{item.type}</span>
+                        <span className="text-sm font-medium">{item.title}</span>
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        [{item.site?.name}] · {item.createdBy?.position ? `${item.createdBy.position} ` : ''}{item.createdBy?.name}
+                        {item.targetDept && ` → ${item.targetDept}`}
+                      </p>
+                      {item.description && (
+                        <p className="mt-1 text-xs text-gray-500 line-clamp-2">{item.description}</p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        className={`btn btn-success btn-xs gap-1 ${working === item.id ? 'loading' : ''}`}
+                        disabled={!!working}
+                        onClick={() => act(item.id, 'approve')}
+                      >
+                        <CheckCircleIcon className="h-3.5 w-3.5" />
+                        승인
+                      </button>
+                      <button
+                        className={`btn btn-error btn-xs gap-1 ${working === item.id ? 'loading' : ''}`}
+                        disabled={!!working}
+                        onClick={() => act(item.id, 'reject')}
+                      >
+                        <XCircleIcon className="h-3.5 w-3.5" />
+                        반려
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {done.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-500 font-medium">처리 완료 ({done.length})</p>
+              {done.slice(0, 5).map((item) => (
+                <div key={item.id} className="rounded-xl border border-gray-800 bg-black/10 p-3 opacity-70">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`badge badge-xs ${item.status === '승인완료' ? 'badge-success' : 'badge-error'}`}>
+                      {item.status}
+                    </span>
+                    <span className="text-sm">{item.title}</span>
+                    <span className="text-xs text-gray-500 ml-auto">[{item.site?.name}]</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };
@@ -166,121 +292,109 @@ const LeaveTab = () => {
   const [sub, setSub] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchData = useCallback(async () => {
-    const [bRes, rRes] = await Promise.all([
-      fetch('/api/leave/balance'),
-      fetch('/api/leave/requests'),
-    ]);
-    if (bRes.ok) { const d = await bRes.json(); setBalance(d.data); }
-    if (rRes.ok) { const d = await rRes.json(); setRequests(d.data || []); }
+  const load = useCallback(async () => {
+    const res = await fetch('/api/leaves');
+    if (res.ok) { const d = await res.json(); setBalance(d.data?.balance); setRequests(d.data?.requests || []); }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { load(); }, [load]);
 
   const handleSubmit = async () => {
-    if (!form.startDate || !form.endDate) { setError(t('leave-fill-dates')); return; }
+    if (!form.startDate) { setError('시작일을 선택하세요.'); return; }
     setSub(true); setError('');
-    const res = await fetch('/api/leave/requests', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+    const res = await fetch('/api/leaves', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form, days: Number(form.days) }),
     });
-    if (res.ok) {
-      setForm({ type: '연차', startDate: '', endDate: '', days: '1', reason: '' });
-      setShowForm(false); fetchData();
-    } else { const d = await res.json(); setError(d.error?.message || ''); }
-    setSub(false);
+    const json = await res.json();
+    if (!res.ok) { setError(json?.error?.message || '신청에 실패했습니다.'); setSub(false); return; }
+    setForm({ type: '연차', startDate: '', endDate: '', days: '1', reason: '' });
+    setShowForm(false); setSub(false); load();
   };
 
-  const total = balance ? Number(balance.totalDays) : 0;
-  const used = balance ? Number(balance.usedDays) : 0;
-  const remaining = total - used;
-
-  const statusColors: Record<string, string> = {
-    '신청': 'badge-info', '승인': 'badge-success', '반려': 'badge-error',
-  };
-  const stepLabels: Record<string, string> = {
-    '부서장승인대기': t('leave-step-manager'),
-    '최종승인대기': t('leave-step-admin'),
-    '완료': t('leave-step-done'),
-  };
+  const statusBadge = (s: string) =>
+    s === '승인' ? 'badge-success' : s === '반려' ? 'badge-error' : s === '최종승인' ? 'badge-success' : 'badge-warning';
 
   return (
-    <div className="space-y-6">
-      {/* 잔여 현황 */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-lg border border-blue-800 bg-blue-900/10 p-4 text-center">
-          <p className="text-2xl font-bold text-blue-400">{total}</p>
-          <p className="text-xs text-gray-500 mt-1">{t('my-leave-total')}</p>
+    <div className="space-y-4">
+      {/* 잔여 연차 */}
+      {balance && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: '총 연차', value: `${balance.total}일` },
+            { label: '사용', value: `${balance.used}일` },
+            { label: '잔여', value: `${balance.remaining}일` },
+          ].map((b) => (
+            <div key={b.label} className="rounded-xl border border-gray-800 bg-black/10 p-4 text-center">
+              <p className="text-xs text-gray-500 mb-1">{b.label}</p>
+              <p className="text-xl font-bold">{b.value}</p>
+            </div>
+          ))}
         </div>
-        <div className="rounded-lg border border-yellow-800 bg-yellow-900/10 p-4 text-center">
-          <p className="text-2xl font-bold text-yellow-400">{used}</p>
-          <p className="text-xs text-gray-500 mt-1">{t('my-leave-used')}</p>
-        </div>
-        <div className="rounded-lg border border-green-800 bg-green-900/10 p-4 text-center">
-          <p className="text-2xl font-bold text-green-400">{remaining}</p>
-          <p className="text-xs text-gray-500 mt-1">{t('my-leave-remaining')}</p>
-        </div>
-      </div>
+      )}
 
       {/* 신청 버튼 */}
       <div className="flex justify-end">
-        <Button size="sm" color="primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? t('cancel') : <><PlusIcon className="w-4 h-4 mr-1" />{t('leave-apply')}</>}
-        </Button>
+        <button className="btn btn-primary btn-sm" onClick={() => setShowForm(!showForm)}>
+          {showForm ? '취소' : '연차 신청'}
+        </button>
       </div>
 
-      {error && <div className="alert alert-error text-sm"><span>{error}</span></div>}
-
-      {/* 신청 폼 */}
       {showForm && (
-        <div className="border border-gray-700 rounded-lg p-5 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div><label className="label"><span className="label-text text-xs">{t('leave-type')}</span></label>
-              <select className="select select-bordered select-sm w-full" value={form.type} onChange={(e) => {
-                const t = e.target.value;
-                setForm({ ...form, type: t, days: t.includes('반차') ? '0.5' : '1' });
-              }}>{leaveTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
-            <div><label className="label"><span className="label-text text-xs">{t('start-date')} *</span></label>
-              <input type="date" className="input input-bordered input-sm w-full" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
-            <div><label className="label"><span className="label-text text-xs">{t('end-date')} *</span></label>
-              <input type="date" className="input input-bordered input-sm w-full" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>
-            <div><label className="label"><span className="label-text text-xs">{t('leave-days')}</span></label>
-              <input type="number" step="0.5" className="input input-bordered input-sm w-full" value={form.days} onChange={(e) => setForm({ ...form, days: e.target.value })} /></div>
+        <div className="rounded-xl border border-gray-700 bg-black/20 p-4 space-y-3">
+          {error && <p className="text-sm text-red-400">{error}</p>}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">유형</label>
+              <select className="select select-bordered select-sm w-full" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                {leaveTypes.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">일수</label>
+              <input type="number" min="0.5" step="0.5" className="input input-bordered input-sm w-full" value={form.days} onChange={(e) => setForm({ ...form, days: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">시작일 *</label>
+              <input type="date" className="input input-bordered input-sm w-full" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">종료일</label>
+              <input type="date" className="input input-bordered input-sm w-full" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs text-gray-400 mb-1">사유</label>
+              <textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+            </div>
           </div>
-          <div><label className="label"><span className="label-text text-xs">{t('leave-reason')}</span></label>
-            <textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} /></div>
-          <div className="flex justify-end"><Button size="sm" color="primary" loading={sub} onClick={handleSubmit}>{t('leave-submit')}</Button></div>
+          <div className="flex justify-end">
+            <button className={`btn btn-primary btn-sm ${sub ? 'loading' : ''}`} disabled={sub} onClick={handleSubmit}>신청</button>
+          </div>
         </div>
       )}
 
       {/* 신청 목록 */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-400 mb-3">{t('leave-my-list')}</h3>
-        {requests.length === 0 ? (
-          <p className="text-sm text-gray-600 text-center py-4">{t('leave-no-requests')}</p>
-        ) : (
-          <div className="space-y-2">
-            {requests.map((r: any) => (
-              <div key={r.id} className="rounded border border-gray-800 p-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{r.type}</span>
-                    <span className="text-sm">{Number(r.days)}일</span>
-                    <span className={`badge badge-xs ${statusColors[r.status] || 'badge-ghost'}`}>{r.status}</span>
-                  </div>
-                  <span className="text-xs text-gray-500">{stepLabels[r.currentStep] || r.currentStep}</span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {new Date(r.startDate).toLocaleDateString('ko-KR')} ~ {new Date(r.endDate).toLocaleDateString('ko-KR')}
-                  {r.reason && ` · ${r.reason}`}
-                </p>
-                {r.managerAction === '반려' && r.managerNote && <p className="text-xs text-red-400 mt-1">{t('leave-reject-reason')}: {r.managerNote}</p>}
-                {r.adminAction === '반려' && r.adminNote && <p className="text-xs text-red-400 mt-1">{t('leave-reject-reason')}: {r.adminNote}</p>}
+      {requests.length === 0 ? (
+        <p className="py-6 text-center text-sm text-gray-500">{t('leave-no-requests')}</p>
+      ) : (
+        <div className="space-y-2">
+          {requests.map((r: any) => (
+            <div key={r.id} className="rounded-xl border border-gray-800 p-3">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <span className={`badge badge-xs ${statusBadge(r.status)}`}>{r.status}</span>
+                <span className="text-sm font-medium">{r.type}</span>
+                <span className="text-xs text-gray-500">{r.days}일</span>
+                <span className="ml-auto text-xs text-gray-500">
+                  {new Date(r.startDate).toLocaleDateString('ko-KR')}
+                  {r.endDate && ` ~ ${new Date(r.endDate).toLocaleDateString('ko-KR')}`}
+                </span>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+              {r.reason && <p className="text-xs text-gray-400">{r.reason}</p>}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -295,20 +409,13 @@ const WorkLogTab = () => {
   const [saved, setSaved] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
 
-  // 오늘 날짜 로그 불러오기
   const loadLog = useCallback(async (date: string) => {
-    setSelectedDate(date);
-    setSaved(false);
+    setSelectedDate(date); setSaved(false);
     const res = await fetch(`/api/my/worklog?date=${date}`);
-    if (res.ok) {
-      const data = await res.json();
-      setContent(data.data?.content || '');
-    } else {
-      setContent('');
-    }
+    if (res.ok) { const data = await res.json(); setContent(data.data?.content || ''); }
+    else setContent('');
   }, []);
 
-  // 월별 목록
   const loadMonth = useCallback(async () => {
     const month = selectedDate.substring(0, 7);
     const res = await fetch(`/api/my/worklog?month=${month}`);
@@ -322,54 +429,80 @@ const WorkLogTab = () => {
     if (!content.trim()) return;
     setSaving(true);
     await fetch('/api/my/worklog', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date: selectedDate, content }),
     });
     setSaving(false); setSaved(true); loadMonth();
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
       {/* 작성 영역 */}
       <div className="lg:col-span-2 space-y-3">
         <div className="flex items-center gap-3">
-          <input type="date" className="input input-bordered input-sm" value={selectedDate}
-            onChange={(e) => loadLog(e.target.value)} />
+          <input
+            type="date"
+            className="input input-bordered input-sm"
+            value={selectedDate}
+            onChange={(e) => loadLog(e.target.value)}
+          />
           <span className="text-sm text-gray-400">
-            {new Date(selectedDate).toLocaleDateString('ko-KR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            {new Date(selectedDate).toLocaleDateString('ko-KR', {
+              weekday: 'short', year: 'numeric', month: 'long', day: 'numeric',
+            })}
           </span>
         </div>
-        <textarea className="textarea textarea-bordered w-full text-sm" rows={12} placeholder={t('worklog-placeholder')}
-          value={content} onChange={(e) => { setContent(e.target.value); setSaved(false); }} />
+        <textarea
+          className="textarea textarea-bordered w-full text-sm"
+          rows={12}
+          placeholder="오늘의 업무 내용을 기록하세요..."
+          value={content}
+          onChange={(e) => { setContent(e.target.value); setSaved(false); }}
+        />
         <div className="flex items-center justify-between">
-          <p className="text-xs text-gray-500">
-            {saved && <span className="text-green-400">{t('worklog-saved')}</span>}
+          <p className="text-xs">
+            {saved && <span className="text-green-400">저장되었습니다 ✓</span>}
           </p>
-          <Button size="sm" color="primary" loading={saving} onClick={handleSave}>
-            <PencilSquareIcon className="w-4 h-4 mr-1" />{t('worklog-save')}
-          </Button>
+          <button
+            className={`btn btn-primary btn-sm ${saving ? 'loading' : ''}`}
+            disabled={saving}
+            onClick={handleSave}
+          >
+            <PencilSquareIcon className="h-4 w-4 mr-1" />
+            저장
+          </button>
         </div>
       </div>
 
       {/* 월별 목록 */}
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-400">{t('worklog-history')}</h3>
+        <h3 className="text-sm font-semibold text-gray-400">이번 달 기록</h3>
         {logs.length === 0 ? (
-          <p className="text-sm text-gray-600">{t('worklog-empty')}</p>
+          <p className="text-sm text-gray-500">기록이 없습니다.</p>
         ) : (
-          <div className="space-y-1 max-h-96 overflow-y-auto">
+          <div className="space-y-1 max-h-[480px] overflow-y-auto">
             {logs.map((log: any) => {
               const d = new Date(log.date).toISOString().split('T')[0];
               const isActive = d === selectedDate;
               return (
-                <button key={log.id} onClick={() => loadLog(d)}
-                  className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${isActive ? 'bg-blue-900/30 border border-blue-800' : 'hover:bg-gray-800/50'}`}>
-                  <div className="flex justify-between">
-                    <span className={isActive ? 'text-blue-400 font-medium' : 'text-gray-300'}>
-                      {new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short' })}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">{log.content.substring(0, 40)}...</p>
+                <button
+                  key={log.id}
+                  onClick={() => loadLog(d)}
+                  className={`w-full text-left rounded-lg px-3 py-2 text-sm transition ${
+                    isActive
+                      ? 'bg-blue-900/30 border border-blue-800 text-blue-300'
+                      : 'hover:bg-gray-800/50 border border-transparent text-gray-300'
+                  }`}
+                >
+                  <p className={`font-medium ${isActive ? 'text-blue-300' : ''}`}>
+                    {new Date(log.date).toLocaleDateString('ko-KR', {
+                      month: 'short', day: 'numeric', weekday: 'short',
+                    })}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate mt-0.5">
+                    {log.content.substring(0, 40)}{log.content.length > 40 ? '…' : ''}
+                  </p>
                 </button>
               );
             })}
@@ -382,19 +515,20 @@ const WorkLogTab = () => {
 
 // ========= 내 현장 탭 =========
 const MySitesTab = ({ sites }: { sites: any[] }) => {
-  const { t } = useTranslation('common');
-  if (sites.length === 0) return <p className="text-sm text-gray-500 py-10 text-center">{t('my-no-sites')}</p>;
+  if (sites.length === 0) return (
+    <p className="py-10 text-center text-sm text-gray-500">배정된 현장이 없습니다.</p>
+  );
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {sites.map((site: any) => (
         <Link key={site.id} href={`/sites/${site.id}`}>
-          <div className="rounded-lg border border-gray-800 p-4 hover:border-gray-600 transition-colors cursor-pointer">
+          <div className="rounded-xl border border-gray-800 bg-black/10 p-4 hover:border-gray-600 transition cursor-pointer">
             <div className="flex items-center gap-2">
-              <span className={`inline-block w-2 h-2 rounded-full ${STATUS_DOT[site.status] || 'bg-gray-400'}`} />
-              <span className="font-medium text-sm">{site.name}</span>
-              <span className="text-xs text-gray-500 ml-auto">{site.status}</span>
+              <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[site.status] || 'bg-gray-400'}`} />
+              <span className="font-medium text-sm truncate">{site.name}</span>
+              <span className="text-xs text-gray-500 ml-auto shrink-0">{site.status}</span>
             </div>
-            {site.address && <p className="text-xs text-gray-500 mt-1 ml-4">{site.address}</p>}
+            {site.address && <p className="text-xs text-gray-500 mt-1 ml-3.5 truncate">{site.address}</p>}
           </div>
         </Link>
       ))}
@@ -404,18 +538,21 @@ const MySitesTab = ({ sites }: { sites: any[] }) => {
 
 // ========= 내 활동 탭 =========
 const ActivityTab = ({ comments }: { comments: any[] }) => {
-  const { t } = useTranslation('common');
-  if (comments.length === 0) return <p className="text-sm text-gray-500 py-10 text-center">{t('my-no-posts')}</p>;
+  if (comments.length === 0) return (
+    <p className="py-10 text-center text-sm text-gray-500">최근 활동이 없습니다.</p>
+  );
   return (
     <div className="space-y-2">
       {comments.map((c: any) => (
         <Link key={c.id} href={`/sites/${c.site?.id}`}>
-          <div className="flex items-center justify-between py-2 px-3 rounded hover:bg-gray-800/50 transition-colors cursor-pointer">
-            <p className="text-sm truncate flex-1">
+          <div className="flex items-start justify-between gap-3 rounded-lg border border-gray-800 px-3 py-2.5 hover:bg-gray-800/30 cursor-pointer">
+            <p className="text-sm flex-1 min-w-0 truncate">
               <span className="text-gray-500">[{c.site?.name}]</span>{' '}
-              {c.content.length > 60 ? c.content.slice(0, 60) + '...' : c.content}
+              {c.content.length > 60 ? c.content.slice(0, 60) + '…' : c.content}
             </p>
-            <span className="text-xs text-gray-500 shrink-0 ml-3">{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span>
+            <span className="shrink-0 text-xs text-gray-500">
+              {new Date(c.createdAt).toLocaleDateString('ko-KR')}
+            </span>
           </div>
         </Link>
       ))}

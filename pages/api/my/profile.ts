@@ -24,7 +24,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         phone: true,
         createdAt: true,
         teamMembers: {
-          select: { role: true, team: { select: { id: true, name: true, slug: true } } },
+          select: {
+            role: true,
+            team: { select: { id: true, name: true, slug: true } },
+          },
         },
       },
     }),
@@ -32,7 +35,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ? prisma.siteAssignment.findMany({
           where: { userId, site: { teamId: tm.teamId } },
           include: {
-            site: { select: { id: true, name: true, status: true, address: true, updatedAt: true } },
+            site: {
+              select: { id: true, name: true, status: true, address: true, updatedAt: true },
+            },
           },
           orderBy: { assignedAt: 'desc' },
           take: 20,

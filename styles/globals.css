@@ -2,87 +2,180 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── 기본 설정 ─────────────────────────────────────── */
 :root {
-  color-scheme: dark light;
+  color-scheme: dark;
+  --brand: #1B3FAE;
+  --brand-hover: #1534a0;
 }
 
-html,
-body {
+html, body {
   padding: 0;
   margin: 0;
+  background: #000;
+  color: #e5e7eb;
   font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    Segoe UI,
-    Roboto,
-    Oxygen,
-    Ubuntu,
-    Cantarell,
-    Fira Sans,
-    Droid Sans,
-    Helvetica Neue,
-    sans-serif;
+    'Pretendard', 'Noto Sans KR',
+    -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
+a { color: inherit; text-decoration: none; }
+* { box-sizing: border-box; }
 
-* {
-  box-sizing: border-box;
-}
-
+/* ─── DaisyUI/Input 초기화 ──────────────────────────── */
 @layer base {
   input:not([type='checkbox']):not([type='radio']),
-  textarea {
-    @apply rounded !important;
+  textarea,
+  select {
+    @apply rounded-lg !important;
+    font-size: 13px !important;
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: 2px solid rgba(59, 130, 246, 0.5) !important;
+    outline-offset: 0 !important;
   }
 }
 
+/* ─── 컴포넌트 ──────────────────────────────────────── */
 @layer components {
-  #__next {
-    @apply h-full;
-  }
+  #__next { @apply h-full; }
 
   .btn {
-    @apply rounded normal-case;
+    @apply rounded-lg normal-case font-medium;
+    font-size: 13px;
+    transition: all 0.15s ease;
+  }
+  .btn-primary {
+    background-color: var(--brand) !important;
+    border-color: var(--brand) !important;
+  }
+  .btn-primary:hover {
+    background-color: var(--brand-hover) !important;
+    border-color: var(--brand-hover) !important;
   }
 
-  .modal-box {
-    @apply rounded;
-  }
+  .modal-box { @apply rounded-xl; }
 
-  .btn-primary:focus-visible {
-    @apply outline-primary;
+  .table th {
+    @apply text-xs text-gray-500 uppercase tracking-wide bg-transparent;
+    font-weight: 600;
   }
+  .table td {
+    @apply text-sm py-2.5;
+    vertical-align: middle;
+  }
+  .table tr:hover td { @apply bg-gray-800/30; }
 
-  .btn-error:focus-visible {
-    @apply outline-error;
-  }
+  .badge { @apply text-[11px] font-medium; }
 }
 
-.btn-md {
-  @apply min-h-8 h-10;
+/* ─── 공통 스크롤바 ─────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+/* ─── 사이드바 스타일 ───────────────────────────────── */
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #9ca3af;
+  transition: all 0.12s ease;
+  text-decoration: none;
+}
+.sidebar-link:hover {
+  background: rgba(255,255,255,0.06);
+  color: #f9fafb;
+}
+.sidebar-link.active {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  font-weight: 600;
+}
+.sidebar-link .icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.sidebar-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #4b5563;
+  text-transform: uppercase;
+  padding: 12px 10px 4px;
 }
 
+/* ─── 헤더 ─────────────────────────────────────────── */
+.top-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  height: 52px;
+  padding: 0 1rem;
+  border-bottom: 1px solid #1f2937;
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ─── 폼 라벨 ───────────────────────────────────────── */
+.form-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ─── 로딩 ─────────────────────────────────────────── */
+.loading { color: #3b82f6; }
+
+/* ─── 모바일 compact ────────────────────────────────── */
+@media (max-width: 640px) {
+  .btn { @apply h-8 min-h-8 text-xs px-3; }
+  .btn-xs { @apply h-6 min-h-6 px-2; }
+  .input, .select, .textarea { font-size: 16px !important; }
+  .table td, .table th { @apply px-2 py-2 text-xs; }
+  .badge { @apply text-[10px] px-1.5; }
+}
+
+/* ─── 애니메이션 ────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fade-in 0.18s ease; }
+
+/* ─── DaisyUI 테마 오버라이드 ───────────────────────── */
+[data-theme="black"] {
+  --rounded-btn: 0.5rem;
+  --rounded-box: 0.75rem;
+}
+
+select { color-scheme: dark; }
+::placeholder { color: #4b5563 !important; opacity: 1 !important; }
+
+/* btn-md 사이즈 보정 */
+.btn-md { @apply min-h-8 h-10; }
+
+/* scrollbar 클래스 (기존 호환) */
 .scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #555555 #f0f0f0;
+  scrollbar-color: #555555 transparent;
 }
-
-.scrollbar::-webkit-scrollbar {
-  width: 8px;
-}
-
-.scrollbar::-webkit-scrollbar-thumb {
-  background-color: #555555;
-}
-
-.scrollbar::-webkit-scrollbar-track {
-  background-color: #f0f0f0;
-}
-
-.scrollbar::-webkit-scrollbar-button {
-  display: none;
-}
+.scrollbar::-webkit-scrollbar { width: 5px; }
+.scrollbar::-webkit-scrollbar-thumb { background-color: #555555; border-radius: 3px; }

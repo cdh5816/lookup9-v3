@@ -20,53 +20,12 @@ export function getRoleLevel(role: string): number {
 export async function getTeamMemberByUserId(userId: string) {
   return prisma.teamMember.findFirst({
     where: { userId },
-    include: {
-      team: { select: { id: true, slug: true, name: true } },
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          company: true,
-          department: true,
-          position: true,
-        },
-      },
-    },
+    include: { team: { select: { id: true, slug: true, name: true } } },
   });
 }
 
 export function hasMinRole(currentRole: string, minRole: string): boolean {
   return getRoleLevel(currentRole) >= getRoleLevel(minRole);
-}
-
-export function isExternalRole(role: string): boolean {
-  return ['PARTNER', 'GUEST', 'VIEWER'].includes(role);
-}
-
-export function isSystemRole(role: string): boolean {
-  return ['SUPER_ADMIN', 'OWNER'].includes(role);
-}
-
-export function isCompanyAdminRole(role: string): boolean {
-  return ['ADMIN_HR', 'ADMIN'].includes(role);
-}
-
-export function getRoleDisplayName(role: string): string {
-  const map: Record<string, string> = {
-    SUPER_ADMIN: 'SUPER_ADMIN',
-    OWNER: 'SUPER_ADMIN',
-    ADMIN_HR: 'COMPANY_ADMIN',
-    ADMIN: 'COMPANY_ADMIN',
-    MANAGER: 'INTERNAL_MANAGER',
-    USER: 'INTERNAL_USER',
-    MEMBER: 'INTERNAL_USER',
-    PARTNER: 'PARTNER',
-    GUEST: 'GUEST',
-    VIEWER: 'VIEWER',
-  };
-
-  return map[role] ?? role;
 }
 
 export function canDeleteUser(
@@ -76,68 +35,16 @@ export function canDeleteUser(
   targetUserId: string
 ): boolean {
   if (actorUserId === targetUserId) return false;
-  if (isSystemRole(targetRole)) return false;
   if (getRoleLevel(actorRole) <= getRoleLevel(targetRole)) return false;
   return true;
 }
 
 export function canAssignRole(actorRole: string, targetRole: string): boolean {
-  if (targetRole === 'SUPER_ADMIN' || targetRole === 'OWNER') return false;
-
-  if (actorRole === 'SUPER_ADMIN' || actorRole === 'OWNER') {
-    return true;
-  }
-
-  if (isCompanyAdminRole(actorRole)) {
-    return ['ADMIN_HR', 'ADMIN', 'MANAGER', 'USER', 'MEMBER', 'PARTNER', 'GUEST', 'VIEWER'].includes(targetRole);
-  }
-
-  if (actorRole === 'MANAGER') {
-    return ['USER', 'MEMBER', 'PARTNER', 'GUEST', 'VIEWER'].includes(targetRole);
-  }
-
-  if (['USER', 'MEMBER', 'PARTNER'].includes(actorRole)) {
-    return ['GUEST', 'VIEWER'].includes(targetRole);
-  }
-
-  return false;
-}
-
-export function canManageGuests(role: string): boolean {
-  return ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'USER', 'MEMBER', 'PARTNER'].includes(role);
-}
-
-export function getPermissionFlags(role: string, department?: string | null) {
-  const dept = department || '';
-  const isSuperAdmin = isSystemRole(role);
-  const isCompanyAdmin = isSuperAdmin || isCompanyAdminRole(role);
-  const isManager = isCompanyAdmin || role === 'MANAGER';
-  const isInternal = isManager || ['USER', 'MEMBER'].includes(role);
-  const isExternal = isExternalRole(role);
-
-  const canViewSales = isCompanyAdmin || dept.includes('영업');
-  const canViewContract = isCompanyAdmin || dept.includes('수주') || dept.includes('영업');
-  const canViewProduction = isCompanyAdmin || dept.includes('생산');
-  const canViewPainting = isCompanyAdmin || dept.includes('도장') || dept.includes('생산');
-  const canViewShipping = isCompanyAdmin || dept.includes('출하') || dept.includes('생산');
-  const canApprove = isCompanyAdmin || isManager || dept.includes('경영') || dept.includes('지원');
-  const canManageUsers = isCompanyAdmin || isManager;
-
-  return {
-    isSuperAdmin,
-    isCompanyAdmin,
-    isManager,
-    isInternal,
-    isExternal,
-    canManageUsers,
-    canManageGuests: canManageGuests(role),
-    canApprove,
-    canViewSales,
-    canViewContract,
-    canViewProduction,
-    canViewPainting,
-    canViewShipping,
-  };
+  if (targetRole === 'SUPER_ADMIN') return false;
+  if (targetRole === 'OWNER') return false;
+  if (actorRole === 'SUPER_ADMIN' || actorRole === 'OWNER') return true;
+  if (getRoleLevel(targetRole) >= getRoleLevel(actorRole)) return false;
+  return true;
 }
 
 export async function verifySiteAccess(userId: string, siteId: string) {
@@ -152,7 +59,7 @@ export async function verifySiteAccess(userId: string, siteId: string) {
 
   if (site.teamId && site.teamId !== tm.teamId) return null;
 
-  if (isExternalRole(tm.role)) {
+  if (tm.role === 'PARTNER' || tm.role === 'GUEST' || tm.role === 'VIEWER') {
     const assignment = await prisma.siteAssignment.findFirst({
       where: { siteId, userId },
     });
@@ -160,4 +67,63 @@ export async function verifySiteAccess(userId: string, siteId: string) {
   }
 
   return tm;
+}
+
+export function isSystemRole(role: string): boolean {
+  return role === 'SUPER_ADMIN' || role === 'OWNER';
+}
+
+export function isCompanyAdminRole(role: string): boolean {
+  return role === 'ADMIN_HR' || role === 'ADMIN';
+}
+
+export function getRoleDisplayName(role: string): string {
+  switch (role) {
+    case 'SUPER_ADMIN':
+      return 'SUPER_ADMIN';
+    case 'OWNER':
+      return 'OWNER';
+    case 'ADMIN_HR':
+    case 'ADMIN':
+      return 'COMPANY_ADMIN';
+    case 'MANAGER':
+      return 'INTERNAL_MANAGER';
+    case 'USER':
+    case 'MEMBER':
+      return 'INTERNAL_USER';
+    case 'PARTNER':
+      return 'PARTNER';
+    case 'GUEST':
+      return 'GUEST';
+    case 'VIEWER':
+      return 'VIEWER';
+    default:
+      return role;
+  }
+}
+
+export function canManageGuests(role: string): boolean {
+  return ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'USER', 'PARTNER'].includes(role);
+}
+
+export function getPermissionFlags(role: string, department?: string | null) {
+  const isSuper = role === 'SUPER_ADMIN' || role === 'OWNER';
+  const isCompanyAdmin = isCompanyAdminRole(role);
+  const isManager = role === 'MANAGER';
+  const isInternal = isSuper || isCompanyAdmin || isManager || role === 'USER' || role === 'MEMBER';
+  const dept = department || '';
+
+  return {
+    isSuper,
+    isCompanyAdmin,
+    isInternal,
+    canManageUsers: isSuper || isCompanyAdmin || isManager,
+    canManageGuests: canManageGuests(role),
+    canViewApprovals: isSuper || isCompanyAdmin || isManager,
+    canViewSales: isSuper || isCompanyAdmin || dept.includes('영업') || dept.includes('경영'),
+    canViewContract: isSuper || isCompanyAdmin || dept.includes('영업') || dept.includes('수주') || dept.includes('경영'),
+    canViewProduction: isSuper || isCompanyAdmin || dept.includes('생산'),
+    canViewPainting: isSuper || isCompanyAdmin || dept.includes('도장') || dept.includes('생산'),
+    canViewShipping: isSuper || isCompanyAdmin || dept.includes('출하') || dept.includes('생산'),
+  };
 }

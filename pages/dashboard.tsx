@@ -4,14 +4,9 @@ import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import Head from 'next/head';
 import Link from 'next/link';
 import {
-  BuildingOffice2Icon,
-  TruckIcon,
-  EnvelopeIcon,
-  BellIcon,
-  MegaphoneIcon,
-  ChatBubbleLeftIcon,
-  ExclamationTriangleIcon,
-  ClipboardDocumentCheckIcon,
+  BuildingOffice2Icon, ExclamationTriangleIcon,
+  EnvelopeIcon, ClipboardDocumentListIcon,
+  MegaphoneIcon, ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
@@ -21,266 +16,137 @@ const STATUS_DOT: Record<string, string> = {
   진행중: 'bg-green-500', 부분완료: 'bg-green-300', 완료: 'bg-gray-400', 보류: 'bg-gray-600',
 };
 
-function getDeadlineText(desc?: string | null): string | null {
-  if (!desc) return null;
-  const m = desc.match(/납품기한\s*[:：]\s*(\d{4}-\d{2}-\d{2})/);
-  return m?.[1] || null;
-}
-
-function getDday(dateStr: string | null): { diff: number; label: string; urgent: boolean } | null {
-  if (!dateStr) return null;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const d = new Date(dateStr); d.setHours(0, 0, 0, 0);
-  const diff = Math.ceil((d.getTime() - today.getTime()) / 86400000);
-  return {
-    diff,
-    label: diff < 0 ? `D+${Math.abs(diff)}` : diff === 0 ? 'D-Day' : `D-${diff}`,
-    urgent: diff <= 7,
-  };
-}
-
 const Dashboard = () => {
   const { data: profileData } = useSWR('/api/my/profile', fetcher, { refreshInterval: 30000 });
   const profile = profileData?.data || {};
   const userRole = profile.role || profile.teamMembers?.[0]?.role || 'USER';
-  const companyDisplayName = profile.companyDisplayName || 'LOOKUP9';
+  const isGuest = userRole === 'GUEST' || userRole === 'VIEWER';
 
-  const isExternal = ['PARTNER', 'GUEST', 'VIEWER'].includes(userRole);
+  const { data } = useSWR('/api/dashboard/stats', fetcher, { refreshInterval: 30000 });
+  const stats = data?.data;
 
-  const { data: statsData } = useSWR('/api/dashboard/stats', fetcher, { refreshInterval: 30000 });
-  const stats = statsData?.data;
+  const companyName = profile.company || profile.teamMembers?.[0]?.team?.name || 'LOOKUP9';
 
-  const { data: noticeData } = useSWR(!isExternal ? '/api/notices?limit=5' : null, fetcher);
-  const notices = noticeData?.data || [];
-
-  if (isExternal) return <ExternalDashboard profile={profile} userRole={userRole} />;
+  if (isGuest) return <GuestDashboard profile={profile} />;
 
   const summaryCards = [
     {
-      label: '진행중 현장',
-      value: stats?.activeSites ?? '-',
-      icon: BuildingOffice2Icon,
-      color: 'text-blue-400',
-      bg: 'bg-blue-500/10',
-      href: '/sites?status=진행중',
-    },
-    {
-      label: '미처리 요청',
-      value: stats?.openRequests ?? '-',
-      icon: ClipboardDocumentCheckIcon,
-      color: 'text-yellow-400',
-      bg: 'bg-yellow-500/10',
+      label: '진행중 현장', value: stats?.activeSites ?? '-',
+      icon: BuildingOffice2Icon, color: 'text-blue-400', bg: 'bg-blue-900/20 border-blue-900/40',
       href: '/sites',
-      alert: (stats?.openRequests ?? 0) > 0,
     },
     {
-      label: '납기 임박 (7일)',
-      value: stats?.deadlineUrgent ?? '-',
+      label: '이슈 현장', value: stats?.issueSites ?? '-',
       icon: ExclamationTriangleIcon,
-      color: 'text-red-400',
-      bg: 'bg-red-500/10',
+      color: (stats?.issueSites ?? 0) > 0 ? 'text-red-400' : 'text-gray-400',
+      bg: (stats?.issueSites ?? 0) > 0 ? 'bg-red-900/20 border-red-800/50' : 'bg-black/20 border-gray-800',
       href: '/sites',
-      alert: (stats?.deadlineUrgent ?? 0) > 0,
     },
     {
-      label: '안읽은 쪽지',
-      value: stats?.unreadMessages ?? '-',
-      icon: EnvelopeIcon,
-      color: 'text-purple-400',
-      bg: 'bg-purple-500/10',
+      label: '미처리 요청', value: stats?.openRequests ?? '-',
+      icon: ClipboardDocumentListIcon,
+      color: (stats?.openRequests ?? 0) > 0 ? 'text-yellow-400' : 'text-gray-400',
+      bg: (stats?.openRequests ?? 0) > 0 ? 'bg-yellow-900/20 border-yellow-800/40' : 'bg-black/20 border-gray-800',
+      href: '/sites',
+    },
+    {
+      label: '안읽은 쪽지', value: stats?.unreadMessages ?? '-',
+      icon: EnvelopeIcon, color: 'text-purple-400', bg: 'bg-purple-900/20 border-purple-900/40',
       href: '/messages',
     },
   ];
 
   return (
     <>
-      <Head><title>대시보드 | {companyDisplayName}</title></Head>
+      <Head><title>대시보드 | LOOKUP9</title></Head>
       <div className="space-y-5">
-
-        {/* 인사말 */}
+        {/* 헤더 */}
         <div>
-          <p className="text-xs text-gray-500">{companyDisplayName}</p>
-          <h2 className="mt-0.5 text-xl font-bold">
-            안녕하세요, {profile.position ? `${profile.position} ` : ''}{profile.name}님
-          </h2>
+          <p className="text-xs text-gray-500">{companyName}</p>
+          <h2 className="mt-0.5 text-xl font-bold">대시보드</h2>
         </div>
 
-        {/* 요약 카드 4개 */}
+        {/* 요약 카드 */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {summaryCards.map((c) => (
             <Link key={c.label} href={c.href}>
-              <div className={`relative rounded-xl border p-4 transition hover:border-gray-600 cursor-pointer ${c.alert ? 'border-red-800/60 bg-red-900/10' : 'border-gray-800 bg-black/20'}`}>
-                {c.alert && (
-                  <span className="absolute right-3 top-3 flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-                  </span>
-                )}
-                <div className={`inline-flex rounded-lg p-2 ${c.bg} mb-2`}>
+              <div className={`cursor-pointer rounded-xl border p-4 transition hover:opacity-80 ${c.bg}`}>
+                <div className="flex items-center gap-2 mb-2">
                   <c.icon className={`h-4 w-4 ${c.color}`} />
+                  <p className="text-xs text-gray-400">{c.label}</p>
                 </div>
-                <p className="text-xs text-gray-400">{c.label}</p>
-                <p className={`text-2xl font-bold mt-0.5 ${c.alert ? c.color : ''}`}>{c.value}</p>
+                <p className={`text-2xl font-bold ${c.color}`}>{c.value}</p>
               </div>
             </Link>
           ))}
         </div>
 
-        {/* 하단 2단 레이아웃 */}
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
+        {/* 공지 + 이슈현장 */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* 공지사항 */}
+          <div className="rounded-xl border border-gray-800 bg-black/20 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <MegaphoneIcon className="h-4 w-4 text-gray-400" />
+              <h3 className="text-sm font-semibold">공지사항</h3>
+            </div>
+            {!stats?.notices?.length ? (
+              <p className="text-sm text-gray-500 py-4 text-center">공지사항이 없습니다.</p>
+            ) : (
+              <div className="divide-y divide-gray-800">
+                {stats.notices.map((n: any) => (
+                  <div key={n.id} className="py-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        {n.isPinned && <span className="badge badge-xs badge-warning mr-1.5">공지</span>}
+                        <span className="text-sm">{n.title}</span>
+                      </div>
+                      <span className="text-[11px] text-gray-500 flex-shrink-0">
+                        {new Date(n.createdAt).toLocaleDateString('ko-KR')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-          {/* 왼쪽: 최근 활성 현장 */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-300">최근 활성 현장</h3>
-              <Link href="/sites" className="text-xs text-blue-400 hover:underline">전체 보기</Link>
+          {/* 이슈 현장 목록 */}
+          <div className="rounded-xl border border-gray-800 bg-black/20 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <ExclamationTriangleIcon className="h-4 w-4 text-red-400" />
+              <h3 className="text-sm font-semibold">이슈 현장</h3>
             </div>
             {!stats?.recentSites?.length ? (
-              <div className="rounded-xl border border-dashed border-gray-700 py-10 text-center text-sm text-gray-500">
-                진행중인 현장이 없습니다.
-              </div>
+              <p className="text-sm text-gray-500 py-4 text-center">진행중인 현장이 없습니다.</p>
             ) : (
-              <div className="space-y-2">
-                {stats.recentSites.map((site: any) => {
-                  const deadline = getDeadlineText(site.description);
-                  const dday = getDday(deadline);
+              <div className="divide-y divide-gray-800">
+                {stats.recentSites.map((s: any) => {
+                  const hasIssue = (s._count?.issues ?? 0) > 0;
                   return (
-                    <Link key={site.id} href={`/sites/${site.id}`}>
-                      <div className="flex items-center gap-3 rounded-xl border border-gray-800 bg-black/20 px-4 py-3 transition hover:border-gray-600 cursor-pointer">
-                        <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[site.status] || 'bg-gray-500'}`} />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{site.name}</p>
-                          {site.address && (
-                            <p className="truncate text-xs text-gray-500">{site.address}</p>
-                          )}
+                    <Link key={s.id} href={`/sites/${s.id}`}>
+                      <div className="flex items-center gap-3 py-2.5 cursor-pointer hover:bg-gray-800/30 rounded px-1 -mx-1 transition">
+                        <span className={`h-2 w-2 flex-shrink-0 rounded-full ${STATUS_DOT[s.status] || 'bg-gray-400'}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium truncate">{s.name}</span>
+                            {hasIssue && (
+                              <span className="flex-shrink-0 text-[10px] rounded-full bg-red-900/40 px-1.5 text-red-300">
+                                이슈 {s._count.issues}
+                              </span>
+                            )}
+                          </div>
+                          {s.client?.name && <p className="text-[11px] text-gray-500">{s.client.name}</p>}
                         </div>
-                        <div className="flex shrink-0 items-center gap-2 text-xs text-gray-500">
-                          {site._count?.requests > 0 && (
-                            <span className="badge badge-xs badge-warning">{site._count.requests}</span>
-                          )}
-                          {dday && (
-                            <span className={`font-mono ${dday.urgent ? 'text-red-400' : 'text-gray-400'}`}>
-                              {dday.label}
-                            </span>
-                          )}
-                          <span className="rounded-full border border-gray-700 px-1.5 py-0.5">{site.status}</span>
-                        </div>
+                        <ChevronRightIcon className="h-3.5 w-3.5 text-gray-600 flex-shrink-0" />
                       </div>
                     </Link>
                   );
                 })}
               </div>
             )}
-
-            {/* 최근 댓글 */}
-            {stats?.recentComments?.length > 0 && (
-              <div className="mt-2 space-y-1">
-                <h3 className="text-sm font-semibold text-gray-300 pt-1">최근 댓글</h3>
-                {stats.recentComments.map((c: any) => (
-                  <Link key={c.id} href={`/sites/${c.site?.id}`}>
-                    <div className="flex items-start gap-3 rounded-lg border border-gray-800 px-3 py-2.5 hover:bg-gray-800/30 cursor-pointer">
-                      <ChatBubbleLeftIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-gray-500 mb-0.5">[{c.site?.name}]</p>
-                        <p className="truncate text-sm text-gray-300">
-                          {c.content.length > 50 ? c.content.slice(0, 50) + '…' : c.content}
-                        </p>
-                      </div>
-                      <span className="shrink-0 text-xs text-gray-600">
-                        {c.author?.position ? `${c.author.position} ` : ''}{c.author?.name}
-                      </span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 오른쪽: 공지사항 + 상태별 카운트 */}
-          <div className="space-y-4">
-            {/* 공지사항 */}
-            <div className="rounded-xl border border-gray-800 bg-black/20 p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <MegaphoneIcon className="h-4 w-4 text-red-400" />
-                <h3 className="text-sm font-semibold">공지사항</h3>
-              </div>
-              {notices.length === 0 ? (
-                <p className="text-xs text-gray-500">등록된 공지가 없습니다.</p>
-              ) : (
-                <div className="space-y-2">
-                  {notices.map((n: any) => (
-                    <div key={n.id} className="border-b border-gray-800 pb-2 last:border-0 last:pb-0">
-                      <div className="flex items-center gap-1.5">
-                        {n.isPinned && <span className="badge badge-xs badge-error">PIN</span>}
-                        <p className="text-sm font-medium line-clamp-1">{n.title}</p>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {n.author?.position ? `${n.author.position} ` : ''}{n.author?.name}
-                        {' · '}{new Date(n.createdAt).toLocaleDateString('ko-KR')}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* 현장 상태별 요약 */}
-            <div className="rounded-xl border border-gray-800 bg-black/20 p-4">
-              <h3 className="mb-3 text-sm font-semibold">현장 상태 현황</h3>
-              <div className="space-y-2">
-                {[
-                  { label: '영업중', color: 'bg-red-500' },
-                  { label: '계약완료', color: 'bg-yellow-400' },
-                  { label: '진행중', color: 'bg-green-500' },
-                  { label: '부분완료', color: 'bg-green-300' },
-                  { label: '완료', color: 'bg-gray-400' },
-                  { label: '보류', color: 'bg-gray-600' },
-                ].map(({ label, color }) => {
-                  const count = stats?.statusCounts?.[label] ?? 0;
-                  const total = stats?.totalSites ?? 1;
-                  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-                  return (
-                    <div key={label} className="flex items-center gap-2">
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${color}`} />
-                      <span className="w-16 text-xs text-gray-400">{label}</span>
-                      <div className="flex-1 h-1.5 rounded-full bg-gray-800">
-                        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
-                      </div>
-                      <span className="w-6 text-right text-xs text-gray-400">{count}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <Link href="/sites" className="mt-3 block text-right text-xs text-blue-400 hover:underline">
-                전체 현장 →
-              </Link>
-            </div>
-
-            {/* 알림/쪽지 바로가기 */}
-            <div className="grid grid-cols-2 gap-2">
-              <Link href="/notifications">
-                <div className="flex items-center justify-between rounded-xl border border-gray-800 bg-black/20 px-3 py-2.5 hover:border-gray-600 cursor-pointer">
-                  <div className="flex items-center gap-2 text-sm text-gray-300">
-                    <BellIcon className="h-4 w-4 text-yellow-400" />
-                    알림
-                  </div>
-                  {(stats?.unreadNotifications ?? 0) > 0 && (
-                    <span className="badge badge-xs badge-warning">{stats.unreadNotifications}</span>
-                  )}
-                </div>
-              </Link>
-              <Link href="/messages">
-                <div className="flex items-center justify-between rounded-xl border border-gray-800 bg-black/20 px-3 py-2.5 hover:border-gray-600 cursor-pointer">
-                  <div className="flex items-center gap-2 text-sm text-gray-300">
-                    <EnvelopeIcon className="h-4 w-4 text-blue-400" />
-                    쪽지
-                  </div>
-                  {(stats?.unreadMessages ?? 0) > 0 && (
-                    <span className="badge badge-xs badge-primary">{stats.unreadMessages}</span>
-                  )}
-                </div>
-              </Link>
-            </div>
+            <Link href="/sites">
+              <p className="mt-3 text-center text-xs text-gray-500 hover:text-gray-300 cursor-pointer">전체 현장 보기 →</p>
+            </Link>
           </div>
         </div>
       </div>
@@ -288,66 +154,35 @@ const Dashboard = () => {
   );
 };
 
-// ========= 외부 계정 (PARTNER / GUEST) 대시보드 =========
-const ExternalDashboard = ({ profile, userRole }: { profile: any; userRole: string }) => {
-  const isGuest = userRole === 'GUEST' || userRole === 'VIEWER';
-  const mySites = profile.mySites || [];
-  const { data: noticeData } = useSWR('/api/notices?limit=3', fetcher);
-  const notices = noticeData?.data || [];
-
+// ── 게스트 전용 대시보드 ──
+const GuestDashboard = ({ profile }: { profile: any }) => {
+  const mySites = profile.siteAssignments?.map((a: any) => a.site).filter(Boolean) || [];
   return (
     <>
       <Head><title>대시보드 | LOOKUP9</title></Head>
-      <div className="space-y-5">
-        <div>
-          <h2 className="text-xl font-bold">
-            {profile.position ? `${profile.position} ` : ''}{profile.name}님
-          </h2>
-          <p className="mt-0.5 text-sm text-gray-400">
-            {isGuest ? '배정된 현장을 확인하세요.' : '담당 현장 현황입니다.'}
-          </p>
-        </div>
-
-        {notices.length > 0 && (
-          <div className="rounded-xl border border-gray-800 bg-black/20 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <MegaphoneIcon className="h-4 w-4 text-red-400" />
-              <h3 className="text-sm font-semibold">공지사항</h3>
-            </div>
-            <div className="space-y-2">
-              {notices.map((n: any) => (
-                <p key={n.id} className="text-sm text-gray-300 border-b border-gray-800 pb-2 last:border-0 last:pb-0">
-                  {n.isPinned && <span className="badge badge-xs badge-error mr-1">PIN</span>}
-                  {n.title}
-                </p>
-              ))}
-            </div>
+      <div className="space-y-4">
+        <h2 className="text-lg font-bold">안녕하세요, {profile.name}님</h2>
+        <p className="text-sm text-gray-400">배정된 현장을 확인하세요.</p>
+        {mySites.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-700 py-12 text-center text-sm text-gray-500">
+            배정된 현장이 없습니다.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {mySites.map((site: any) => (
+              <Link key={site.id} href={`/sites/${site.id}`}>
+                <div className="cursor-pointer rounded-xl border border-gray-800 bg-black/20 p-4 transition hover:border-gray-600">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2.5 w-2.5 rounded-full ${STATUS_DOT[site.status] || 'bg-gray-400'}`} />
+                    <h3 className="font-bold">{site.name}</h3>
+                    <span className="text-xs text-gray-400 ml-auto">{site.status}</span>
+                  </div>
+                  {site.address && <p className="text-sm text-gray-400 mt-1">{site.address}</p>}
+                </div>
+              </Link>
+            ))}
           </div>
         )}
-
-        <div>
-          <h3 className="text-sm font-semibold text-gray-300 mb-3">배정된 현장 ({mySites.length})</h3>
-          {mySites.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-700 py-10 text-center text-sm text-gray-500">
-              배정된 현장이 없습니다.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {mySites.map((site: any) => (
-                <Link key={site.id} href={isGuest ? `/guest/site/${site.id}` : `/sites/${site.id}`}>
-                  <div className="rounded-xl border border-gray-800 bg-black/20 p-4 transition hover:border-gray-600 cursor-pointer">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[site.status] || 'bg-gray-400'}`} />
-                      <h4 className="font-semibold truncate">{site.name}</h4>
-                      <span className="ml-auto shrink-0 text-xs text-gray-400">{site.status}</span>
-                    </div>
-                    {site.address && <p className="text-xs text-gray-500 truncate">{site.address}</p>}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
     </>
   );

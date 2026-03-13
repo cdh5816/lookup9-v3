@@ -35,7 +35,7 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     ];
   }
 
-  if (tm.role === 'PARTNER' || tm.role === 'GUEST' || tm.role === 'VIEWER') {
+  if (['PARTNER', 'GUEST', 'VIEWER'].includes(tm.role)) {
     where.assignments = { some: { userId: tm.userId } };
   }
 
@@ -47,21 +47,19 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
       contracts: {
         orderBy: { createdAt: 'asc' },
         select: {
-          id: true,
-          contractAmount: true,
-          quantity: true,
-          unitPrice: true,
-          specification: true,
-          isAdditional: true,
-          contractDate: true,
-          createdAt: true,
+          id: true, contractAmount: true, quantity: true,
+          unitPrice: true, specification: true, isAdditional: true, contractDate: true,
         },
       },
       shipments: {
-        select: { quantity: true, shippedAt: true, status: true },
-        orderBy: [{ sequence: 'desc' }, { createdAt: 'desc' }],
+        select: { quantity: true, status: true },
       },
-      _count: { select: { assignments: true, comments: true } },
+      requests: {
+        select: { status: true },
+      },
+      _count: {
+        select: { issues: true, documents: true },
+      },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -78,7 +76,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
 
   if (!name) return res.status(400).json({ error: { message: 'Name is required' } });
 
-  // description: 메모용으로만 (핵심 수치는 Contract로 분리)
   const descLines = [
     siteType ? `현장구분: ${siteType}` : '',
     installer ? `전문시공사: ${installer}` : '',
@@ -89,8 +86,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
   const site = await prisma.$transaction(async (tx) => {
     const newSite = await tx.site.create({
       data: {
-        name,
-        address: address || null,
+        name, address: address || null,
         clientId: clientId || null,
         teamId: tm.teamId,
         status: status || '대기',
@@ -99,28 +95,21 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
       },
     });
 
-    // 계약 정보가 하나라도 있으면 Contract 레코드 생성
     const hasContractInfo = quantity || unitPrice || contractAmount || specification;
     if (hasContractInfo) {
       const parsedQty = quantity ? parseFloat(String(quantity).replace(/,/g, '')) : null;
       const parsedUnit = unitPrice ? parseFloat(String(unitPrice).replace(/,/g, '')) : null;
       const parsedAmt = contractAmount
         ? parseFloat(String(contractAmount).replace(/,/g, ''))
-        : parsedQty && parsedUnit
-          ? Math.round(parsedQty * parsedUnit)
-          : null;
+        : parsedQty && parsedUnit ? Math.round(parsedQty * parsedUnit) : null;
 
       await tx.contract.create({
         data: {
-          siteId: newSite.id,
-          status: '수주등록',
-          contractAmount: parsedAmt,
-          quantity: parsedQty,
-          unitPrice: parsedUnit,
+          siteId: newSite.id, status: '수주등록',
+          contractAmount: parsedAmt, quantity: parsedQty, unitPrice: parsedUnit,
           specification: specification || null,
           contractDate: contractDate ? new Date(contractDate) : null,
-          isAdditional: false,
-          createdById: session.user.id,
+          isAdditional: false, createdById: session.user.id,
         },
       });
     }

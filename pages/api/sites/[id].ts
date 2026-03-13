@@ -1,14 +1,8 @@
-/*
- * AIRX (individual business) proprietary source.
- * Owner: AIRX / choe DONGHYUN. All rights reserved.
- */
-
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { notifySiteMembers } from '@/lib/notification-helper';
 import { verifySiteAccess, hasMinRole } from '@/lib/team-helper';
-import { canUpdateAssignedSite, isInternalRole } from '@/lib/lookup9-role';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -24,9 +18,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     switch (req.method) {
       case 'GET':
         return await handleGET(id, res);
-      case 'PUT':
-        if (!canUpdateAssignedSite(tm.role)) return res.status(403).json({ error: { message: 'Forbidden' } });
+      case 'PUT': {
+        // PARTNER(협력사): 배정된 현장은 전체 수정 가능
+        const canEdit = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'USER', 'MEMBER', 'PARTNER'].includes(tm.role);
+        if (!canEdit) return res.status(403).json({ error: { message: 'Forbidden' } });
         return await handlePUT(id, req, res, session, tm);
+      }
       case 'DELETE':
         if (!hasMinRole(tm.role, 'ADMIN_HR')) return res.status(403).json({ error: { message: 'Forbidden' } });
         return await handleDELETE(id, res);
@@ -45,25 +42,71 @@ const handleGET = async (id: string, res: NextApiResponse) => {
     include: {
       client: true,
       createdBy: { select: { name: true, position: true, department: true } },
-      assignments: { include: { user: { select: { id: true, name: true, position: true, department: true, company: true } } } },
-      sales: { include: { createdBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
-      contracts: { include: { createdBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
-      paintSpecs: { include: { confirmedBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
-      shipments: { include: { createdBy: { select: { name: true, position: true } } }, orderBy: [{ sequence: 'desc' }, { createdAt: 'desc' }] },
-      requests: { include: { createdBy: { select: { name: true, position: true } }, handledBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
-      statusHistory: { include: { changedBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' }, take: 20 },
-      issues: { include: { createdBy: { select: { name: true, position: true } }, handledBy: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
-      changeLogs: { include: { requester: { select: { name: true, position: true } }, approver: { select: { name: true, position: true } } }, orderBy: { createdAt: 'desc' } },
-      schedules: { include: { assignee: { select: { name: true, position: true } } }, orderBy: { startDate: 'asc' } },
+      assignments: {
+        include: {
+          user: { select: { id: true, name: true, position: true, department: true, company: true } },
+        },
+      },
+      sales: {
+        include: { createdBy: { select: { name: true, position: true } } },
+        orderBy: { createdAt: 'desc' },
+      },
+      contracts: {
+        include: { createdBy: { select: { name: true, position: true } } },
+        orderBy: { createdAt: 'asc' },
+      },
+      paintSpecs: {
+        include: { confirmedBy: { select: { name: true, position: true } } },
+        orderBy: { createdAt: 'desc' },
+      },
+      shipments: {
+        include: { createdBy: { select: { name: true, position: true } } },
+        orderBy: [{ sequence: 'asc' }, { createdAt: 'asc' }],
+      },
+      requests: {
+        include: {
+          createdBy: { select: { name: true, position: true } },
+          handledBy: { select: { name: true, position: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      },
+      issues: {
+        include: {
+          createdBy: { select: { name: true, position: true } },
+          handledBy: { select: { name: true, position: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      },
+      changeLogs: {
+        include: {
+          requester: { select: { name: true, position: true } },
+          approver: { select: { name: true, position: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      },
+      schedules: {
+        include: { assignee: { select: { name: true, position: true } } },
+        orderBy: { startDate: 'asc' },
+      },
+      statusHistory: {
+        include: { changedBy: { select: { name: true, position: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+      },
       comments: {
         where: { parentId: null },
         include: {
           author: { select: { name: true, position: true, department: true } },
-          replies: { include: { author: { select: { name: true, position: true } } }, orderBy: { createdAt: 'asc' } },
+          replies: {
+            include: { author: { select: { name: true, position: true } } },
+            orderBy: { createdAt: 'asc' },
+          },
         },
         orderBy: { createdAt: 'desc' },
       },
-      _count: { select: { documents: true, requests: true, issues: true, schedules: true } },
+      _count: {
+        select: { documents: true, requests: true, issues: true, schedules: true },
+      },
     },
   });
 
@@ -73,13 +116,6 @@ const handleGET = async (id: string, res: NextApiResponse) => {
 
 const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, session: any, tm: any) => {
   const { name, address, clientId, status, description, statusReason } = req.body;
-
-  if (!isInternalRole(tm.role) && (name !== undefined || address !== undefined || clientId !== undefined || description !== undefined || status !== undefined)) {
-    // PARTNER는 제한적으로만 상태/메모를 업데이트하게 유지
-    if (name !== undefined || address !== undefined || clientId !== undefined) {
-      return res.status(403).json({ error: { message: '협력사는 기본 현장정보를 수정할 수 없습니다.' } });
-    }
-  }
 
   if (status) {
     const currentSite = await prisma.site.findUnique({ where: { id }, select: { status: true } });

@@ -209,7 +209,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await tx.teamMember.deleteMany({ where: { userId, teamId: actor.teamId } });
       try {
         await tx.session.deleteMany({ where: { userId } });
-      } catch {}
+      } catch (error) {
+        void error;
+      }
       const remainTeams = await tx.teamMember.count({ where: { userId } });
       if (remainTeams === 0) {
         await tx.user.update({

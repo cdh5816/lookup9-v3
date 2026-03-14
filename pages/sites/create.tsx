@@ -11,7 +11,7 @@ const STATUS_DOT: Record<string, string> = {
   진행중: 'bg-green-500', 부분완료: 'bg-green-300', 완료: 'bg-gray-400', 보류: 'bg-gray-600',
 };
 const siteStatuses = ['영업중', '대기', '계약완료', '진행중', '부분완료', '완료', '보류'];
-const siteTypes = ['납품하차도', '현장설치도'];
+const siteTypes = ['납품설치도', '납품하차도'];
 
 // 숫자 콤마 포맷
 function fmtNum(v: string) {
@@ -45,7 +45,7 @@ const CreateSite = () => {
     address: '',
     clientId: '',
     status: '영업중',
-    siteType: '현장설치도',
+    siteType: '납품설치도',
     // 계약 정보 (Contract 테이블)
     specification: '',
     quantity: '',      // m2

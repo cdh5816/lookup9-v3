@@ -106,6 +106,7 @@ model User {
   leaveRequests    LeaveRequest[] @relation("LeaveRequestUser")
   leaveManaged     LeaveRequest[] @relation("LeaveManager")
   leaveAdmined     LeaveRequest[] @relation("LeaveAdmin")
+  productionOrders ProductionOrder[] @relation("ProductionOrderCreator")
 }
 
 model Team {
@@ -272,6 +273,13 @@ model Site {
   clientId    String?
   teamId      String?
   status      String   @default("대기")
+  siteType    String   @default("납품설치도")  // 납품설치도 | 납품하차도
+  salesStage  String?                           // 영업단계: 설계지원중 | 영업진행중 | 수주영업중 | 영업완료
+  pipeRate    Int?     @default(0)              // 하지파이프 진행률
+  caulkingRate Int?    @default(0)             // 코킹 진행률
+  startDocsDone Boolean @default(false)
+  completionDocsDone Boolean @default(false)
+  completionDate DateTime?                      // 준공일 (하자보수 기산점)
   description String?  @db.Text
   createdById String
   createdAt   DateTime @default(now())
@@ -293,6 +301,7 @@ model Site {
   issues        Issue[]
   changeLogs    ChangeLog[]
   schedules     Schedule[]
+  productionOrders ProductionOrder[]
 
   @@index([teamId])
   @@index([clientId])
@@ -366,6 +375,25 @@ model Contract {
 
   site      Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
   createdBy User @relation("ContractCreator", fields: [createdById], references: [id])
+
+  @@index([siteId])
+}
+
+// 생산 발주 차수 테이블
+model ProductionOrder {
+  id          String   @id @default(uuid())
+  siteId      String
+  sequence    Int                    // 차수 (1, 2, 3...)
+  quantity    Decimal? @db.Decimal(12, 2)  // 발주물량
+  orderDate   DateTime?              // 발주일
+  supplyDate  DateTime?              // 공급일 (입고일)
+  notes       String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  site      Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User @relation("ProductionOrderCreator", fields: [createdById], references: [id])
 
   @@index([siteId])
 }

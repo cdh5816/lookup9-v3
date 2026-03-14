@@ -88,6 +88,9 @@ const handleGET = async (id: string, res: NextApiResponse) => {
         include: { assignee: { select: { name: true, position: true } } },
         orderBy: { startDate: 'asc' },
       },
+      productionOrders: {
+        orderBy: { sequence: 'asc' },
+      },
       statusHistory: {
         include: { changedBy: { select: { name: true, position: true } } },
         orderBy: { createdAt: 'desc' },
@@ -115,7 +118,8 @@ const handleGET = async (id: string, res: NextApiResponse) => {
 };
 
 const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, session: any, tm: any) => {
-  const { name, address, clientId, status, description, statusReason } = req.body;
+  const { name, address, clientId, status, description, statusReason,
+    siteType, salesStage, pipeRate, caulkingRate, startDocsDone, completionDocsDone, completionDate } = req.body;
 
   if (status) {
     const currentSite = await prisma.site.findUnique({ where: { id }, select: { status: true } });
@@ -141,6 +145,13 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
       ...(clientId !== undefined && { clientId: clientId || null }),
       ...(status !== undefined && { status }),
       ...(description !== undefined && { description }),
+      ...(siteType !== undefined && { siteType }),
+      ...(salesStage !== undefined && { salesStage }),
+      ...(pipeRate !== undefined && { pipeRate: Number(pipeRate) }),
+      ...(caulkingRate !== undefined && { caulkingRate: Number(caulkingRate) }),
+      ...(startDocsDone !== undefined && { startDocsDone }),
+      ...(completionDocsDone !== undefined && { completionDocsDone }),
+      ...(completionDate !== undefined && { completionDate: completionDate ? new Date(completionDate) : null }),
       updatedAt: new Date(),
     },
   });

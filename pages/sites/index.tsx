@@ -155,19 +155,31 @@ const SiteCard = ({ site }: { site: any }) => {
   const openRequestCount = (site.requests ?? []).filter((r: any) => !['완료', '반려'].includes(r.status)).length;
   const contract = site.contracts?.find((c: any) => !c.isAdditional);
   const hasAlert = issueCount > 0 || dday?.overdue;
+  const siteType = site.siteType || '납품설치도';
+  const isInstall = siteType === '납품설치도';
 
   return (
     <Link href={`/sites/${site.id}`}>
       <div className={`cursor-pointer rounded-xl border p-4 transition hover:bg-black/30
         ${hasAlert ? 'border-red-800/60 bg-red-950/10' : 'border-gray-800 bg-black/20 hover:border-gray-600'}`}>
 
-        {/* 상단: 현장명 + 상태 */}
+        {/* 상단: 현장명 + 납품유형 + 상태 */}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <span className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${STATUS_DOT[site.status] || 'bg-gray-400'}`} />
               <h3 className="truncate text-sm font-bold">{site.name}</h3>
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              {/* 납품유형 뱃지 */}
+              <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${isInstall ? 'bg-blue-900/40 text-blue-300' : 'bg-purple-900/40 text-purple-300'}`}>
+                {siteType}
+              </span>
               <span className="rounded-full border border-gray-700 px-2 py-0.5 text-[11px] text-gray-300">{site.status}</span>
+              {/* 영업단계 */}
+              {site.salesStage && (
+                <span className="rounded px-1.5 py-0.5 text-[10px] bg-orange-900/30 text-orange-300">{site.salesStage}</span>
+              )}
             </div>
             <p className="mt-0.5 truncate text-xs text-gray-500">
               {site.client?.name ? `${site.client.name} · ` : ''}{site.address || '주소 미입력'}
@@ -189,7 +201,7 @@ const SiteCard = ({ site }: { site: any }) => {
         {/* 진행률 바 */}
         <div className="mt-3">
           <div className="mb-1 flex items-center justify-between text-[11px] text-gray-400">
-            <span>진행률</span>
+            <span>공정율</span>
             <span className="font-medium">{progress}%</span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
@@ -199,7 +211,7 @@ const SiteCard = ({ site }: { site: any }) => {
           </div>
         </div>
 
-        {/* 계약 정보 요약 */}
+        {/* 계약 정보 */}
         {contract && (
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
             {contract.quantity && <span>계약 {Number(contract.quantity).toLocaleString()} m²</span>}
@@ -208,7 +220,7 @@ const SiteCard = ({ site }: { site: any }) => {
           </div>
         )}
 
-        {/* 알람 뱃지 영역 */}
+        {/* 알람 뱃지 */}
         {(issueCount > 0 || openRequestCount > 0 || dday?.overdue) && (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             {issueCount > 0 && (

@@ -90,6 +90,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
         clientId: clientId || null,
         teamId: tm.teamId,
         status: status || '대기',
+        siteType: siteType || '납품설치도',
         description: descLines.join('\n') || null,
         createdById: session.user.id,
       },

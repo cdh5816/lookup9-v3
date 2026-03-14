@@ -293,6 +293,14 @@ export const getAuthOptions = (
     secret: env.nextAuth.secret,
     callbacks: {
       async signIn({ user, account, profile }) {
+        // credentials 로그인은 authorize()에서 이미 검증됨 - 바로 통과
+        if (account?.provider === 'credentials') {
+          if (isCredentialsProviderCallbackWithDbSession) {
+            await createDatabaseSession(user, req, res);
+          }
+          return true;
+        }
+
         if (!user || !user.email || !account) {
           return false;
         }
@@ -304,13 +312,9 @@ export const getAuthOptions = (
         const existingUser = await getUser({ email: user.email });
         const isIdpLogin = account.provider === 'boxyhq-idp';
 
-        // Handle credentials provider
+        // Handle credentials provider (database session)
         if (isCredentialsProviderCallbackWithDbSession && !isIdpLogin) {
           await createDatabaseSession(user, req, res);
-        }
-
-        if (account?.provider === 'credentials') {
-          return true;
         }
 
         // Login via email (Magic Link)

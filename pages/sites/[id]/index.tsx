@@ -107,19 +107,28 @@ const SiteDetail = () => {
         {/* ── 상단 요약 카드 ── */}
         <div className="rounded-xl border border-gray-800 bg-black/20 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
+              {/* 현장명 + 납품유형 */}
               <div className="flex flex-wrap items-center gap-2">
                 <StatusDot status={site.status} />
-                <h2 className="text-lg font-bold leading-tight break-all">{site.name}</h2>
-                <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">{site.status}</span>
+                <h2 className="text-lg font-bold leading-tight break-words">{site.name}</h2>
               </div>
+              {/* 뱃지 행 */}
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${site.siteType === '납품하차도' ? 'bg-purple-900/40 text-purple-300' : 'bg-blue-900/40 text-blue-300'}`}>
+                  {site.siteType || '납품설치도'}
+                </span>
+                <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">{site.status}</span>
+                {site.salesStage && (
+                  <span className="rounded px-2 py-0.5 text-[11px] bg-orange-900/30 text-orange-300">{site.salesStage}</span>
+                )}
+              </div>
+              {/* 메타 */}
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
                 {site.client?.name && <span>{site.client.name}</span>}
                 {site.address && <span>{site.address}</span>}
                 {site.createdBy && (
-                  <span>
-                    등록: {site.createdBy.position ? `${site.createdBy.position} ` : ''}{site.createdBy.name}
-                  </span>
+                  <span>등록: {site.createdBy.position ? `${site.createdBy.position} ` : ''}{site.createdBy.name}</span>
                 )}
                 {site.updatedAt && <span>수정: {formatDate(site.updatedAt)}</span>}
               </div>
@@ -136,8 +145,11 @@ const SiteDetail = () => {
             </div>
           </div>
 
+          {/* 공정율 바 - 현장명 바로 아래 직관적으로 */}
+          <SiteProgressBar site={site} />
+
           {/* 요약 수치 */}
-          <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+          <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
             {[
               { label: '배정인원', value: site.assignments?.length || 0 },
               { label: '도장사양', value: site.paintSpecs?.length || 0 },
@@ -154,12 +166,12 @@ const SiteDetail = () => {
 
         {/* ── 탭 ── */}
         <div className="border-b border-gray-800">
-          <div className="flex gap-0.5 overflow-x-auto">
+          <div className="flex gap-0 overflow-x-auto">
             {tabs.map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`shrink-0 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+                className={`shrink-0 px-3 py-3 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === tab
                     ? 'border-blue-500 text-blue-400'
                     : 'border-transparent text-gray-500 hover:text-gray-300'
@@ -229,11 +241,45 @@ const SiteDetail = () => {
   );
 };
 
+// ========= 현장명 아래 공정율 바 =========
+const SiteProgressBar = ({ site }: { site: any }) => {
+  const contract = site.contracts?.find((c: any) => !c.isAdditional);
+  const contractQty = Number(contract?.quantity ?? 0);
+  // 판넬 생산율은 productionOrders 합계 / 계약물량 - 여기선 shipments로 근사치
+  const shippedQty = (site.shipments || []).reduce((s: number, r: any) => s + Number(r.quantity ?? 0), 0);
+  const panelRate = contractQty > 0 ? Math.min(100, Math.round((shippedQty / contractQty) * 100)) : 0;
+  const pipeRate = site.pipeRate ?? 0;
+  const caulkingRate = site.caulkingRate ?? 0;
+  const finalRate = Math.round(panelRate * 0.4 + pipeRate * 0.3 + caulkingRate * 0.3);
+  const color = finalRate >= 80 ? 'bg-green-500' : finalRate >= 40 ? 'bg-blue-600' : 'bg-yellow-500';
+  const textColor = finalRate >= 80 ? 'text-green-400' : finalRate >= 40 ? 'text-blue-400' : 'text-yellow-400';
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-gray-500">전체 공정율</span>
+        <span className={`text-sm font-bold ${textColor}`}>{finalRate}%</span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${finalRate}%` }} />
+      </div>
+    </div>
+  );
+};
+
 // ========= 개요 =========
 const siteStatuses = ['영업중', '대기', '계약완료', '진행중', '부분완료', '완료', '보류'];
+const siteTypes = ['납품설치도', '납품하차도'];
+const salesStages = ['설계지원중', '영업진행중', '수주영업중', '영업완료', ''];
 const OverviewPanel = ({ site, siteId, canManage, onMutate }: any) => {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ status: site.status, description: site.description || '', statusReason: '' });
+  const [form, setForm] = useState({
+    status: site.status,
+    siteType: site.siteType || '납품설치도',
+    salesStage: site.salesStage || '',
+    description: site.description || '',
+    statusReason: '',
+  });
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -251,30 +297,46 @@ const OverviewPanel = ({ site, siteId, canManage, onMutate }: any) => {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <InfoCard label="발주처" value={site.client?.name || '-'} />
         <div className="rounded-xl border border-gray-800 bg-black/10 p-4">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs text-gray-500">현장 상태</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-gray-500">현장 정보</p>
             {canManage && !editing && (
               <button className="btn btn-ghost btn-xs text-xs" onClick={() => setEditing(true)}>수정</button>
             )}
           </div>
           {editing ? (
             <div className="space-y-2">
-              <select
-                className="select select-bordered select-sm w-full"
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value })}
-              >
-                {siteStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <input
-                className="input input-bordered input-sm w-full"
-                placeholder="변경 사유 (선택)"
-                value={form.statusReason}
-                onChange={(e) => setForm({ ...form, statusReason: e.target.value })}
-              />
+              <div>
+                <label className="block text-[10px] text-gray-500 mb-1">현장 상태</label>
+                <select className="select select-bordered select-sm w-full" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                  {siteStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] text-gray-500 mb-1">납품유형</label>
+                <select className="select select-bordered select-sm w-full" value={form.siteType} onChange={(e) => setForm({ ...form, siteType: e.target.value })}>
+                  {siteTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] text-gray-500 mb-1">영업단계</label>
+                <select className="select select-bordered select-sm w-full" value={form.salesStage} onChange={(e) => setForm({ ...form, salesStage: e.target.value })}>
+                  <option value="">없음</option>
+                  {salesStages.filter(Boolean).map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] text-gray-500 mb-1">변경 사유</label>
+                <input className="input input-bordered input-sm w-full" placeholder="(선택)" value={form.statusReason} onChange={(e) => setForm({ ...form, statusReason: e.target.value })} />
+              </div>
             </div>
           ) : (
-            <p className="font-medium flex items-center"><StatusDot status={site.status} />{site.status}</p>
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium flex items-center gap-2">
+                <StatusDot status={site.status} />{site.status}
+              </p>
+              <p className="text-xs text-gray-400">납품유형: <span className="text-gray-200">{site.siteType || '납품설치도'}</span></p>
+              {site.salesStage && <p className="text-xs text-gray-400">영업단계: <span className="text-orange-300">{site.salesStage}</span></p>}
+            </div>
           )}
         </div>
       </div>
@@ -287,25 +349,14 @@ const OverviewPanel = ({ site, siteId, canManage, onMutate }: any) => {
           )}
         </div>
         {editing ? (
-          <textarea
-            className="textarea textarea-bordered w-full text-sm"
-            rows={3}
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-          />
+          <textarea className="textarea textarea-bordered w-full text-sm" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         ) : (
           <p className="text-sm whitespace-pre-wrap text-gray-300">{site.description || '-'}</p>
         )}
         {editing && (
           <div className="mt-2 flex justify-end gap-2">
             <button className="btn btn-ghost btn-xs" onClick={() => setEditing(false)}>취소</button>
-            <button
-              className={`btn btn-primary btn-xs ${saving ? 'loading' : ''}`}
-              disabled={saving}
-              onClick={handleSave}
-            >
-              저장
-            </button>
+            <button className={`btn btn-primary btn-xs ${saving ? 'loading' : ''}`} disabled={saving} onClick={handleSave}>저장</button>
           </div>
         )}
       </div>
@@ -723,7 +774,7 @@ const ShipmentPanel = ({ siteId, shipments, canManage, onMutate }: any) => {
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                 <span className="text-gray-500">출고일: <span className="text-gray-300">{s.shippedAt ? formatDate(s.shippedAt) : '-'}</span></span>
                 <span className="text-gray-500">수량: <span className="text-gray-300">{s.quantity ? formatNumber(s.quantity) : '-'}</span></span>
                 <span className="text-gray-500">차량: <span className="text-gray-300">{s.vehicleInfo || '-'}</span></span>

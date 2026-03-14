@@ -110,11 +110,11 @@ const Dashboard = () => {
             )}
           </div>
 
-          {/* 이슈 현장 목록 */}
+          {/* 최근 진행 현장 */}
           <div className="rounded-xl border border-gray-800 bg-black/20 p-4">
             <div className="mb-3 flex items-center gap-2">
               <ExclamationTriangleIcon className="h-4 w-4 text-red-400" />
-              <h3 className="text-sm font-semibold">이슈 현장</h3>
+              <h3 className="text-sm font-semibold">진행중 현장</h3>
             </div>
             {!stats?.recentSites?.length ? (
               <p className="text-sm text-gray-500 py-4 text-center">진행중인 현장이 없습니다.</p>
@@ -127,7 +127,7 @@ const Dashboard = () => {
                       <div className="flex items-center gap-3 py-2.5 cursor-pointer hover:bg-gray-800/30 rounded px-1 -mx-1 transition">
                         <span className={`h-2 w-2 flex-shrink-0 rounded-full ${STATUS_DOT[s.status] || 'bg-gray-400'}`} />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-sm font-medium truncate">{s.name}</span>
                             {hasIssue && (
                               <span className="flex-shrink-0 text-[10px] rounded-full bg-red-900/40 px-1.5 text-red-300">
@@ -148,6 +148,36 @@ const Dashboard = () => {
               <p className="mt-3 text-center text-xs text-gray-500 hover:text-gray-300 cursor-pointer">전체 현장 보기 →</p>
             </Link>
           </div>
+
+          {/* 하자보수 만료 임박 */}
+          {(stats?.warrantyExpiring?.length ?? 0) > 0 && (
+            <div className="rounded-xl border border-orange-800/50 bg-orange-950/20 p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <ClipboardDocumentListIcon className="h-4 w-4 text-orange-400" />
+                <h3 className="text-sm font-semibold text-orange-300">하자보수 만료 임박</h3>
+                <span className="badge badge-xs badge-warning">{stats.warrantyExpiring.length}</span>
+              </div>
+              <div className="divide-y divide-orange-900/30">
+                {stats.warrantyExpiring.map((s: any) => (
+                  <Link key={s.id} href={`/sites/${s.id}`}>
+                    <div className="flex items-center justify-between py-2.5 cursor-pointer hover:bg-orange-900/10 rounded px-1 -mx-1 transition">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{s.name}</p>
+                        <p className="text-[11px] text-gray-500">
+                          만료: {new Date(s.expiryDate).toLocaleDateString('ko-KR')}
+                        </p>
+                      </div>
+                      <span className={`flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded-full ml-2 ${
+                        s.daysLeft <= 30 ? 'bg-red-900/50 text-red-300' : 'bg-orange-900/50 text-orange-300'
+                      }`}>
+                        D-{s.daysLeft}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

@@ -32,16 +32,21 @@ const formatDate = (value: any) => {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('ko-KR');
 };
 
-const allTabs = ['overview', 'sales', 'contract', 'production', 'painting', 'shipping', 'documents', 'requests', 'issues', 'changes', 'schedule', 'history', 'comments'];
+const allTabs = ['overview', 'sales', 'contract', 'production', 'painting', 'shipping', 'settlement', 'documents', 'requests', 'issues', 'changes', 'schedule', 'history', 'comments'];
 const tabLabels: Record<string, string> = {
   overview: '개요', sales: '영업', contract: '수주', production: '생산',
-  painting: '도장', shipping: '출하', documents: '서류',
+  painting: '도장', shipping: '출하', settlement: '실정/정산', documents: '서류',
   requests: '요청', issues: '이슈', changes: '변경', schedule: '일정', history: '이력', comments: '댓글',
 };
 
+// 납품하차도는 영업/수주/도장 탭 불필요
+const hiddenTabsBySiteType: Record<string, string[]> = {
+  '납품하차도': ['sales', 'contract', 'painting'],
+};
+
 const hiddenTabsByRole: Record<string, string[]> = {
-  PARTNER: ['sales', 'contract'],
-  GUEST: ['sales', 'contract', 'production', 'painting', 'shipping', 'requests', 'issues', 'changes', 'schedule', 'history'],
+  PARTNER: ['sales', 'contract', 'settlement'],
+  GUEST: ['sales', 'contract', 'production', 'painting', 'shipping', 'settlement', 'requests', 'issues', 'changes', 'schedule', 'history'],
 };
 
 // 부서별 탭 숨김 (USER 등 일반 직원)
@@ -67,8 +72,9 @@ const SiteDetail = () => {
   const permissions = profileData?.data?.permissions || {};
 
   const hiddenByRole = hiddenTabsByRole[userRole] || [];
+  const hiddenBySiteType = site ? (hiddenTabsBySiteType[site.siteType || '납품설치도'] || []) : [];
   const hiddenByDept = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER'].includes(userRole) ? [] : getHiddenByDept(profileData?.data?.department || '', permissions);
-  const hiddenAll = new Set([...hiddenByRole, ...hiddenByDept]);
+  const hiddenAll = new Set([...hiddenByRole, ...hiddenBySiteType, ...hiddenByDept]);
   const tabs = allTabs.filter((tab) => !hiddenAll.has(tab));
 
   const canManage = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER'].includes(userRole);
@@ -191,6 +197,7 @@ const SiteDetail = () => {
           {activeTab === 'production' && <ProductionProgressPanel site={site} canManage={canManage} onMutate={mutate} />}
           {activeTab === 'painting' && <PaintPanel siteId={id as string} specs={site.paintSpecs || []} canManage={canManage} onMutate={mutate} />}
           {activeTab === 'shipping' && <ShipmentPanel siteId={id as string} shipments={site.shipments || []} canManage={canManage} onMutate={mutate} />}
+          {activeTab === 'settlement' && <SettlementPanel siteId={id as string} canManage={canManage} onMutate={mutate} />}
           {activeTab === 'documents' && <DocumentPanel siteId={id as string} canManage={canManage} />}
           {activeTab === 'requests' && <RequestPanel siteId={id as string} requests={site.requests || []} canManage={canManage} onMutate={mutate} />}
           {activeTab === 'issues' && <IssuePanel siteId={id as string} issues={site.issues || []} canManage={canManage} onMutate={mutate} />}
@@ -783,6 +790,127 @@ const ShipmentPanel = ({ siteId, shipments, canManage, onMutate }: any) => {
                 <span className="text-gray-500">인수자: <span className="text-gray-300">{s.receivedBy || '-'}</span></span>
               </div>
               {s.notes && <p className="text-xs text-gray-400 mt-2">{s.notes}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ========= 실정/정산 =========
+const settlementTypes = ['고소작업차', '물량증가', '설계변경', '추가공사', '기타'];
+const settlementStatuses = ['검토중', '공문발송', '수요처승인', '정산완료', '반려'];
+
+const SettlementPanel = ({ siteId, canManage, onMutate }: any) => {
+  const { data, mutate } = useSWR(`/api/sites/${siteId}/changes`, fetcher);
+  const settlements = (data?.data || []).filter((c: any) => c.type === '실정보고' || settlementTypes.includes(c.type));
+
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ type: '물량증가', beforeValue: '', afterValue: '', reason: '', impact: '' });
+  const [sub, setSub] = useState(false);
+
+  const handleSubmit = async () => {
+    setSub(true);
+    await fetch(`/api/sites/${siteId}/changes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form }),
+    });
+    setForm({ type: '물량증가', beforeValue: '', afterValue: '', reason: '', impact: '' });
+    setShowForm(false); setSub(false); mutate(); onMutate();
+  };
+
+  const handleStatus = async (changeId: string, status: string) => {
+    await fetch(`/api/sites/${siteId}/changes`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ changeId, status }),
+    });
+    mutate(); onMutate();
+  };
+
+  return (
+    <div className="rounded-xl border border-gray-800 p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h3 className="font-semibold">실정보고 / 정산 이력</h3>
+          <p className="text-xs text-gray-500 mt-0.5">고소작업차·물량증가 등 수요처 공문 발송 및 정산 관리</p>
+        </div>
+        {canManage && (
+          <button className="btn btn-primary btn-xs" onClick={() => setShowForm(!showForm)}>
+            {showForm ? '취소' : <><PlusIcon className="w-3.5 h-3.5 mr-1" />실정보고 등록</>}
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="mb-4 rounded-lg border border-gray-700 bg-black/20 p-4 space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">유형</label>
+              <select className="select select-bordered select-sm w-full" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                {settlementTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">기존 내용</label>
+              <input className="input input-bordered input-sm w-full" placeholder="변경 전 상황" value={form.beforeValue} onChange={(e) => setForm({ ...form, beforeValue: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">변경/추가 내용</label>
+              <input className="input input-bordered input-sm w-full" placeholder="변경 후 내용" value={form.afterValue} onChange={(e) => setForm({ ...form, afterValue: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">정산 금액 (원)</label>
+              <input className="input input-bordered input-sm w-full" placeholder="예: 1,500,000" value={form.impact} onChange={(e) => setForm({ ...form, impact: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">사유 / 상세</label>
+            <textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+          </div>
+          <div className="flex justify-end">
+            <button className={`btn btn-primary btn-sm ${sub ? 'loading' : ''}`} disabled={sub} onClick={handleSubmit}>저장</button>
+          </div>
+        </div>
+      )}
+
+      {settlements.length === 0 ? (
+        <p className="text-sm text-gray-500">등록된 실정보고/정산 이력이 없습니다.</p>
+      ) : (
+        <div className="space-y-2">
+          {settlements.map((c: any) => (
+            <div key={c.id} className="rounded-lg border border-gray-800 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="badge badge-sm badge-warning">{c.type}</span>
+                  <span className={`badge badge-sm ${
+                    c.status === '정산완료' ? 'badge-success' :
+                    c.status === '반려' ? 'badge-error' :
+                    c.status === '수요처승인' ? 'badge-info' :
+                    c.status === '공문발송' ? 'badge-warning' : 'badge-ghost'
+                  }`}>{c.status || '검토중'}</span>
+                </div>
+                {canManage && (
+                  <select
+                    className="select select-bordered select-xs"
+                    value={c.status || '검토중'}
+                    onChange={(e) => handleStatus(c.id, e.target.value)}
+                  >
+                    {settlementStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                )}
+              </div>
+              <div className="space-y-1 text-xs">
+                {c.beforeValue && <p className="text-gray-400">기존: <span className="text-gray-300">{c.beforeValue}</span></p>}
+                {c.afterValue && <p className="text-gray-300 font-medium">변경: {c.afterValue}</p>}
+                {c.impact && <p className="text-green-400">정산금액: {c.impact}</p>}
+                {c.reason && <p className="text-gray-500 mt-1 whitespace-pre-wrap">{c.reason}</p>}
+              </div>
+              <p className="text-xs text-gray-600 mt-2">
+                {c.requester?.position ? `${c.requester.position} ` : ''}{c.requester?.name} · {formatDate(c.createdAt)}
+              </p>
             </div>
           ))}
         </div>

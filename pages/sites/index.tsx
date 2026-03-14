@@ -46,6 +46,7 @@ const SitesList = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [issueFilter, setIssueFilter] = useState(false);
   const { data: profileData } = useSWR('/api/my/profile', fetcher);
   const profile = profileData?.data;
@@ -71,11 +72,12 @@ const SitesList = () => {
     urgent: sites.filter((s) => { const dd = getDday(getDeadline(s)); return dd?.urgent || dd?.overdue; }).length,
   }), [sites]);
 
-  const displayed = useMemo(() =>
-    issueFilter
-      ? sites.filter((s) => (s._count?.issues ?? s.issues?.length ?? 0) > 0)
-      : sites,
-    [sites, issueFilter]);
+  const displayed = useMemo(() => {
+    let filtered = sites;
+    if (issueFilter) filtered = filtered.filter((s) => (s._count?.issues ?? s.issues?.length ?? 0) > 0);
+    if (typeFilter !== 'all') filtered = filtered.filter((s) => (s.siteType || '납품설치도') === typeFilter);
+    return filtered;
+  }, [sites, issueFilter, typeFilter]);
 
   return (
     <>
@@ -109,23 +111,29 @@ const SitesList = () => {
         </div>
 
         {/* 검색/필터 */}
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <div className="relative flex-1">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <div className="relative flex-1 min-w-0">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input type="text" className="input input-bordered w-full pl-10 text-sm"
               placeholder="현장명 또는 주소 검색"
               value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="select select-bordered w-full text-sm sm:w-40"
+          <select className="select select-bordered text-sm w-full sm:w-36"
             value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="all">전체 상태</option>
             {['영업중','계약완료','진행중','부분완료','완료','보류'].map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+          <select className="select select-bordered text-sm w-full sm:w-36"
+            value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+            <option value="all">전체 유형</option>
+            <option value="납품설치도">납품설치도</option>
+            <option value="납품하차도">납품하차도</option>
+          </select>
           {issueFilter && (
             <button className="btn btn-sm btn-error btn-outline gap-1.5" onClick={() => setIssueFilter(false)}>
-              <ExclamationTriangleIcon className="h-4 w-4" />이슈 현장만 보는 중 · 해제
+              <ExclamationTriangleIcon className="h-4 w-4" />이슈 현장만 · 해제
             </button>
           )}
         </div>

@@ -75,15 +75,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       include: { author: { select: { name: true, position: true } } },
     });
 
+    // 하자보수 만료 임박 (90일 이내)
+    const ninetyDaysLater = new Date();
+    ninetyDaysLater.setDate(ninetyDaysLater.getDate() + 90);
+    const warrantySites = await prisma.site.findMany({
+      where: {
+        ...baseWhere,
+        completionDate: { not: null },
+      },
+      select: { id: true, name: true, completionDate: true, siteType: true },
+    });
+    // JS에서 만료일(+2년) 계산 후 필터
+    const warrantyExpiring = warrantySites
+      .map((s) => {
+        const exp = new Date(s.completionDate!);
+        exp.setFullYear(exp.getFullYear() + 2);
+        return { ...s, expiryDate: exp, daysLeft: Math.ceil((exp.getTime() - Date.now()) / 86400000) };
+      })
+      .filter((s) => s.daysLeft >= 0 && s.daysLeft <= 90)
+      .sort((a, b) => a.daysLeft - b.daysLeft);
+
     return res.status(200).json({
       data: {
         activeSites,
-        issueSites,        // ← 이슈현장 (기존 미처리현장 대체)
+        issueSites,
         openRequests,
         unreadNotifications,
         unreadMessages,
         recentSites,
         notices,
+        warrantyExpiring,
       },
     });
   } catch (error: any) {

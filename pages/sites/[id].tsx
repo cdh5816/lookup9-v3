@@ -1,77 +1,98 @@
 /* eslint-disable i18next/no-literal-string */
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 import {
   PlusIcon, TrashIcon, MagnifyingGlassIcon,
-  ExclamationTriangleIcon, ChatBubbleLeftRightIcon,
-  ClockIcon, ArrowPathIcon, CheckCircleIcon,
-  ChevronDownIcon, ChevronUpIcon, XMarkIcon,
+  ExclamationTriangleIcon, PencilIcon, CheckIcon,
+  XMarkIcon, DocumentArrowUpIcon,
 } from '@heroicons/react/24/outline';
 
 // ── 상수 ──────────────────────────────────────────────
-const STATUS_DOT: Record<string, string> = {
-  영업중: 'bg-red-500', 대기: 'bg-red-400', 계약완료: 'bg-yellow-400',
-  진행중: 'bg-green-500', 부분완료: 'bg-green-300', 완료: 'bg-gray-400', 보류: 'bg-gray-600',
+const STATUS_LABEL: Record<string, string> = {
+  SALES_PIPELINE: '영업중',
+  SALES_CONFIRMED: '수주확정',
+  CONTRACT_ACTIVE: '진행중',
+  COMPLETED: '준공완료',
+  WARRANTY: '하자기간',
+  FAILED: '영업실패',
 };
-const SITE_STATUSES = ['영업중', '대기', '계약완료', '진행중', '부분완료', '완료', '보류'];
+const STATUS_COLOR: Record<string, string> = {
+  SALES_PIPELINE: 'bg-orange-500',
+  SALES_CONFIRMED: 'bg-yellow-400',
+  CONTRACT_ACTIVE: 'bg-green-500',
+  COMPLETED: 'bg-blue-500',
+  WARRANTY: 'bg-purple-500',
+  FAILED: 'bg-gray-500',
+};
+const STATUS_BADGE: Record<string, string> = {
+  SALES_PIPELINE: 'bg-orange-900/40 text-orange-300 border-orange-800/50',
+  SALES_CONFIRMED: 'bg-yellow-900/40 text-yellow-300 border-yellow-800/50',
+  CONTRACT_ACTIVE: 'bg-green-900/40 text-green-300 border-green-800/50',
+  COMPLETED: 'bg-blue-900/40 text-blue-300 border-blue-800/50',
+  WARRANTY: 'bg-purple-900/40 text-purple-300 border-purple-800/50',
+  FAILED: 'bg-gray-800/60 text-gray-400 border-gray-700/50',
+};
 const ISSUE_TYPES = ['누수', '손상', '색상 오류', '치수 불일치', '반입 문제', '재작업', '민원', '기타'];
 const ISSUE_STATUSES = ['발생', '조사중', '조치중', '완료', '보류'];
-const SHIP_STATUSES = ['출하예정', '상차완료', '출발', '현장도착', '인수완료', '반송', '취소'];
 
 // ── 유틸 ──────────────────────────────────────────────
 const fmt = (v: any) => (v === null || v === undefined || v === '') ? '-' : String(v);
 const fmtNum = (v: any) => {
-  if (!v) return '-';
+  if (!v && v !== 0) return '-';
   const n = Number(v);
   return Number.isFinite(n) ? n.toLocaleString('ko-KR') : String(v);
 };
 const fmtDate = (v: any) => {
   if (!v) return '-';
-  try { return new Date(v).toLocaleDateString('ko-KR'); } catch { return String(v); }
+  try { return new Date(v).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }); } catch { return String(v); }
 };
-const fmtDatetime = (v: any) => {
+const fmtMoney = (v: any) => {
   if (!v) return '-';
-  try { return new Date(v).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return String(v); }
+  const n = Number(v);
+  if (n >= 100000000) return `${(n / 100000000).toFixed(1)}억원`;
+  return `${Math.round(n / 10000).toLocaleString()}만원`;
 };
 const userName = (u: any) => !u ? '-' : u.position ? `${u.position} ${u.name}` : u.name;
 
+const getDday = (dateVal: any) => {
+  if (!dateVal) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(dateVal); d.setHours(0, 0, 0, 0);
+  const diff = Math.ceil((d.getTime() - today.getTime()) / 86400000);
+  return { diff, overdue: diff < 0, urgent: diff >= 0 && diff <= 14 };
+};
+
 const calcProgress = (site: any) => {
-  const c = site.contracts?.find((x: any) => !x.isAdditional);
-  const totalQty = Number(c?.quantity ?? 0);
-  if (totalQty > 0) {
-    const shipped = (site.shipments ?? []).reduce((s: number, r: any) => s + Number(r.quantity ?? 0), 0);
-    return { pct: Math.min(100, Math.round((shipped / totalQty) * 100)), shipped, totalQty };
-  }
-  const map: Record<string, number> = { 영업중: 12, 대기: 8, 계약완료: 35, 진행중: 65, 부분완료: 85, 완료: 100, 보류: 0 };
-  return { pct: map[site.status] ?? 0, shipped: null, totalQty: null };
+  const contractQty = Number(site.contractQuantity ?? 0);
+  if (contractQty <= 0) return { pct: 0, delivered: 0, contractQty: 0 };
+  const orders = site.productionOrders ?? [];
+  const delivered = orders.filter((o: any) => o.supplyDate).reduce((s: number, o: any) => s + Number(o.quantity ?? 0), 0);
+  return { pct: Math.min(100, Math.round((delivered / contractQty) * 100)), delivered, contractQty };
 };
 
 // ── 탭 정의 ──────────────────────────────────────────
-type TabKey = 'overview' | 'contract' | 'production' | 'activity' | 'requests' | 'documents' | 'comments';
-
+type TabKey = 'overview' | 'sales' | 'production' | 'settlement' | 'documents' | 'defect' | 'comments';
 interface TabDef { key: TabKey; label: string; badge?: (site: any) => number }
+
 const ALL_TABS: TabDef[] = [
   { key: 'overview', label: '기본정보' },
-  { key: 'contract', label: '계약' },
-  { key: 'production', label: '생산·출하' },
-  { key: 'activity', label: '활동', badge: (s) => (s.issues?.filter((i: any) => i.status !== '완료').length ?? 0) },
-  { key: 'requests', label: '요청', badge: (s) => (s.requests?.filter((r: any) => !['완료','반려'].includes(r.status)).length ?? 0) },
+  { key: 'sales', label: '영업이력' },
+  { key: 'production', label: '생산' },
+  { key: 'settlement', label: '정산', badge: (s) => s.issues?.filter((i: any) => i.status !== '완료').length ?? 0 },
   { key: 'documents', label: '서류' },
-  { key: 'comments', label: '댓글' },
+  { key: 'defect', label: '하자' },
+  { key: 'comments', label: '코멘트' },
 ];
 
-// PARTNER: 영업/계약 숨김 여부만 다름
 const getVisibleTabs = (role: string): TabKey[] => {
-  if (role === 'GUEST' || role === 'VIEWER')
-    return ['overview', 'production', 'activity', 'requests', 'documents', 'comments'];
-  if (role === 'PARTNER')
-    return ['overview', 'production', 'activity', 'requests', 'documents', 'comments'];
-  return ['overview', 'contract', 'production', 'activity', 'requests', 'documents', 'comments'];
+  if (['PARTNER', 'GUEST', 'VIEWER'].includes(role))
+    return ['overview', 'production', 'documents', 'comments'];
+  return ['overview', 'sales', 'production', 'settlement', 'documents', 'defect', 'comments'];
 };
 
 // ── 메인 ──────────────────────────────────────────────
@@ -86,14 +107,13 @@ const SiteDetail = () => {
   const site = data?.data;
   const profile = profileData?.data;
   const role = profile?.role || profile?.teamMembers?.[0]?.role || 'USER';
-
-  // PARTNER도 배정된 현장은 전체 수정 가능
   const canManage = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'USER', 'MEMBER', 'PARTNER'].includes(role);
   const canDelete = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN'].includes(role);
   const isExternal = ['PARTNER', 'GUEST', 'VIEWER'].includes(role);
 
-  const visibleTabs = getVisibleTabs(role);
-  const tabs = ALL_TABS.filter((t) => visibleTabs.includes(t.key));
+  const visibleTabKeys = getVisibleTabs(role);
+  const tabs = ALL_TABS.filter(t => visibleTabKeys.includes(t.key));
+  const activeKey = tabs.find(t => t.key === activeTab) ? activeTab : tabs[0]?.key ?? 'overview';
 
   const handleDeleteSite = async () => {
     if (!confirm('이 현장을 삭제하시겠습니까? 모든 데이터가 삭제됩니다.')) return;
@@ -108,39 +128,38 @@ const SiteDetail = () => {
   );
 
   const progress = calcProgress(site);
+  const dday = getDday(site.deliveryDeadline);
   const openIssues = site.issues?.filter((i: any) => i.status !== '완료') ?? [];
-  const openRequests = site.requests?.filter((r: any) => !['완료', '반려'].includes(r.status)) ?? [];
-  const hasAlert = openIssues.length > 0;
+  const isSaleStage = ['SALES_PIPELINE', 'SALES_CONFIRMED', 'FAILED'].includes(site.status);
 
   return (
     <>
       <Head><title>{site.name} | LOOKUP9</title></Head>
-      <div className="space-y-3">
+      <div className="space-y-0">
 
-        {/* ── 상단 헤더 카드 ── */}
-        <div className={`rounded-xl border p-4 ${hasAlert ? 'border-red-800/60 bg-red-950/10' : 'border-gray-800 bg-black/20'}`}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${STATUS_DOT[site.status] || 'bg-gray-400'}`} />
-                <h2 className="text-xl font-bold">{site.name}</h2>
-                <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-300">{site.status}</span>
-                {hasAlert && (
-                  <span className="flex items-center gap-1 rounded-full bg-red-900/50 px-2 py-0.5 text-xs font-semibold text-red-300">
-                    <ExclamationTriangleIcon className="h-3.5 w-3.5" />
-                    이슈 {openIssues.length}건
-                  </span>
-                )}
-                {openRequests.length > 0 && (
-                  <span className="rounded-full bg-yellow-900/30 px-2 py-0.5 text-xs text-yellow-300">
-                    미처리 요청 {openRequests.length}건
+        {/* ── 헤더 카드 ── */}
+        <div className={`rounded-xl border p-4 mb-3 ${openIssues.length > 0 ? 'border-red-800/50 bg-red-950/10' : 'border-gray-800 bg-gray-900/40'}`}>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <span className={`h-2 w-2 rounded-full flex-shrink-0 ${STATUS_COLOR[site.status] || 'bg-gray-400'}`} />
+                <h2 className="text-lg font-bold tracking-tight">{site.name}</h2>
+                <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${STATUS_BADGE[site.status] || 'bg-gray-800 text-gray-400 border-gray-700'}`}>
+                  {STATUS_LABEL[site.status] ?? site.status}
+                </span>
+                <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
+                  {site.siteType || '납품설치도'}
+                </span>
+                {openIssues.length > 0 && (
+                  <span className="flex items-center gap-1 rounded-full bg-red-900/50 border border-red-800/40 px-2 py-0.5 text-xs font-semibold text-red-300">
+                    <ExclamationTriangleIcon className="h-3 w-3" />이슈 {openIssues.length}건
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-sm text-gray-400">
-                {site.client?.name && <span className="mr-2">{site.client.name}</span>}
-                {site.address && <span className="mr-2">{site.address}</span>}
-                <span className="text-gray-500">{userName(site.createdBy)}</span>
+              <p className="text-sm text-gray-400 flex flex-wrap gap-2">
+                {site.client?.name && <span className="font-medium text-gray-300">{site.client.name}</span>}
+                {site.address && <span>{site.address}</span>}
+                {site.contractNo && <span className="text-gray-500 font-mono text-xs">{site.contractNo}</span>}
               </p>
             </div>
             {canDelete && (
@@ -148,41 +167,54 @@ const SiteDetail = () => {
             )}
           </div>
 
-          {/* 진행률 */}
-          <div className="mt-3">
-            <div className="mb-1 flex items-center justify-between text-xs text-gray-400">
-              <span>전체 진행률</span>
-              <span className="font-semibold">
-                {progress.pct}%
-                {progress.shipped !== null && progress.totalQty !== null && (
-                  <span className="ml-2 text-gray-500">
-                    ({fmtNum(progress.shipped)} / {fmtNum(progress.totalQty)} m²)
-                  </span>
-                )}
-              </span>
+          {/* 핵심 지표 (계약 이후) */}
+          {!isSaleStage && site.contractQuantity && (
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              <MetricCard label="계약물량" value={`${fmtNum(site.contractQuantity)} m²`} />
+              <MetricCard label="계약금액" value={fmtMoney(site.contractAmount)} highlight />
+              <MetricCard
+                label="공정률"
+                value={`${progress.pct}%`}
+                sub={`${fmtNum(progress.delivered)} / ${fmtNum(progress.contractQty)} m²`}
+                progressPct={progress.pct}
+              />
+              <MetricCard
+                label="납품기한"
+                value={fmtDate(site.deliveryDeadline)}
+                sub={dday ? (dday.overdue ? `D+${Math.abs(dday.diff)}일 초과` : `D-${dday.diff}일`) : undefined}
+                subColor={dday?.overdue ? 'text-red-400' : dday?.urgent ? 'text-orange-400' : 'text-gray-500'}
+              />
+              <MetricCard
+                label="하자만료"
+                value={site.completionDate ? fmtDate(new Date(new Date(site.completionDate).setFullYear(new Date(site.completionDate).getFullYear() + (site.warrantyPeriod ?? 2)))) : '-'}
+                sub={site.completionDate ? `준공 ${fmtDate(site.completionDate)}` : undefined}
+              />
             </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
-              <div className={`h-full rounded-full transition-all
-                ${progress.pct >= 100 ? 'bg-gray-500' : progress.pct >= 60 ? 'bg-green-600' : 'bg-blue-500'}`}
-                style={{ width: `${progress.pct}%` }} />
+          )}
+
+          {/* 공정률 바 */}
+          {!isSaleStage && site.contractQuantity && (
+            <div className="mt-3">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
+                <div className={`h-full rounded-full transition-all duration-500 ${progress.pct >= 100 ? 'bg-blue-500' : 'bg-green-500'}`}
+                  style={{ width: `${progress.pct}%` }} />
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* ── 탭 바 ── */}
         <div className="border-b border-gray-800">
-          <div className="flex gap-0 overflow-x-auto">
+          <div className="flex overflow-x-auto">
             {tabs.map((tab) => {
               const badge = tab.badge ? tab.badge(site) : 0;
               return (
                 <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                  className={`relative flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors
-                    ${activeTab === tab.key ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
+                  className={`relative flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors
+                    ${activeKey === tab.key ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-200'}`}>
                   {tab.label}
                   {badge > 0 && (
-                    <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                      {badge}
-                    </span>
+                    <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{badge}</span>
                   )}
                 </button>
               );
@@ -191,39 +223,93 @@ const SiteDetail = () => {
         </div>
 
         {/* ── 탭 콘텐츠 ── */}
-        {activeTab === 'overview' && (
-          <OverviewPanel site={site} siteId={id as string} canManage={canManage} isExternal={isExternal} onMutate={mutate} />
-        )}
-        {activeTab === 'contract' && (
-          <ContractPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />
-        )}
-        {activeTab === 'production' && (
-          <ProductionPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />
-        )}
-        {activeTab === 'activity' && (
-          <ActivityPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />
-        )}
-        {activeTab === 'requests' && (
-          <RequestPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />
-        )}
-        {activeTab === 'documents' && (
-          <DocumentPanel siteId={id as string} canManage={canManage} />
-        )}
-        {activeTab === 'comments' && (
-          <CommentsPanel site={site} siteId={id as string} onMutate={mutate} />
-        )}
+        <div className="pt-3">
+          {activeKey === 'overview' && <OverviewPanel site={site} siteId={id as string} canManage={canManage} isExternal={isExternal} onMutate={mutate} role={role} />}
+          {activeKey === 'sales' && <SalesPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />}
+          {activeKey === 'production' && <ProductionPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />}
+          {activeKey === 'settlement' && <SettlementPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />}
+          {activeKey === 'documents' && <DocumentPanel siteId={id as string} canManage={canManage} />}
+          {activeKey === 'defect' && <DefectPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />}
+          {activeKey === 'comments' && <CommentsPanel site={site} siteId={id as string} onMutate={mutate} />}
+        </div>
       </div>
     </>
   );
 };
 
+// ── 메트릭 카드 ──────────────────────────────────────
+const MetricCard = ({ label, value, sub, subColor, highlight, progressPct }: {
+  label: string; value: string; sub?: string; subColor?: string; highlight?: boolean; progressPct?: number;
+}) => (
+  <div className="rounded-lg border border-gray-800 bg-black/30 px-3 py-2.5">
+    <p className="text-[10px] text-gray-500 mb-1">{label}</p>
+    <p className={`text-sm font-semibold ${highlight ? 'text-blue-300' : 'text-white'}`}>{value}</p>
+    {progressPct !== undefined && (
+      <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-gray-800">
+        <div className={`h-full rounded-full ${progressPct >= 100 ? 'bg-blue-500' : progressPct >= 60 ? 'bg-green-500' : 'bg-blue-500'}`}
+          style={{ width: `${progressPct}%` }} />
+      </div>
+    )}
+    {sub && <p className={`text-[10px] mt-0.5 ${subColor || 'text-gray-500'}`}>{sub}</p>}
+  </div>
+);
+
+// ── 섹션 카드 ────────────────────────────────────────
+const SectionCard = ({ title, children, accent, action }: {
+  title: string; children: React.ReactNode; accent?: string; action?: React.ReactNode;
+}) => (
+  <div className={`rounded-xl border bg-gray-900/40 p-4 space-y-3 ${accent === 'blue' ? 'border-blue-900/40' : 'border-gray-800'}`}>
+    <div className="flex items-center justify-between">
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{title}</p>
+      {action}
+    </div>
+    {children}
+  </div>
+);
+
+// ── 인포 로우 ────────────────────────────────────────
+const InfoRow = ({ label, value, mono, highlight }: {
+  label: string; value?: string | null; mono?: boolean; highlight?: boolean;
+}) => (
+  <div>
+    <p className="text-[11px] text-gray-500 mb-0.5">{label}</p>
+    <p className={`text-sm ${mono ? 'font-mono text-xs tracking-tight' : ''} ${highlight ? 'text-blue-300 font-semibold' : 'text-gray-200'}`}>
+      {value || '-'}
+    </p>
+  </div>
+);
+
 // ══════════════════════════════════════════════════════
 // 기본정보 탭
 // ══════════════════════════════════════════════════════
-const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate }: any) => {
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ status: site.status, description: site.description || '', statusReason: '' });
+const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: any) => {
+  const [editSection, setEditSection] = useState<string | null>(null);
+  const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
+
+  const startEdit = (section: string) => {
+    setEditSection(section);
+    setForm({
+      name: site.name || '',
+      address: site.address || '',
+      status: site.status || 'SALES_PIPELINE',
+      siteType: site.siteType || '납품설치도',
+      description: site.description || '',
+      inspectionAgency: site.inspectionAgency || '',
+      inspectionBody: site.inspectionBody || '',
+      acceptanceAgency: site.acceptanceAgency || '',
+      inspectionDone: site.inspectionDone || false,
+      inspectionDoneAt: site.inspectionDoneAt ? new Date(site.inspectionDoneAt).toISOString().split('T')[0] : '',
+      installerName: site.installerName || '',
+      installerContact: site.installerContact || '',
+      installerPhone: site.installerPhone || '',
+      startDocsDone: site.startDocsDone || false,
+      startDocsDate: site.startDocsDate ? new Date(site.startDocsDate).toISOString().split('T')[0] : '',
+      completionDocsDone: site.completionDocsDone || false,
+      completionDocsDate: site.completionDocsDate ? new Date(site.completionDocsDate).toISOString().split('T')[0] : '',
+      completionDate: site.completionDate ? new Date(site.completionDate).toISOString().split('T')[0] : '',
+    });
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -231,79 +317,287 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate }: any) =
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
     });
-    setSaving(false); setEditing(false); onMutate();
+    setSaving(false); setEditSection(null); onMutate();
   };
 
+  const SaveCancelBar = () => (
+    <div className="flex gap-2 justify-end border-t border-gray-800 pt-3 mt-1">
+      <button className="btn btn-ghost btn-sm" onClick={() => setEditSection(null)}>취소</button>
+      <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+        {saving ? <span className="loading loading-spinner loading-xs" /> : '저장'}
+      </button>
+    </div>
+  );
+
+  const isSaleStage = ['SALES_PIPELINE', 'SALES_CONFIRMED', 'FAILED'].includes(site.status);
+
   return (
-    <div className="space-y-4">
-      {/* 기본 정보 카드 */}
-      <div className="rounded-xl border border-gray-800 bg-black/20 p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">현장 정보</p>
-          {canManage && !editing && <button className="btn btn-ghost btn-xs" onClick={() => setEditing(true)}>수정</button>}
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <InfoRow label="수요처/발주처" value={site.client?.name} />
-          <InfoRow label="현장 주소" value={site.address} />
-          <InfoRow label="등록자" value={userName(site.createdBy)} />
-          <InfoRow label="등록일" value={fmtDate(site.createdAt)} />
-        </div>
-        {editing ? (
-          <div className="space-y-3 border-t border-gray-800 pt-3">
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">상태</label>
-              <div className="flex flex-wrap gap-2">
-                {SITE_STATUSES.map((s) => (
-                  <button key={s} type="button" onClick={() => setForm({ ...form, status: s })}
-                    className={`rounded-full border px-3 py-1 text-xs transition
-                      ${form.status === s ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-gray-700 text-gray-400'}`}>
-                    {s}
-                  </button>
-                ))}
+    <div className="space-y-3">
+
+      {/* 계약 정보 (분할납품요구서 파싱값) */}
+      {!isSaleStage && (site.contractNo || site.contractAmount || site.contractQuantity) && (
+        <SectionCard title="계약 정보 (분할납품요구서)" accent="blue">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <InfoRow label="납품요구번호" value={site.contractNo} mono />
+            <InfoRow label="계약번호" value={site.procurementNo} mono />
+            <InfoRow label="납품요구일" value={fmtDate(site.contractDate)} />
+            <InfoRow label="납품기한" value={fmtDate(site.deliveryDeadline)} />
+            <InfoRow label="계약물량" value={site.contractQuantity ? `${fmtNum(site.contractQuantity)} m²` : '-'} />
+            <InfoRow label="단가" value={site.unitPrice ? `${fmtNum(site.unitPrice)} 원/m²` : '-'} />
+            <InfoRow label="계약금액" value={fmtMoney(site.contractAmount)} highlight />
+            <InfoRow label="하자담보기간" value={`${site.warrantyPeriod ?? 2}년`} />
+            {site.specification && (
+              <div className="col-span-2 sm:col-span-4">
+                <InfoRow label="규격/사양" value={site.specification} />
+              </div>
+            )}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* 현장 기본 정보 */}
+      <SectionCard
+        title="현장 정보"
+        action={canManage && editSection !== 'basic' ? (
+          <button className="btn btn-ghost btn-xs gap-1" onClick={() => startEdit('basic')}>
+            <PencilIcon className="h-3 w-3" />수정
+          </button>
+        ) : null}
+      >
+        {editSection !== 'basic' ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <InfoRow label="현장 상태" value={STATUS_LABEL[site.status] ?? site.status} />
+            <InfoRow label="계약 유형" value={site.siteType || '납품설치도'} />
+            <InfoRow label="수요기관" value={site.client?.name} />
+            <InfoRow label="현장 주소" value={site.address} />
+            <InfoRow label="등록자" value={userName(site.createdBy)} />
+            <InfoRow label="등록일" value={fmtDate(site.createdAt)} />
+            {site.description && (
+              <div className="col-span-full">
+                <p className="text-[11px] text-gray-500 mb-0.5">메모</p>
+                <p className="text-sm text-gray-300 whitespace-pre-wrap">{site.description}</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1">현장명</label>
+                <input type="text" className="input input-bordered input-sm w-full"
+                  value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1">계약 유형</label>
+                <select className="select select-bordered select-sm w-full"
+                  value={form.siteType} onChange={e => setForm({ ...form, siteType: e.target.value })}>
+                  <option>납품설치도</option><option>납품하차도</option>
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] text-gray-400 mb-1">현장 주소</label>
+                <input type="text" className="input input-bordered input-sm w-full"
+                  value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1">상태</label>
+                <select className="select select-bordered select-sm w-full"
+                  value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+                  {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
               </div>
             </div>
-            {form.status !== site.status && (
-              <input type="text" className="input input-bordered input-sm w-full"
-                placeholder="상태 변경 사유 (선택)"
-                value={form.statusReason} onChange={(e) => setForm({ ...form, statusReason: e.target.value })} />
-            )}
             <div>
-              <label className="block text-xs text-gray-400 mb-1">현장 메모</label>
-              <textarea className="textarea textarea-bordered w-full text-sm" rows={3}
-                value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+              <label className="block text-[11px] text-gray-400 mb-1">메모</label>
+              <textarea className="textarea textarea-bordered w-full text-sm" rows={2}
+                value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
             </div>
-            <div className="flex gap-2 justify-end">
-              <button className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>취소</button>
-              <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
-                {saving ? <span className="loading loading-spinner loading-xs" /> : '저장'}
-              </button>
+            <SaveCancelBar />
+          </div>
+        )}
+      </SectionCard>
+
+      {/* 검사 · 검수 기관 */}
+      <SectionCard
+        title="검사 · 검수 기관"
+        action={canManage && editSection !== 'inspection' ? (
+          <button className="btn btn-ghost btn-xs gap-1" onClick={() => startEdit('inspection')}>
+            <PencilIcon className="h-3 w-3" />수정
+          </button>
+        ) : null}
+      >
+        {editSection !== 'inspection' ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <InfoRow label="검사기관 유형" value={site.inspectionAgency || '미정'} />
+            {site.inspectionAgency === '전문검사기관' && (
+              <InfoRow label="검사기관명" value={site.inspectionBody} />
+            )}
+            <InfoRow label="검수기관" value={site.acceptanceAgency} />
+            <div>
+              <p className="text-[11px] text-gray-500 mb-0.5">검사 완료</p>
+              <div className="flex items-center gap-1.5">
+                <span className={`badge badge-xs ${site.inspectionDone ? 'badge-success' : 'badge-ghost'}`}>
+                  {site.inspectionDone ? '완료' : '미완료'}
+                </span>
+                {site.inspectionDone && site.inspectionDoneAt && (
+                  <span className="text-xs text-gray-500">{fmtDate(site.inspectionDoneAt)}</span>
+                )}
+              </div>
             </div>
           </div>
         ) : (
-          site.description && (
-            <div className="border-t border-gray-800 pt-3">
-              <p className="text-xs text-gray-400 mb-1">메모</p>
-              <p className="text-sm whitespace-pre-wrap text-gray-300">{site.description}</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-[11px] text-gray-400 mb-1">검사기관 유형</label>
+              <select className="select select-bordered select-sm w-full"
+                value={form.inspectionAgency} onChange={e => setForm({ ...form, inspectionAgency: e.target.value })}>
+                <option value="">미정</option>
+                <option>수요기관 자체</option><option>전문검사기관</option><option>조달청</option>
+              </select>
             </div>
-          )
+            {form.inspectionAgency === '전문검사기관' && (
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1">검사기관명</label>
+                <input type="text" className="input input-bordered input-sm w-full"
+                  value={form.inspectionBody} onChange={e => setForm({ ...form, inspectionBody: e.target.value })} />
+              </div>
+            )}
+            <div>
+              <label className="block text-[11px] text-gray-400 mb-1">검수기관</label>
+              <input type="text" className="input input-bordered input-sm w-full"
+                value={form.acceptanceAgency} onChange={e => setForm({ ...form, acceptanceAgency: e.target.value })} />
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" className="checkbox checkbox-sm"
+                  checked={form.inspectionDone} onChange={e => setForm({ ...form, inspectionDone: e.target.checked })} />
+                검사 완료
+              </label>
+              {form.inspectionDone && (
+                <input type="date" className="input input-bordered input-xs"
+                  value={form.inspectionDoneAt} onChange={e => setForm({ ...form, inspectionDoneAt: e.target.value })} />
+              )}
+            </div>
+            <div className="col-span-full"><SaveCancelBar /></div>
+          </div>
         )}
-      </div>
+      </SectionCard>
+
+      {/* 시공 협력사 */}
+      <SectionCard
+        title="시공 협력사"
+        action={canManage && editSection !== 'installer' ? (
+          <button className="btn btn-ghost btn-xs gap-1" onClick={() => startEdit('installer')}>
+            <PencilIcon className="h-3 w-3" />수정
+          </button>
+        ) : null}
+      >
+        {editSection !== 'installer' ? (
+          site.installerName ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <InfoRow label="협력사명" value={site.installerName} />
+              <InfoRow label="담당자" value={site.installerContact} />
+              <InfoRow label="연락처" value={site.installerPhone} />
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">등록된 협력사 정보가 없습니다.</p>
+          )
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <label className="block text-[11px] text-gray-400 mb-1">협력사명</label>
+              <input type="text" className="input input-bordered input-sm w-full"
+                value={form.installerName} onChange={e => setForm({ ...form, installerName: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-[11px] text-gray-400 mb-1">담당자</label>
+              <input type="text" className="input input-bordered input-sm w-full"
+                value={form.installerContact} onChange={e => setForm({ ...form, installerContact: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-[11px] text-gray-400 mb-1">연락처</label>
+              <input type="text" className="input input-bordered input-sm w-full"
+                value={form.installerPhone} onChange={e => setForm({ ...form, installerPhone: e.target.value })} />
+            </div>
+            <div className="col-span-full"><SaveCancelBar /></div>
+          </div>
+        )}
+      </SectionCard>
+
+      {/* 서류 현황 (착수계/준공계) */}
+      {!isSaleStage && (
+        <SectionCard
+          title="서류 현황"
+          action={canManage && editSection !== 'docs' ? (
+            <button className="btn btn-ghost btn-xs gap-1" onClick={() => startEdit('docs')}>
+              <PencilIcon className="h-3 w-3" />수정
+            </button>
+          ) : null}
+        >
+          {editSection !== 'docs' ? (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <DocStatusRow label="착수계" done={site.startDocsDone} date={fmtDate(site.startDocsDate)} />
+              <DocStatusRow label="준공계" done={site.completionDocsDone} date={fmtDate(site.completionDocsDate)} />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" className="checkbox checkbox-sm"
+                      checked={form.startDocsDone} onChange={e => setForm({ ...form, startDocsDone: e.target.checked })} />
+                    착수계 제출
+                  </label>
+                  {form.startDocsDone && (
+                    <input type="date" className="input input-bordered input-xs w-full"
+                      value={form.startDocsDate} onChange={e => setForm({ ...form, startDocsDate: e.target.value })} />
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" className="checkbox checkbox-sm"
+                      checked={form.completionDocsDone} onChange={e => setForm({ ...form, completionDocsDone: e.target.checked })} />
+                    준공계 제출
+                  </label>
+                  {form.completionDocsDone && (
+                    <div className="space-y-1.5">
+                      <input type="date" className="input input-bordered input-xs w-full"
+                        value={form.completionDocsDate} onChange={e => setForm({ ...form, completionDocsDate: e.target.value })} />
+                      <div>
+                        <label className="block text-[11px] text-gray-400 mb-0.5">준공일 (하자기산점)</label>
+                        <input type="date" className="input input-bordered input-xs w-full"
+                          value={form.completionDate} onChange={e => setForm({ ...form, completionDate: e.target.value })} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <SaveCancelBar />
+            </div>
+          )}
+        </SectionCard>
+      )}
 
       {/* 담당자 배정 */}
-      <AssignmentPanel siteId={siteId} assignments={site.assignments} canManage={canManage} isExternal={isExternal} onMutate={onMutate} />
+      <AssignmentPanel siteId={siteId} assignments={site.assignments ?? []} canManage={canManage} isExternal={isExternal} onMutate={onMutate} />
     </div>
   );
 };
 
-const InfoRow = ({ label, value }: { label: string; value?: string | null }) => (
-  <div>
-    <p className="text-[11px] text-gray-500">{label}</p>
-    <p className="text-sm mt-0.5">{value || '-'}</p>
+const DocStatusRow = ({ label, done, date }: { label: string; done: boolean; date: string }) => (
+  <div className="flex items-center justify-between rounded-lg border border-gray-800 px-3 py-2.5">
+    <div className="flex items-center gap-2">
+      <span className={`flex h-5 w-5 items-center justify-center rounded-full flex-shrink-0 ${done ? 'bg-green-600' : 'bg-gray-700'}`}>
+        {done ? <CheckIcon className="h-3 w-3 text-white" /> : null}
+      </span>
+      <span className="text-sm">{label}</span>
+    </div>
+    <span className="text-xs text-gray-500">{done ? date : '미제출'}</span>
   </div>
 );
 
 // ══════════════════════════════════════════════════════
-// 담당자 배정 (협력사 생성 + 게스트 생성 + 현장배정 포함)
+// 담당자 배정 패널
 // ══════════════════════════════════════════════════════
 const AssignmentPanel = ({ siteId, assignments, canManage, isExternal, onMutate }: any) => {
   const [showSearch, setShowSearch] = useState(false);
@@ -341,11 +635,12 @@ const AssignmentPanel = ({ siteId, assignments, canManage, isExternal, onMutate 
   const handleCreate = async () => {
     if (!form.name || !form.email || !form.password) { setError('이름, 이메일, 비밀번호는 필수입니다.'); return; }
     setSaving(true); setError('');
-    const role = mode === 'partner' ? 'PARTNER' : 'GUEST';
+    const roleVal = mode === 'partner' ? 'PARTNER' : 'GUEST';
     try {
       const res = await fetch('/api/admin/users', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, role, department: role === 'PARTNER' ? '협력사' : '게스트', assignedSiteIds: [siteId] }),
+        // 현장 미지정으로 생성 — assignedSiteIds 제거
+        body: JSON.stringify({ ...form, role: roleVal, department: roleVal === 'PARTNER' ? '협력사' : '게스트' }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error?.message || '생성 실패');
@@ -353,52 +648,32 @@ const AssignmentPanel = ({ siteId, assignments, canManage, isExternal, onMutate 
       setMode(null); onMutate();
     } catch (e: any) {
       setError(e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const roleBadge = (role: string) => {
-    const map: Record<string, string> = {
-      PARTNER: 'badge-warning', GUEST: 'badge-ghost', VIEWER: 'badge-ghost',
-      MANAGER: 'badge-info', ADMIN_HR: 'badge-primary', USER: 'badge-neutral',
-    };
-    const labels: Record<string, string> = {
-      PARTNER: '협력사', GUEST: '게스트', VIEWER: '게스트',
-      MANAGER: '매니저', ADMIN_HR: '관리자', USER: '직원',
-    };
-    return <span className={`badge badge-xs ${map[role] || 'badge-neutral'}`}>{labels[role] || role}</span>;
+    } finally { setSaving(false); }
   };
 
   return (
-    <div className="rounded-xl border border-gray-800 bg-black/20 p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-          담당자 · 협력사 ({assignments.length})
-        </p>
-        {canManage && (
-          <div className="flex gap-1.5 flex-wrap justify-end">
-            <button className="btn btn-ghost btn-xs gap-1" onClick={() => { setShowSearch((p) => !p); setMode(null); }}>
-              <PlusIcon className="h-3.5 w-3.5" />직원 추가
-            </button>
-            <button className="btn btn-ghost btn-xs gap-1" onClick={() => { setMode('partner'); setShowSearch(false); }}>
-              <PlusIcon className="h-3.5 w-3.5" />협력사 생성
-            </button>
-            {/* 협력사도 게스트 생성 가능 */}
-            <button className="btn btn-ghost btn-xs gap-1" onClick={() => { setMode('guest'); setShowSearch(false); }}>
-              <PlusIcon className="h-3.5 w-3.5" />게스트 생성
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* 직원 검색 */}
+    <SectionCard
+      title={`담당자 · 협력사 (${assignments.length}명)`}
+      action={canManage ? (
+        <div className="flex gap-1 flex-wrap justify-end">
+          <button className="btn btn-ghost btn-xs gap-1" onClick={() => { setShowSearch(p => !p); setMode(null); }}>
+            <PlusIcon className="h-3 w-3" />직원 배정
+          </button>
+          <button className="btn btn-ghost btn-xs gap-1" onClick={() => { setMode('partner'); setShowSearch(false); }}>
+            <PlusIcon className="h-3 w-3" />협력사 생성
+          </button>
+          <button className="btn btn-ghost btn-xs gap-1" onClick={() => { setMode('guest'); setShowSearch(false); }}>
+            <PlusIcon className="h-3 w-3" />게스트 생성
+          </button>
+        </div>
+      ) : null}
+    >
       {showSearch && (
         <div className="space-y-2">
           <div className="relative">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input type="text" className="input input-bordered input-sm w-full pl-9"
-              placeholder="이름으로 검색" value={sq} onChange={(e) => handleSearch(e.target.value)} />
+              placeholder="이름으로 검색" value={sq} onChange={e => handleSearch(e.target.value)} />
           </div>
           {sr.length > 0 && (
             <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-800">
@@ -415,31 +690,26 @@ const AssignmentPanel = ({ siteId, assignments, canManage, isExternal, onMutate 
         </div>
       )}
 
-      {/* 협력사/게스트 생성 폼 */}
       {mode && (
-        <div className="rounded-lg border border-gray-700 bg-black/30 p-4 space-y-3">
+        <div className="rounded-lg border border-gray-700 bg-black/30 p-3 space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold">
+            <p className="text-sm font-semibold">
               {mode === 'partner' ? '협력사 계정 생성' : '게스트 계정 생성'}
-              <span className="ml-2 text-xs font-normal text-gray-400">→ 이 현장에 자동 배정됩니다</span>
-            </h4>
+              <span className="ml-2 text-xs font-normal text-gray-400">(현장 미지정으로 생성됩니다)</span>
+            </p>
             <button onClick={() => setMode(null)}><XMarkIcon className="h-4 w-4 text-gray-500" /></button>
           </div>
           {error && <p className="text-xs text-red-400">{error}</p>}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {[
-              { key: 'name', label: '이름 *' },
-              { key: 'email', label: '이메일 *' },
-              { key: 'password', label: '비밀번호 *', type: 'password' },
-              { key: 'company', label: '회사명' },
-              { key: 'position', label: '직책' },
-              { key: 'phone', label: '연락처' },
+              { key: 'name', label: '이름 *' }, { key: 'email', label: '이메일 *' },
+              { key: 'password', label: '비밀번호 *', type: 'password' }, { key: 'company', label: '회사명' },
+              { key: 'position', label: '직책' }, { key: 'phone', label: '연락처' },
             ].map(({ key, label, type }) => (
               <div key={key}>
                 <label className="block text-[11px] text-gray-400 mb-0.5">{label}</label>
                 <input type={type || 'text'} className="input input-bordered input-xs w-full"
-                  value={(form as any)[key]}
-                  onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+                  value={(form as any)[key]} onChange={e => setForm({ ...form, [key]: e.target.value })} />
               </div>
             ))}
           </div>
@@ -452,280 +722,401 @@ const AssignmentPanel = ({ siteId, assignments, canManage, isExternal, onMutate 
         </div>
       )}
 
-      {/* 담당자 목록 */}
       {assignments.length === 0 ? (
         <p className="text-sm text-gray-500">배정된 담당자가 없습니다.</p>
       ) : (
         <div className="divide-y divide-gray-800/60">
-          {assignments.map((a: any) => (
-            <div key={a.id} className="flex items-center justify-between py-2">
-              <div className="flex items-center gap-2">
-                {roleBadge(a.user.company ? 'PARTNER' : 'USER')}
-                <span className="text-sm">{a.user.position ? `${a.user.position} ` : ''}{a.user.name}</span>
-                {a.user.company && <span className="text-xs text-gray-500">({a.user.company})</span>}
-                {a.user.department && <span className="text-xs text-gray-500">{a.user.department}</span>}
+          {assignments.map((a: any) => {
+            const isPartner = a.user?.department === '협력사' || a.user?.teamMembers?.[0]?.role === 'PARTNER';
+            return (
+              <div key={a.id} className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-2">
+                  <span className={`badge badge-xs ${isPartner ? 'badge-warning' : 'badge-neutral'}`}>
+                    {isPartner ? '협력사' : '직원'}
+                  </span>
+                  <span className="text-sm">{a.user?.position ? `${a.user.position} ` : ''}{a.user?.name}</span>
+                  {a.user?.company && <span className="text-xs text-gray-500">({a.user.company})</span>}
+                </div>
+                {canManage && (
+                  <button className="btn btn-ghost btn-xs text-red-400" onClick={() => handleRemove(a.user.id)}>
+                    <TrashIcon className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
-              {canManage && (
-                <button className="btn btn-ghost btn-xs text-red-400" onClick={() => handleRemove(a.user.id)}>
-                  <TrashIcon className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
-    </div>
+    </SectionCard>
   );
 };
 
 // ══════════════════════════════════════════════════════
-// 계약 탭
+// 영업이력 탭
 // ══════════════════════════════════════════════════════
-const ContractPanel = ({ site, siteId, canManage, onMutate }: any) => {
+const SalesPanel = ({ site, siteId, canManage, onMutate }: any) => {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ contractAmount: '', quantity: '', unitPrice: '', specification: '', contractDate: '', isAdditional: false, specialNotes: '' });
+  const [form, setForm] = useState({ status: '영업접촉', estimateAmount: '', meetingNotes: '' });
   const [saving, setSaving] = useState(false);
-
-  const fmtMoney = (v: any) => { if (!v) return '-'; return `${Math.round(Number(v) / 10000).toLocaleString()}만원`; };
 
   const handleSubmit = async () => {
     setSaving(true);
-    await fetch(`/api/sites/${siteId}/contracts`, {
+    await fetch(`/api/sites/${siteId}/sales`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
     });
-    setForm({ contractAmount: '', quantity: '', unitPrice: '', specification: '', contractDate: '', isAdditional: false, specialNotes: '' });
+    setForm({ status: '영업접촉', estimateAmount: '', meetingNotes: '' });
     setShowForm(false); setSaving(false); onMutate();
   };
 
-  const contracts = site.contracts ?? [];
-  const main = contracts.find((c: any) => !c.isAdditional);
-  const extras = contracts.filter((c: any) => c.isAdditional);
-  const totalAmount = contracts.reduce((s: number, c: any) => s + Number(c.contractAmount ?? 0), 0);
+  const sales = site.sales ?? [];
+  const STATUS_COLORS: Record<string, string> = {
+    '영업접촉': 'bg-gray-700 text-gray-300', '제안': 'bg-orange-900/50 text-orange-300',
+    '협의중': 'bg-yellow-900/50 text-yellow-300', '수주확정': 'bg-green-900/50 text-green-300',
+    '실패': 'bg-red-900/50 text-red-300',
+  };
 
   return (
-    <div className="space-y-4">
-      {/* 요약 */}
-      {main && (
-        <div className="rounded-xl border border-blue-900/40 bg-blue-950/20 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-blue-300 uppercase tracking-wider">본 계약</p>
-            {extras.length > 0 && (
-              <span className="text-xs text-gray-400">
-                추가계약 {extras.length}건 포함 합계 <strong className="text-white">{fmtMoney(totalAmount)}</strong>
-              </span>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <ContractCell label="계약물량" value={main.quantity ? `${fmtNum(main.quantity)} m²` : '-'} />
-            <ContractCell label="단가" value={main.unitPrice ? `${fmtNum(main.unitPrice)} 원/m²` : '-'} />
-            <ContractCell label="계약금액" value={fmtMoney(main.contractAmount)} highlight />
-            <ContractCell label="사양" value={fmt(main.specification)} />
-          </div>
-          {main.specialNotes && <p className="text-xs text-gray-400 border-t border-gray-800 pt-2">{main.specialNotes}</p>}
-        </div>
-      )}
-
-      {/* 추가계약 */}
-      {extras.map((c: any) => (
-        <div key={c.id} className="rounded-xl border border-gray-700 bg-black/20 p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="badge badge-xs badge-warning">추가계약</span>
-            <span className="text-xs text-gray-500">{fmtDate(c.contractDate)}</span>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <ContractCell label="물량" value={c.quantity ? `${fmtNum(c.quantity)} m²` : '-'} />
-            <ContractCell label="금액" value={fmtMoney(c.contractAmount)} />
-            <ContractCell label="사양" value={fmt(c.specification)} />
-            <ContractCell label="비고" value={fmt(c.specialNotes)} />
-          </div>
-        </div>
-      ))}
-
-      {/* 등록 없는 경우 */}
-      {contracts.length === 0 && (
-        <div className="rounded-xl border border-dashed border-gray-700 py-10 text-center text-sm text-gray-500">
-          등록된 계약 정보가 없습니다.
-        </div>
-      )}
-
-      {/* 추가 등록 폼 */}
-      {canManage && (
-        <div>
-          <button className="btn btn-ghost btn-sm gap-1.5" onClick={() => setShowForm((p) => !p)}>
-            <PlusIcon className="h-4 w-4" />{showForm ? '취소' : '계약 추가 / 추가계약 등록'}
+    <div className="space-y-3">
+      <SectionCard
+        title={`영업 활동 이력 (${sales.length}건)`}
+        action={canManage ? (
+          <button className="btn btn-ghost btn-xs gap-1" onClick={() => setShowForm(p => !p)}>
+            <PlusIcon className="h-3 w-3" />{showForm ? '취소' : '활동 추가'}
           </button>
-          {showForm && (
-            <div className="mt-3 rounded-xl border border-gray-700 p-4 space-y-3">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" className="checkbox checkbox-sm" checked={form.isAdditional}
-                  onChange={(e) => setForm({ ...form, isAdditional: e.target.checked })} />
-                추가계약 (변경계약)
-              </label>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {[
-                  { key: 'specification', label: '사양' },
-                  { key: 'quantity', label: '물량 (m²)' },
-                  { key: 'unitPrice', label: '단가 (원/m²)' },
-                  { key: 'contractAmount', label: '계약금액 (원)' },
-                  { key: 'contractDate', label: '계약일', type: 'date' },
-                ].map(({ key, label, type }) => (
-                  <div key={key}>
-                    <label className="block text-xs text-gray-400 mb-1">{label}</label>
-                    <input type={type || 'text'} className="input input-bordered input-sm w-full"
-                      value={(form as any)[key]}
-                      onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
-                  </div>
-                ))}
+        ) : null}
+      >
+        {showForm && (
+          <div className="rounded-lg border border-gray-700 bg-black/30 p-3 space-y-3 mb-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1">단계</label>
+                <select className="select select-bordered select-sm w-full"
+                  value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+                  {['영업접촉', '제안', '협의중', '수주확정', '실패'].map(s => <option key={s}>{s}</option>)}
+                </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">특이사항</label>
-                <textarea className="textarea textarea-bordered w-full text-sm" rows={2}
-                  value={form.specialNotes} onChange={(e) => setForm({ ...form, specialNotes: e.target.value })} />
-              </div>
-              <div className="flex justify-end">
-                <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={saving}>
-                  {saving ? <span className="loading loading-spinner loading-xs" /> : '저장'}
-                </button>
+                <label className="block text-[11px] text-gray-400 mb-1">예상금액 (원)</label>
+                <input type="text" className="input input-bordered input-sm w-full"
+                  value={form.estimateAmount} onChange={e => setForm({ ...form, estimateAmount: e.target.value })} />
               </div>
             </div>
-          )}
-        </div>
-      )}
+            <div>
+              <label className="block text-[11px] text-gray-400 mb-1">활동 내용</label>
+              <textarea className="textarea textarea-bordered w-full text-sm" rows={3}
+                placeholder="미팅 내용, 특이사항 등..."
+                value={form.meetingNotes} onChange={e => setForm({ ...form, meetingNotes: e.target.value })} />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowForm(false)}>취소</button>
+              <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={saving}>
+                {saving ? <span className="loading loading-spinner loading-xs" /> : '등록'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {sales.length === 0 ? (
+          <div className="py-8 text-center text-sm text-gray-500">영업 활동 이력이 없습니다.</div>
+        ) : (
+          <div className="relative pl-4 space-y-0">
+            <div className="absolute left-1.5 top-2 bottom-2 w-px bg-gray-800" />
+            {sales.map((s: any) => (
+              <div key={s.id} className="relative pb-3">
+                <span className="absolute -left-3 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-gray-900 bg-orange-500" />
+                <div className="rounded-lg border border-gray-800 bg-black/20 px-3 py-2.5">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_COLORS[s.status] || 'bg-gray-700 text-gray-300'}`}>{s.status}</span>
+                    {s.estimateAmount && <span className="text-xs text-blue-300 font-semibold">{fmtMoney(s.estimateAmount)}</span>}
+                    <span className="text-[11px] text-gray-500 ml-auto">{fmtDate(s.createdAt)} · {userName(s.createdBy)}</span>
+                  </div>
+                  {s.meetingNotes && <p className="text-sm text-gray-300 whitespace-pre-wrap">{s.meetingNotes}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
     </div>
   );
 };
 
-const ContractCell = ({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) => (
-  <div>
-    <p className="text-[11px] text-gray-500">{label}</p>
-    <p className={`text-sm font-medium mt-0.5 ${highlight ? 'text-blue-300 text-base' : ''}`}>{value}</p>
-  </div>
-);
-
 // ══════════════════════════════════════════════════════
-// 생산·출하 탭 (도장사양 + 출하기록 통합)
+// 생산 탭
 // ══════════════════════════════════════════════════════
 const ProductionPanel = ({ site, siteId, canManage, onMutate }: any) => {
-  const [showShipForm, setShowShipForm] = useState(false);
-  const [shipForm, setShipForm] = useState({ shippedAt: '', quantity: '', vehicleInfo: '', driverInfo: '', destination: '', receivedBy: '', notes: '' });
+  const { data: ordersData, mutate: mutateOrders } = useSWR(siteId ? `/api/sites/${siteId}/production` : null, fetcher);
+  const orders: any[] = ordersData?.data ?? [];
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [addingNew, setAddingNew] = useState(false);
+  const [newForm, setNewForm] = useState({ quantity: '', orderDate: '', supplyDate: '', notes: '' });
   const [saving, setSaving] = useState(false);
 
-  const handleShipSubmit = async () => {
+  const contractQty = Number(site.contractQuantity ?? 0);
+  const orderedQty = orders.reduce((s, o) => s + Number(o.quantity ?? 0), 0);
+  const deliveredQty = orders.filter(o => o.supplyDate).reduce((s, o) => s + Number(o.quantity ?? 0), 0);
+  const diff = contractQty - orderedQty;
+  const progressPct = contractQty > 0 ? Math.min(100, Math.round((deliveredQty / contractQty) * 100)) : 0;
+  const dday = getDday(site.deliveryDeadline);
+
+  const startEdit = (order: any) => {
+    setEditingId(order.id);
+    setEditForm({
+      quantity: order.quantity ? String(order.quantity) : '',
+      orderDate: order.orderDate ? new Date(order.orderDate).toISOString().split('T')[0] : '',
+      supplyDate: order.supplyDate ? new Date(order.supplyDate).toISOString().split('T')[0] : '',
+      notes: order.notes || '',
+    });
+  };
+
+  const saveEdit = async (orderId: string) => {
     setSaving(true);
-    await fetch(`/api/sites/${siteId}/shipments`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(shipForm),
-    });
-    setShipForm({ shippedAt: '', quantity: '', vehicleInfo: '', driverInfo: '', destination: '', receivedBy: '', notes: '' });
-    setShowShipForm(false); setSaving(false); onMutate();
-  };
-
-  const handleShipStatus = async (recordId: string, status: string) => {
-    await fetch(`/api/sites/${siteId}/shipments`, {
+    await fetch(`/api/sites/${siteId}/production`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recordId, status }),
+      body: JSON.stringify({ orderId, ...editForm }),
     });
-    onMutate();
+    setEditingId(null); setSaving(false); mutateOrders(); onMutate();
   };
 
-  const shipments = site.shipments ?? [];
-  const paintSpecs = site.paintSpecs ?? [];
+  const addOrder = async () => {
+    if (!newForm.quantity) return;
+    setSaving(true);
+    await fetch(`/api/sites/${siteId}/production`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newForm),
+    });
+    setNewForm({ quantity: '', orderDate: '', supplyDate: '', notes: '' });
+    setAddingNew(false); setSaving(false); mutateOrders(); onMutate();
+  };
+
+  const deleteOrder = async (orderId: string) => {
+    if (!confirm('이 차수를 삭제하시겠습니까?')) return;
+    await fetch(`/api/sites/${siteId}/production`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId }),
+    });
+    mutateOrders(); onMutate();
+  };
+
+  const calcElapsed = (order: any) => {
+    if (!order.orderDate) return null;
+    const from = new Date(order.orderDate);
+    const to = order.supplyDate ? new Date(order.supplyDate) : new Date();
+    return Math.ceil((to.getTime() - from.getTime()) / 86400000);
+  };
+
+  if (!site.contractQuantity && orders.length === 0) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-sm text-gray-500 mb-1">계약 정보가 없습니다.</p>
+        <p className="text-xs text-gray-600">분할납품요구서를 서류 탭에 업로드하거나 기본정보에서 계약 정보를 입력해주세요.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4">
-      {/* 도장 사양 */}
-      {paintSpecs.length > 0 && (
-        <div className="rounded-xl border border-gray-800 bg-black/20 p-4">
-          <p className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider">도장 사양</p>
-          <div className="space-y-2">
-            {paintSpecs.map((s: any) => (
-              <div key={s.id} className="flex flex-wrap items-center gap-3 text-sm rounded-lg border border-gray-800 px-3 py-2">
-                <span className="font-mono font-semibold text-yellow-300">{s.colorCode}</span>
-                <span>{s.colorName}</span>
-                {s.manufacturer && <span className="text-gray-500">{s.manufacturer}</span>}
-                {s.quantity && <span className="text-gray-400">{fmtNum(s.quantity)} m²</span>}
-                <span className={`badge badge-xs ${s.status === '확정' ? 'badge-success' : 'badge-ghost'}`}>{s.status}</span>
-                {s.isPrimary && <span className="badge badge-xs badge-info">주색상</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+    <div className="space-y-3">
 
-      {/* 출하 기록 */}
-      <div className="rounded-xl border border-gray-800 bg-black/20 p-4 space-y-3">
-        <div className="flex items-center justify-between">
+      {/* 종합 현황 */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">종합 현황</p>
+          {dday && (
+            <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+              dday.overdue ? 'bg-red-900/40 text-red-300 border-red-800/50' :
+              dday.urgent ? 'bg-orange-900/40 text-orange-300 border-orange-800/50' :
+              'bg-gray-800/60 text-gray-400 border-gray-700/50'
+            }`}>
+              납품기한 {dday.overdue ? `D+${Math.abs(dday.diff)}` : `D-${dday.diff}`} ({fmtDate(site.deliveryDeadline)})
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 mb-3">
+          {[
+            { label: '계약물량', value: contractQty > 0 ? `${fmtNum(contractQty)} m²` : '-', color: 'text-white' },
+            { label: '발주물량', value: orderedQty > 0 ? `${fmtNum(orderedQty)} m²` : '-', color: 'text-blue-300' },
+            { label: '납품물량', value: deliveredQty > 0 ? `${fmtNum(deliveredQty)} m²` : '-', color: 'text-green-300' },
+            {
+              label: '미발주(오차)',
+              value: contractQty > 0 ? `${fmtNum(Math.abs(diff))} m²${diff < 0 ? ' ↑초과' : ''}` : '-',
+              color: diff < 0 ? 'text-red-400' : diff === 0 ? 'text-gray-400' : 'text-orange-300',
+            },
+            { label: '공정률', value: `${progressPct}%`, color: 'text-blue-300 text-lg font-bold', big: true },
+          ].map(({ label, value, color, big }) => (
+            <div key={label} className={`rounded-lg border px-3 py-2.5 text-center ${big ? 'border-blue-900/40 bg-blue-950/20 sm:col-span-1 col-span-2' : 'border-gray-800 bg-black/30'}`}>
+              <p className="text-[10px] text-gray-500 mb-1">{label}</p>
+              <p className={`text-sm font-semibold ${color}`}>{value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
+            <div className={`h-full rounded-full transition-all duration-700 ${progressPct >= 100 ? 'bg-blue-500' : 'bg-green-500'}`}
+              style={{ width: `${progressPct}%` }} />
+          </div>
+          <p className="text-[10px] text-gray-600 mt-1">※ 공정률 = 납품물량 ÷ 계약물량 (설치 포함 안 함)</p>
+        </div>
+      </div>
+
+      {/* 차수별 테이블 */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900/40 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-            출하 기록 ({shipments.length}차)
+            차수별 발주 · 납품 ({orders.length}차)
           </p>
           {canManage && (
-            <button className="btn btn-ghost btn-xs gap-1" onClick={() => setShowShipForm((p) => !p)}>
-              <PlusIcon className="h-3.5 w-3.5" />{showShipForm ? '취소' : '출하 추가'}
+            <button className="btn btn-ghost btn-xs gap-1" onClick={() => setAddingNew(p => !p)}>
+              <PlusIcon className="h-3 w-3" />{addingNew ? '취소' : '차수 추가'}
             </button>
           )}
         </div>
 
-        {showShipForm && (
-          <div className="rounded-lg border border-gray-700 p-3 space-y-3">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {[
-                { key: 'shippedAt', label: '출하일', type: 'date' },
-                { key: 'quantity', label: '수량 (m²)', type: 'number' },
-                { key: 'vehicleInfo', label: '차량번호' },
-                { key: 'driverInfo', label: '기사명' },
-                { key: 'destination', label: '도착지' },
-                { key: 'receivedBy', label: '인수자' },
-              ].map(({ key, label, type }) => (
-                <div key={key}>
-                  <label className="block text-[11px] text-gray-400 mb-0.5">{label}</label>
-                  <input type={type || 'text'} className="input input-bordered input-xs w-full"
-                    value={(shipForm as any)[key]}
-                    onChange={(e) => setShipForm({ ...shipForm, [key]: e.target.value })} />
-                </div>
-              ))}
+        {/* 신규 차수 입력 */}
+        {addingNew && (
+          <div className="px-4 py-3 border-b border-gray-800 bg-blue-950/10">
+            <p className="text-xs text-blue-300 mb-2 font-semibold">{orders.length + 1}차 추가</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div>
+                <label className="block text-[10px] text-gray-500 mb-1">물량 (m²) *</label>
+                <input type="number" className="input input-bordered input-xs w-full"
+                  value={newForm.quantity} onChange={e => setNewForm({ ...newForm, quantity: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[10px] text-gray-500 mb-1">발주일</label>
+                <input type="date" className="input input-bordered input-xs w-full"
+                  value={newForm.orderDate} onChange={e => setNewForm({ ...newForm, orderDate: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[10px] text-gray-500 mb-1">공급일 (입고일)</label>
+                <input type="date" className="input input-bordered input-xs w-full"
+                  value={newForm.supplyDate} onChange={e => setNewForm({ ...newForm, supplyDate: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[10px] text-gray-500 mb-1">비고</label>
+                <input type="text" className="input input-bordered input-xs w-full"
+                  placeholder="색상변경, 추가발주..."
+                  value={newForm.notes} onChange={e => setNewForm({ ...newForm, notes: e.target.value })} />
+              </div>
             </div>
-            <textarea className="textarea textarea-bordered w-full text-sm" rows={2} placeholder="비고"
-              value={shipForm.notes} onChange={(e) => setShipForm({ ...shipForm, notes: e.target.value })} />
-            <div className="flex justify-end">
-              <button className="btn btn-primary btn-sm" onClick={handleShipSubmit} disabled={saving}>
+            <div className="flex justify-end mt-2 gap-2">
+              <button className="btn btn-ghost btn-xs" onClick={() => setAddingNew(false)}>취소</button>
+              <button className="btn btn-primary btn-xs" onClick={addOrder} disabled={saving || !newForm.quantity}>
                 {saving ? <span className="loading loading-spinner loading-xs" /> : '저장'}
               </button>
             </div>
           </div>
         )}
 
-        {shipments.length === 0 ? (
-          <p className="text-sm text-gray-500 py-4 text-center">출하 기록이 없습니다.</p>
-        ) : (
-          <div className="space-y-2">
-            {shipments.map((s: any, idx: number) => (
-              <div key={s.id} className="rounded-lg border border-gray-800 p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm">{idx + 1}차 출하</span>
-                    {s.shippedAt && <span className="text-xs text-gray-400">{fmtDate(s.shippedAt)}</span>}
-                    {s.quantity && <span className="text-xs text-blue-300 font-semibold">{fmtNum(s.quantity)} m²</span>}
-                  </div>
-                  {canManage ? (
-                    <select className="select select-bordered select-xs" value={s.status}
-                      onChange={(e) => handleShipStatus(s.id, e.target.value)}>
-                      {SHIP_STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
-                    </select>
-                  ) : (
-                    <span className="badge badge-sm">{s.status}</span>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-400">
-                  {s.vehicleInfo && <span>차량: {s.vehicleInfo}</span>}
-                  {s.driverInfo && <span>기사: {s.driverInfo}</span>}
-                  {s.destination && <span>도착: {s.destination}</span>}
-                  {s.receivedBy && <span>인수: {s.receivedBy}</span>}
-                </div>
-                {s.notes && <p className="text-xs text-gray-500 mt-1">{s.notes}</p>}
-              </div>
-            ))}
+        {orders.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800 text-[11px] text-gray-500">
+                  <th className="px-4 py-2.5 text-left font-medium w-12">차수</th>
+                  <th className="px-4 py-2.5 text-right font-medium">물량 (m²)</th>
+                  <th className="px-4 py-2.5 text-left font-medium">발주일</th>
+                  <th className="px-4 py-2.5 text-left font-medium">공급일</th>
+                  <th className="px-4 py-2.5 text-right font-medium">경과일</th>
+                  <th className="px-4 py-2.5 text-left font-medium">비고</th>
+                  {canManage && <th className="px-2 py-2.5 w-16" />}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800/60">
+                {orders.map((order: any) => {
+                  const elapsed = calcElapsed(order);
+                  const isEditing = editingId === order.id;
+                  return (
+                    <tr key={order.id} className={`transition-colors ${isEditing ? 'bg-blue-950/20' : 'hover:bg-gray-800/20'}`}>
+                      <td className="px-4 py-2.5">
+                        <span className="font-bold text-gray-200">{order.sequence}차</span>
+                      </td>
+                      {isEditing ? (
+                        <>
+                          <td className="px-2 py-1.5">
+                            <input type="number" className="input input-bordered input-xs w-24 text-right"
+                              value={editForm.quantity} onChange={e => setEditForm({ ...editForm, quantity: e.target.value })} />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input type="date" className="input input-bordered input-xs"
+                              value={editForm.orderDate} onChange={e => setEditForm({ ...editForm, orderDate: e.target.value })} />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input type="date" className="input input-bordered input-xs"
+                              value={editForm.supplyDate} onChange={e => setEditForm({ ...editForm, supplyDate: e.target.value })} />
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-xs text-gray-500">
+                            {elapsed !== null ? `${elapsed}일` : '-'}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input type="text" className="input input-bordered input-xs w-28"
+                              value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <div className="flex gap-1">
+                              <button className="btn btn-primary btn-xs" onClick={() => saveEdit(order.id)} disabled={saving}>
+                                {saving ? <span className="loading loading-spinner loading-xs" /> : <CheckIcon className="h-3 w-3" />}
+                              </button>
+                              <button className="btn btn-ghost btn-xs" onClick={() => setEditingId(null)}>
+                                <XMarkIcon className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-4 py-2.5 text-right font-semibold">{fmtNum(order.quantity)}</td>
+                          <td className="px-4 py-2.5 text-gray-300">{fmtDate(order.orderDate)}</td>
+                          <td className="px-4 py-2.5">
+                            {order.supplyDate
+                              ? <span className="text-green-300">{fmtDate(order.supplyDate)}</span>
+                              : <span className="text-gray-600 text-xs">미입고</span>
+                            }
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            {elapsed !== null && (
+                              <span className={`text-xs font-medium ${order.supplyDate ? 'text-gray-400' : 'text-yellow-400'}`}>
+                                {elapsed}일{!order.supplyDate ? ' ↑' : ''}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-gray-500 text-xs">{order.notes || '-'}</td>
+                          {canManage && (
+                            <td className="px-2 py-2.5">
+                              <div className="flex gap-1">
+                                <button className="btn btn-ghost btn-xs" onClick={() => startEdit(order)}>
+                                  <PencilIcon className="h-3 w-3" />
+                                </button>
+                                <button className="btn btn-ghost btn-xs text-red-400" onClick={() => deleteOrder(order.id)}>
+                                  <TrashIcon className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </td>
+                          )}
+                        </>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+              {orders.length > 1 && (
+                <tfoot>
+                  <tr className="border-t border-gray-700 bg-black/20">
+                    <td className="px-4 py-2 text-xs font-semibold text-gray-400">합계</td>
+                    <td className="px-4 py-2 text-right text-sm font-bold text-white">{fmtNum(orderedQty)} m²</td>
+                    <td colSpan={canManage ? 5 : 4} className="px-4 py-2 text-xs text-gray-500">
+                      납품완료 {fmtNum(deliveredQty)} m² · 미납 {fmtNum(orderedQty - deliveredQty)} m²
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
           </div>
+        ) : !addingNew && (
+          <div className="py-10 text-center text-sm text-gray-500">등록된 발주 차수가 없습니다.</div>
         )}
       </div>
     </div>
@@ -733,19 +1124,12 @@ const ProductionPanel = ({ site, siteId, canManage, onMutate }: any) => {
 };
 
 // ══════════════════════════════════════════════════════
-// 활동 탭 (이슈 + 일정 + 변경 + 상태이력 통합 타임라인)
+// 정산 탭
 // ══════════════════════════════════════════════════════
-type ActivityItem = {
-  id: string; type: 'issue' | 'schedule' | 'change' | 'history';
-  date: Date; label: string; title: string; status?: string;
-  meta?: string; resolved?: boolean;
-};
-
-const ActivityPanel = ({ site, siteId, canManage, onMutate }: any) => {
+const SettlementPanel = ({ site, siteId, canManage, onMutate }: any) => {
   const [showIssueForm, setShowIssueForm] = useState(false);
   const [issueForm, setIssueForm] = useState({ title: '', type: '기타', occurredAt: '', location: '', description: '', responsibility: '' });
   const [saving, setSaving] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'issue' | 'schedule' | 'change'>('all');
 
   const handleIssueSubmit = async () => {
     if (!issueForm.title) return;
@@ -766,307 +1150,118 @@ const ActivityPanel = ({ site, siteId, canManage, onMutate }: any) => {
     onMutate();
   };
 
-  // 타임라인 통합
-  const timeline: ActivityItem[] = [
-    ...(site.issues ?? []).map((i: any) => ({
-      id: i.id, type: 'issue' as const,
-      date: new Date(i.occurredAt || i.createdAt),
-      label: i.type, title: i.title, status: i.status,
-      meta: [i.location, i.responsibility, userName(i.createdBy)].filter(Boolean).join(' · '),
-      resolved: i.status === '완료',
-    })),
-    ...(site.schedules ?? []).map((s: any) => ({
-      id: s.id, type: 'schedule' as const,
-      date: new Date(s.startDate),
-      label: s.type, title: s.title, status: s.isDone ? '완료' : '예정',
-      meta: userName(s.assignee),
-      resolved: s.isDone,
-    })),
-    ...(site.changeLogs ?? []).map((c: any) => ({
-      id: c.id, type: 'change' as const,
-      date: new Date(c.createdAt),
-      label: c.type, title: `${c.beforeValue ? `${c.beforeValue} → ` : ''}${c.afterValue || c.reason || '변경'}`,
-      status: c.status,
-      meta: userName(c.requester),
-      resolved: c.status === '승인',
-    })),
-    ...(site.statusHistory ?? []).map((h: any) => ({
-      id: h.id, type: 'history' as const,
-      date: new Date(h.createdAt),
-      label: '상태변경', title: `${h.fromStatus} → ${h.toStatus}`,
-      meta: [h.reason, userName(h.changedBy)].filter(Boolean).join(' · '),
-      resolved: true,
-    })),
-  ].sort((a, b) => b.date.getTime() - a.date.getTime());
-
-  const filtered = filter === 'all' ? timeline : timeline.filter((t) => t.type === filter);
-
-  const typeStyle: Record<string, { dot: string; badge: string }> = {
-    issue: { dot: 'bg-red-500', badge: 'bg-red-900/40 text-red-300' },
-    schedule: { dot: 'bg-blue-500', badge: 'bg-blue-900/30 text-blue-300' },
-    change: { dot: 'bg-yellow-500', badge: 'bg-yellow-900/30 text-yellow-300' },
-    history: { dot: 'bg-gray-500', badge: 'bg-gray-800 text-gray-400' },
-  };
-
-  const openIssues = (site.issues ?? []).filter((i: any) => i.status !== '완료');
+  const issues = site.issues ?? [];
+  const openIssues = issues.filter((i: any) => i.status !== '완료');
+  const doneIssues = issues.filter((i: any) => i.status === '완료');
+  const changeLogs = (site.changeLogs ?? []).filter((c: any) => ['물량변경', '기성정산', '실정보고'].includes(c.type));
 
   return (
-    <div className="space-y-4">
-      {/* 미해결 이슈 요약 */}
-      {openIssues.length > 0 && (
-        <div className="rounded-xl border border-red-800/60 bg-red-950/15 p-4 space-y-2">
-          <div className="flex items-center gap-2 text-red-300 font-semibold text-sm">
-            <ExclamationTriangleIcon className="h-4 w-4" />
-            미해결 이슈 {openIssues.length}건
-          </div>
-          {openIssues.map((i: any) => (
-            <div key={i.id} className="flex items-center justify-between rounded-lg border border-red-800/30 bg-black/20 px-3 py-2">
-              <div className="flex items-center gap-2">
-                <span className="badge badge-xs badge-error">{i.type}</span>
-                <span className="text-sm">{i.title}</span>
-              </div>
-              {canManage && (
-                <select className="select select-bordered select-xs"
-                  value={i.status} onChange={(e) => handleIssueStatus(i.id, e.target.value)}>
-                  {ISSUE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 필터 + 이슈 등록 버튼 */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex gap-1">
-          {([['all', '전체'], ['issue', '이슈'], ['schedule', '일정'], ['change', '변경']] as const).map(([v, l]) => (
-            <button key={v} onClick={() => setFilter(v)}
-              className={`btn btn-xs ${filter === v ? 'btn-primary' : 'btn-ghost'}`}>{l}</button>
-          ))}
-        </div>
-        {canManage && (
-          <button className="btn btn-ghost btn-xs gap-1" onClick={() => setShowIssueForm((p) => !p)}>
-            <PlusIcon className="h-3.5 w-3.5" />{showIssueForm ? '취소' : '이슈 등록'}
-          </button>
-        )}
-      </div>
-
-      {/* 이슈 등록 폼 */}
-      {showIssueForm && (
-        <div className="rounded-xl border border-red-900/40 bg-red-950/10 p-4 space-y-3">
-          <p className="text-sm font-semibold text-red-300">이슈 등록</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="sm:col-span-2">
-              <label className="block text-xs text-gray-400 mb-1">제목 *</label>
-              <input type="text" className="input input-bordered input-sm w-full"
-                value={issueForm.title} onChange={(e) => setIssueForm({ ...issueForm, title: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">분류</label>
-              <select className="select select-bordered select-sm w-full"
-                value={issueForm.type} onChange={(e) => setIssueForm({ ...issueForm, type: e.target.value })}>
-                {ISSUE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">발생일</label>
-              <input type="date" className="input input-bordered input-sm w-full"
-                value={issueForm.occurredAt} onChange={(e) => setIssueForm({ ...issueForm, occurredAt: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">위치</label>
-              <input type="text" className="input input-bordered input-sm w-full"
-                value={issueForm.location} onChange={(e) => setIssueForm({ ...issueForm, location: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">책임구분</label>
-              <input type="text" className="input input-bordered input-sm w-full"
-                value={issueForm.responsibility} onChange={(e) => setIssueForm({ ...issueForm, responsibility: e.target.value })} />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">상세내용</label>
-            <textarea className="textarea textarea-bordered w-full text-sm" rows={3}
-              value={issueForm.description} onChange={(e) => setIssueForm({ ...issueForm, description: e.target.value })} />
-          </div>
-          <div className="flex justify-end">
-            <button className="btn btn-primary btn-sm" onClick={handleIssueSubmit} disabled={saving}>
-              {saving ? <span className="loading loading-spinner loading-xs" /> : '등록'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 타임라인 */}
-      {filtered.length === 0 ? (
-        <div className="py-10 text-center text-sm text-gray-500">기록된 활동이 없습니다.</div>
-      ) : (
-        <div className="relative space-y-0 pl-5">
-          <div className="absolute left-2 top-0 bottom-0 w-px bg-gray-800" />
-          {filtered.map((item) => {
-            const style = typeStyle[item.type];
-            return (
-              <div key={`${item.type}-${item.id}`} className="relative pb-4">
-                <span className={`absolute -left-3 top-1.5 h-3 w-3 rounded-full border-2 border-gray-900 ${item.resolved ? 'bg-gray-600' : style.dot}`} />
-                <div className={`ml-3 rounded-lg border border-gray-800 bg-black/20 px-3 py-2.5 ${item.resolved ? 'opacity-60' : ''}`}>
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${style.badge}`}>{item.label}</span>
-                    <span className="text-sm font-medium">{item.title}</span>
-                    {item.status && (
-                      <span className="text-[11px] text-gray-500 border border-gray-700 rounded-full px-1.5">{item.status}</span>
-                    )}
-                  </div>
-                  <div className="flex gap-3 text-[11px] text-gray-500">
-                    <span>{fmtDate(item.date)}</span>
-                    {item.meta && <span>{item.meta}</span>}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ══════════════════════════════════════════════════════
-// 요청 탭 (게스트가 쓰는 요청 + 내부 요청 처리)
-// ══════════════════════════════════════════════════════
-const RequestPanel = ({ site, siteId, canManage, onMutate }: any) => {
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: '', type: '현장 요청', priority: '보통', description: '' });
-  const [saving, setSaving] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!form.title) return;
-    setSaving(true);
-    await fetch(`/api/sites/${siteId}/requests`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
-    setForm({ title: '', type: '현장 요청', priority: '보통', description: '' });
-    setShowForm(false); setSaving(false); onMutate();
-  };
-
-  const handleStatus = async (requestId: string, status: string) => {
-    await fetch(`/api/sites/${siteId}/requests`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId, status }),
-    });
-    onMutate();
-  };
-
-  const requests = site.requests ?? [];
-  const open = requests.filter((r: any) => !['완료', '반려'].includes(r.status));
-  const done = requests.filter((r: any) => ['완료', '반려'].includes(r.status));
-
-  const priorityColor = (p: string) => {
-    if (p === '긴급') return 'badge-error';
-    if (p === '높음') return 'badge-warning';
-    return 'badge-ghost';
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-400">
-          미처리 <strong className="text-white">{open.length}</strong>건 · 완료 {done.length}건
-        </p>
-        <button className="btn btn-ghost btn-sm gap-1" onClick={() => setShowForm((p) => !p)}>
-          <PlusIcon className="h-4 w-4" />{showForm ? '취소' : '요청 등록'}
-        </button>
-      </div>
-
-      {showForm && (
-        <div className="rounded-xl border border-gray-700 p-4 space-y-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="sm:col-span-2">
-              <label className="block text-xs text-gray-400 mb-1">제목 *</label>
-              <input type="text" className="input input-bordered input-sm w-full"
-                value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">유형</label>
-              <select className="select select-bordered select-sm w-full"
-                value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                {['현장 요청', '고객 요청', '협력사 요청', '내부 요청', '긴급 요청'].map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">우선순위</label>
-              <select className="select select-bordered select-sm w-full"
-                value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
-                {['낮음', '보통', '높음', '긴급'].map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">내용</label>
-            <textarea className="textarea textarea-bordered w-full text-sm" rows={3}
-              value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-          </div>
-          <div className="flex justify-end">
-            <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={saving}>
-              {saving ? <span className="loading loading-spinner loading-xs" /> : '등록'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 미처리 요청 */}
-      {open.length > 0 && (
-        <div className="space-y-2">
-          {open.map((r: any) => (
-            <div key={r.id} className="rounded-xl border border-yellow-900/30 bg-yellow-950/10 p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className={`badge badge-xs ${priorityColor(r.priority)}`}>{r.priority}</span>
-                    <span className="text-sm font-medium">{r.title}</span>
-                    <span className="text-xs text-gray-500">{r.type}</span>
-                  </div>
-                  {r.description && <p className="text-sm text-gray-400">{r.description}</p>}
-                  <p className="text-[11px] text-gray-500 mt-1">{userName(r.createdBy)} · {fmtDate(r.createdAt)}</p>
-                </div>
-                {canManage && (
-                  <select className="select select-bordered select-xs flex-shrink-0"
-                    value={r.status} onChange={(e) => handleStatus(r.id, e.target.value)}>
-                    {['등록', '확인중', '처리중', '완료', '반려', '보류'].map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 완료 요청 */}
-      {done.length > 0 && (
-        <details className="rounded-xl border border-gray-800">
-          <summary className="cursor-pointer px-4 py-2.5 text-xs text-gray-500 hover:text-gray-300">
-            완료된 요청 {done.length}건 보기
-          </summary>
-          <div className="divide-y divide-gray-800 px-4 pb-3 space-y-0">
-            {done.map((r: any) => (
-              <div key={r.id} className="py-2 opacity-60">
+    <div className="space-y-3">
+      {/* 실정보고 */}
+      <SectionCard title="실정보고 · 추가정산">
+        {changeLogs.length === 0 ? (
+          <p className="text-sm text-gray-600">등록된 실정보고가 없습니다.</p>
+        ) : (
+          <div className="space-y-2">
+            {changeLogs.map((c: any) => (
+              <div key={c.id} className="rounded-lg border border-gray-800 px-3 py-2.5">
                 <div className="flex items-center gap-2">
-                  <span className={`badge badge-xs ${r.status === '완료' ? 'badge-success' : 'badge-error'}`}>{r.status}</span>
-                  <span className="text-sm">{r.title}</span>
+                  <span className="badge badge-xs badge-warning">{c.type}</span>
+                  <span className="text-sm">{c.reason || `${c.beforeValue} → ${c.afterValue}`}</span>
+                  <span className={`ml-auto badge badge-xs ${c.status === '승인' ? 'badge-success' : c.status === '반려' ? 'badge-error' : 'badge-ghost'}`}>{c.status}</span>
                 </div>
+                <p className="text-xs text-gray-500 mt-1">{fmtDate(c.createdAt)} · {userName(c.requester)}</p>
               </div>
             ))}
           </div>
-        </details>
-      )}
+        )}
+      </SectionCard>
 
-      {requests.length === 0 && (
-        <div className="py-10 text-center text-sm text-gray-500">등록된 요청이 없습니다.</div>
-      )}
+      {/* 이슈 관리 */}
+      <SectionCard
+        title={`이슈 (미해결 ${openIssues.length}건)`}
+        action={canManage ? (
+          <button className="btn btn-ghost btn-xs gap-1" onClick={() => setShowIssueForm(p => !p)}>
+            <PlusIcon className="h-3 w-3" />{showIssueForm ? '취소' : '이슈 등록'}
+          </button>
+        ) : null}
+      >
+        {openIssues.length > 0 && (
+          <div className="rounded-lg border border-red-800/40 bg-red-950/10 p-3 space-y-2">
+            {openIssues.map((i: any) => (
+              <div key={i.id} className="flex items-center justify-between rounded bg-black/20 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="badge badge-xs badge-error">{i.type}</span>
+                  <span className="text-sm">{i.title}</span>
+                </div>
+                {canManage && (
+                  <select className="select select-bordered select-xs" value={i.status}
+                    onChange={e => handleIssueStatus(i.id, e.target.value)}>
+                    {ISSUE_STATUSES.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {showIssueForm && (
+          <div className="rounded-lg border border-gray-700 p-3 space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] text-gray-400 mb-1">이슈 제목 *</label>
+                <input type="text" className="input input-bordered input-sm w-full"
+                  value={issueForm.title} onChange={e => setIssueForm({ ...issueForm, title: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1">분류</label>
+                <select className="select select-bordered select-sm w-full"
+                  value={issueForm.type} onChange={e => setIssueForm({ ...issueForm, type: e.target.value })}>
+                  {ISSUE_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1">발생일</label>
+                <input type="date" className="input input-bordered input-sm w-full"
+                  value={issueForm.occurredAt} onChange={e => setIssueForm({ ...issueForm, occurredAt: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1">위치</label>
+                <input type="text" className="input input-bordered input-sm w-full"
+                  value={issueForm.location} onChange={e => setIssueForm({ ...issueForm, location: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1">책임구분</label>
+                <input type="text" className="input input-bordered input-sm w-full"
+                  value={issueForm.responsibility} onChange={e => setIssueForm({ ...issueForm, responsibility: e.target.value })} />
+              </div>
+            </div>
+            <textarea className="textarea textarea-bordered w-full text-sm" rows={2} placeholder="상세 내용"
+              value={issueForm.description} onChange={e => setIssueForm({ ...issueForm, description: e.target.value })} />
+            <div className="flex justify-end gap-2">
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowIssueForm(false)}>취소</button>
+              <button className="btn btn-primary btn-sm" onClick={handleIssueSubmit} disabled={saving}>
+                {saving ? <span className="loading loading-spinner loading-xs" /> : '등록'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {doneIssues.length > 0 && (
+          <details className="rounded-lg border border-gray-800">
+            <summary className="cursor-pointer px-3 py-2 text-xs text-gray-500 hover:text-gray-300">완료 이슈 {doneIssues.length}건</summary>
+            <div className="divide-y divide-gray-800 px-3 pb-2">
+              {doneIssues.map((i: any) => (
+                <div key={i.id} className="py-2 flex items-center gap-2 opacity-60">
+                  <span className="badge badge-xs badge-success">완료</span>
+                  <span className="text-sm">{i.title}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+        {issues.length === 0 && !showIssueForm && <p className="text-sm text-gray-600">등록된 이슈가 없습니다.</p>}
+      </SectionCard>
     </div>
   );
 };
@@ -1115,56 +1310,109 @@ const DocumentPanel = ({ siteId, canManage }: { siteId: string; canManage: boole
     fetchDocs();
   };
 
-  const fmtSize = (b: number | null) => {
-    if (!b) return '-';
-    if (b < 1024) return `${b}B`;
-    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)}KB`;
-    return `${(b / (1024 * 1024)).toFixed(1)}MB`;
-  };
+  const fmtSize = (b: number | null) => !b ? '' : b < 1024 * 1024 ? `${(b / 1024).toFixed(0)}KB` : `${(b / (1024 * 1024)).toFixed(1)}MB`;
+  const DOC_TYPE_BADGE: Record<string, string> = { '분할납품요구서': 'badge-info', '착수계': 'badge-warning', '준공계': 'badge-success', '공문': 'badge-ghost' };
+  const getDocType = (name: string) => Object.keys(DOC_TYPE_BADGE).find(k => name.includes(k));
 
   return (
-    <div className="rounded-xl border border-gray-800 bg-black/20 p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">서류 ({docs.length})</p>
-        {canManage && (
-          <label className="btn btn-ghost btn-xs gap-1 cursor-pointer">
-            {uploading ? <span className="loading loading-spinner loading-xs" /> : <PlusIcon className="h-3.5 w-3.5" />}
-            파일 업로드
-            <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
-          </label>
-        )}
-      </div>
-
+    <SectionCard
+      title={`서류 (${docs.length}개)`}
+      action={canManage ? (
+        <label className="btn btn-ghost btn-xs gap-1 cursor-pointer">
+          {uploading ? <span className="loading loading-spinner loading-xs" /> : <DocumentArrowUpIcon className="h-3.5 w-3.5" />}
+          업로드
+          <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
+        </label>
+      ) : null}
+    >
       {loading ? (
         <div className="py-6 text-center"><span className="loading loading-spinner loading-sm" /></div>
       ) : docs.length === 0 ? (
-        <p className="py-6 text-center text-sm text-gray-500">등록된 서류가 없습니다.</p>
+        <div className="py-8 text-center">
+          <p className="text-sm text-gray-500">등록된 서류가 없습니다.</p>
+          <p className="text-xs text-gray-600 mt-1">분할납품요구서, 착수계, 준공계 등을 업로드하세요.</p>
+        </div>
       ) : (
         <div className="divide-y divide-gray-800">
-          {docs.map((d: any) => (
-            <div key={d.id} className="flex items-center justify-between py-2.5">
-              <div>
-                <a href={`/api/documents/${d.id}`} target="_blank" rel="noreferrer"
-                  className="text-sm text-blue-400 hover:underline">{d.fileName}</a>
-                <p className="text-[11px] text-gray-500 mt-0.5">
-                  {fmtSize(d.fileSize)} · {userName(d.uploadedBy)} · {fmtDate(d.createdAt)}
-                </p>
+          {docs.map((d: any) => {
+            const docType = getDocType(d.fileName);
+            return (
+              <div key={d.id} className="flex items-center justify-between py-2.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  {docType && <span className={`badge badge-xs ${DOC_TYPE_BADGE[docType]} flex-shrink-0`}>{docType}</span>}
+                  <a href={`/api/documents/${d.id}`} target="_blank" rel="noreferrer"
+                    className="text-sm text-blue-400 hover:underline truncate">{d.fileName}</a>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                  <span className="text-[11px] text-gray-500">{fmtSize(d.fileSize)}</span>
+                  {canManage && (
+                    <button className="btn btn-ghost btn-xs text-red-400" onClick={() => handleDel(d.id)}>
+                      <TrashIcon className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
-              {canManage && (
-                <button className="btn btn-ghost btn-xs text-red-400" onClick={() => handleDel(d.id)}>
-                  <TrashIcon className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
+    </SectionCard>
+  );
+};
+
+// ══════════════════════════════════════════════════════
+// 하자 탭
+// ══════════════════════════════════════════════════════
+const DefectPanel = ({ site, siteId, canManage, onMutate }: any) => {
+  const warrantyEnd = site.completionDate
+    ? new Date(new Date(site.completionDate).setFullYear(new Date(site.completionDate).getFullYear() + (site.warrantyPeriod ?? 2)))
+    : null;
+  const wd = getDday(warrantyEnd);
+  const defectIssues = (site.issues ?? []).filter((i: any) => ['누수', '손상', '색상 오류', '재작업', '민원'].includes(i.type));
+
+  return (
+    <div className="space-y-3">
+      <SectionCard title="하자보수 기간">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <InfoRow label="준공일" value={fmtDate(site.completionDate)} />
+          <InfoRow label="하자담보기간" value={`${site.warrantyPeriod ?? 2}년`} />
+          <div>
+            <p className="text-[11px] text-gray-500 mb-0.5">하자 만료일</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-gray-200">{warrantyEnd ? fmtDate(warrantyEnd) : '-'}</p>
+              {wd && <span className={`badge badge-xs ${wd.overdue ? 'badge-error' : wd.urgent ? 'badge-warning' : 'badge-success'}`}>
+                {wd.overdue ? `만료 D+${Math.abs(wd.diff)}` : `D-${wd.diff}`}
+              </span>}
+            </div>
+          </div>
+        </div>
+        {!site.completionDate && <p className="text-xs text-gray-600">기본정보 탭 → 서류 현황에서 준공일을 등록해주세요.</p>}
+      </SectionCard>
+
+      <SectionCard title={`하자 접수 이력 (${defectIssues.length}건)`}>
+        {defectIssues.length === 0 ? (
+          <p className="text-sm text-gray-600">접수된 하자가 없습니다.</p>
+        ) : (
+          <div className="space-y-2">
+            {defectIssues.map((i: any) => (
+              <div key={i.id} className="rounded-lg border border-gray-800 px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <span className={`badge badge-xs ${i.status === '완료' ? 'badge-success' : 'badge-error'}`}>{i.type}</span>
+                  <span className="text-sm">{i.title}</span>
+                  <span className="ml-auto text-xs text-gray-500">{fmtDate(i.occurredAt || i.createdAt)}</span>
+                </div>
+                {i.location && <p className="text-xs text-gray-500 mt-0.5">위치: {i.location}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
     </div>
   );
 };
 
 // ══════════════════════════════════════════════════════
-// 댓글 탭
+// 코멘트 탭
 // ══════════════════════════════════════════════════════
 const CommentsPanel = ({ site, siteId, onMutate }: any) => {
   const [comment, setComment] = useState('');
@@ -1180,43 +1428,34 @@ const CommentsPanel = ({ site, siteId, onMutate }: any) => {
     setComment(''); setSubmitting(false); onMutate();
   };
 
-  const comments = site.comments ?? [];
+  const fmtdt = (v: any) => {
+    if (!v) return '';
+    try { return new Date(v).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
+  };
 
+  const comments = site.comments ?? [];
   return (
     <div className="space-y-4">
       <div className="flex gap-3">
-        <textarea className="textarea textarea-bordered flex-1 text-sm" rows={2}
-          placeholder="댓글을 입력하세요..."
-          value={comment} onChange={(e) => setComment(e.target.value)} />
+        <textarea className="textarea textarea-bordered flex-1 text-sm resize-none" rows={2}
+          placeholder="코멘트를 입력하세요... (Ctrl+Enter 등록)"
+          value={comment} onChange={e => setComment(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit(); }} />
         <button className="btn btn-primary btn-sm self-end" onClick={handleSubmit} disabled={submitting || !comment.trim()}>
           {submitting ? <span className="loading loading-spinner loading-xs" /> : '등록'}
         </button>
       </div>
-
       {comments.length === 0 ? (
-        <p className="py-6 text-center text-sm text-gray-500">댓글이 없습니다.</p>
+        <p className="py-6 text-center text-sm text-gray-500">코멘트가 없습니다.</p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {comments.map((c: any) => (
-            <div key={c.id} className="rounded-xl border border-gray-800 p-3">
+            <div key={c.id} className="rounded-xl border border-gray-800 bg-gray-900/40 p-3">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-sm font-medium">{userName(c.author)}</span>
-                <span className="text-[11px] text-gray-500">{fmtDatetime(c.createdAt)}</span>
+                <span className="text-[11px] text-gray-500">{fmtdt(c.createdAt)}</span>
               </div>
-              <p className="text-sm whitespace-pre-wrap">{c.content}</p>
-              {c.replies?.length > 0 && (
-                <div className="mt-2 ml-4 space-y-2 border-l-2 border-gray-800 pl-3">
-                  {c.replies.map((r: any) => (
-                    <div key={r.id}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-gray-300">{userName(r.author)}</span>
-                        <span className="text-[11px] text-gray-500">{fmtDatetime(r.createdAt)}</span>
-                      </div>
-                      <p className="text-sm">{r.content}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <p className="text-sm whitespace-pre-wrap text-gray-200">{c.content}</p>
             </div>
           ))}
         </div>

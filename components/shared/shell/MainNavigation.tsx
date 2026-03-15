@@ -4,9 +4,9 @@ import {
   BuildingLibraryIcon,
   UsersIcon,
   ShieldCheckIcon,
-  WrenchScrewdriverIcon,
   UserCircleIcon,
   UserPlusIcon,
+  MegaphoneIcon,
 } from '@heroicons/react/24/outline';
 import { useTranslation } from 'next-i18next';
 import NavigationItems from './NavigationItems';
@@ -52,7 +52,6 @@ const MainNavigation = ({ activePathname, onNavigate }: NavigationProps) => {
         menus={[
           { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: exact('/dashboard') },
           { name: t('nav-sites'), href: '/sites', icon: BuildingOffice2Icon, active: active('/sites') },
-          { name: t('nav-production-dashboard'), href: '/production', icon: WrenchScrewdriverIcon, active: active('/production') },
           { name: '게스트 관리', href: '/guests', icon: UserPlusIcon, active: active('/guests') },
           { name: t('my-page-title'), href: '/my', icon: UserCircleIcon, active: exact('/my') },
           { name: t('security'), href: '/settings/security', icon: ShieldCheckIcon, active: exact('/settings/security') },
@@ -71,8 +70,13 @@ const MainNavigation = ({ activePathname, onNavigate }: NavigationProps) => {
   }
 
   if (isUser) {
+    // 영업팀 or 매니저 이상은 영업관리 메뉴 노출
+    const dept = profile?.department || '';
+    const isSalesOrManager = isManager || dept === '영업' || dept === '영업팀';
+    if (isSalesOrManager) {
+      menus.push({ name: '영업관리', href: '/sales', icon: MegaphoneIcon, active: active('/sales') });
+    }
     menus.push({ name: t('nav-sites'), href: '/sites', icon: BuildingOffice2Icon, active: active('/sites') });
-    menus.push({ name: t('nav-production-dashboard'), href: '/production', icon: WrenchScrewdriverIcon, active: active('/production') });
   }
 
   // 계정관리 (매니저 이상)

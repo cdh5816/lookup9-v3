@@ -118,8 +118,15 @@ const handleGET = async (id: string, res: NextApiResponse) => {
 };
 
 const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, session: any, tm: any) => {
-  const { name, address, clientId, status, description, statusReason,
-    siteType, salesStage, pipeRate, caulkingRate, startDocsDone, completionDocsDone, completionDate } = req.body;
+  const {
+    name, address, clientId, status, description, statusReason, siteType,
+    salesStage, estimatedAmount, salesNote,
+    inspectionAgency, inspectionBody, acceptanceAgency, inspectionDone, inspectionDoneAt,
+    installerName, installerContact, installerPhone,
+    startDocsDone, startDocsDate, completionDocsDone, completionDocsDate, completionDate,
+    // 계약 정보 직접 수정 (이력 누적)
+    contractQuantity, deliveryDeadline, warrantyPeriod,
+  } = req.body;
 
   if (status) {
     const currentSite = await prisma.site.findUnique({ where: { id }, select: { status: true } });
@@ -137,6 +144,44 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
     }
   }
 
+  // 물량/납품기한 변경 시 ChangeLog 자동 기록
+  if (contractQuantity !== undefined || deliveryDeadline !== undefined) {
+    const currentSite = await prisma.site.findUnique({
+      where: { id },
+      select: { contractQuantity: true, deliveryDeadline: true },
+    });
+    if (currentSite) {
+      if (contractQuantity !== undefined && String(currentSite.contractQuantity) !== String(contractQuantity)) {
+        await prisma.changeLog.create({
+          data: {
+            siteId: id,
+            type: '물량변경',
+            beforeValue: currentSite.contractQuantity ? String(currentSite.contractQuantity) : null,
+            afterValue: String(contractQuantity),
+            requesterId: session.user.id,
+            status: '승인',
+            approvedAt: new Date(),
+            approverId: session.user.id,
+          },
+        });
+      }
+      if (deliveryDeadline !== undefined && currentSite.deliveryDeadline?.toISOString().split('T')[0] !== deliveryDeadline) {
+        await prisma.changeLog.create({
+          data: {
+            siteId: id,
+            type: '납품기한변경',
+            beforeValue: currentSite.deliveryDeadline ? currentSite.deliveryDeadline.toISOString().split('T')[0] : null,
+            afterValue: deliveryDeadline,
+            requesterId: session.user.id,
+            status: '승인',
+            approvedAt: new Date(),
+            approverId: session.user.id,
+          },
+        });
+      }
+    }
+  }
+
   const site = await prisma.site.update({
     where: { id },
     data: {
@@ -147,11 +192,24 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
       ...(description !== undefined && { description }),
       ...(siteType !== undefined && { siteType }),
       ...(salesStage !== undefined && { salesStage }),
-      ...(pipeRate !== undefined && { pipeRate: Number(pipeRate) }),
-      ...(caulkingRate !== undefined && { caulkingRate: Number(caulkingRate) }),
+      ...(estimatedAmount !== undefined && { estimatedAmount: estimatedAmount ? Number(String(estimatedAmount).replace(/,/g, '')) : null }),
+      ...(salesNote !== undefined && { salesNote }),
+      ...(inspectionAgency !== undefined && { inspectionAgency }),
+      ...(inspectionBody !== undefined && { inspectionBody }),
+      ...(acceptanceAgency !== undefined && { acceptanceAgency }),
+      ...(inspectionDone !== undefined && { inspectionDone }),
+      ...(inspectionDoneAt !== undefined && { inspectionDoneAt: inspectionDoneAt ? new Date(inspectionDoneAt) : null }),
+      ...(installerName !== undefined && { installerName }),
+      ...(installerContact !== undefined && { installerContact }),
+      ...(installerPhone !== undefined && { installerPhone }),
       ...(startDocsDone !== undefined && { startDocsDone }),
+      ...(startDocsDate !== undefined && { startDocsDate: startDocsDate ? new Date(startDocsDate) : null }),
       ...(completionDocsDone !== undefined && { completionDocsDone }),
+      ...(completionDocsDate !== undefined && { completionDocsDate: completionDocsDate ? new Date(completionDocsDate) : null }),
       ...(completionDate !== undefined && { completionDate: completionDate ? new Date(completionDate) : null }),
+      ...(contractQuantity !== undefined && { contractQuantity: contractQuantity ? Number(String(contractQuantity).replace(/,/g, '')) : null }),
+      ...(deliveryDeadline !== undefined && { deliveryDeadline: deliveryDeadline ? new Date(deliveryDeadline) : null }),
+      ...(warrantyPeriod !== undefined && { warrantyPeriod: warrantyPeriod ? Number(warrantyPeriod) : 2 }),
       updatedAt: new Date(),
     },
   });

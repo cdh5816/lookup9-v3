@@ -268,18 +268,56 @@ model jackson_ttl {
 
 model Site {
   id          String   @id @default(uuid())
-  name        String
-  address     String?
-  clientId    String?
+  name        String                             // 사업명 (현장명)
+  address     String?                            // 현장 주소
+  clientId    String?                            // 수요기관 (발주처)
   teamId      String?
-  status      String   @default("대기")
-  siteType    String   @default("납품설치도")  // 납품설치도 | 납품하차도
-  salesStage  String?                           // 영업단계: 설계지원중 | 영업진행중 | 수주영업중 | 영업완료
-  pipeRate    Int?     @default(0)              // 하지파이프 진행률
-  caulkingRate Int?    @default(0)             // 코킹 진행률
-  startDocsDone Boolean @default(false)
-  completionDocsDone Boolean @default(false)
-  completionDate DateTime?                      // 준공일 (하자보수 기산점)
+
+  // ── 현장 상태 (SaaS 통합 라이프사이클) ──
+  // SALES_PIPELINE: 영업중 (계약서 없음)
+  // SALES_CONFIRMED: 수주확정 (계약서 대기)
+  // CONTRACT_ACTIVE: 계약완료, 진행중
+  // COMPLETED: 준공완료
+  // WARRANTY: 하자기간
+  // FAILED: 영업실패 (아카이브)
+  status      String   @default("SALES_PIPELINE")
+  siteType    String   @default("납품설치도")    // 납품설치도 | 납품하차도
+
+  // ── 분할납품요구서 파싱 필드 ──
+  contractNo        String?                      // 납품요구번호 (R25TB01360601-00)
+  procurementNo     String?                      // 계약번호 (002370053-11)
+  contractDate      DateTime?                    // 납품요구일자
+  contractAmount    Decimal? @db.Decimal(15, 0)  // 계약금액
+  contractQuantity  Decimal? @db.Decimal(12, 2)  // 계약물량 (m²)
+  unitPrice         Decimal? @db.Decimal(15, 0)  // 단가
+  specification     String?                      // 규격/사양
+  deliveryDeadline  DateTime?                    // 납품기한
+  warrantyPeriod    Int?     @default(2)         // 하자담보기간 (년)
+  completionDate    DateTime?                    // 준공일
+
+  // ── 검사/검수 기관 ──
+  inspectionAgency  String?                      // 검사기관 (수요기관자체 | 전문검사기관 | 조달청)
+  inspectionBody    String?                      // 검사기관명 (전문검사기관인 경우)
+  acceptanceAgency  String?                      // 검수기관
+  inspectionDone    Boolean  @default(false)     // 검사 완료 여부
+  inspectionDoneAt  DateTime?                    // 검사 완료일
+
+  // ── 영업 정보 (SALES_PIPELINE 단계) ──
+  salesStage        String?                      // 접촉중 | 제안 | 협의중 | 수주확정 | 실패
+  salesNote         String?  @db.Text            // 영업 활동 메모
+  estimatedAmount   Decimal? @db.Decimal(15, 0)  // 예상 계약금액
+
+  // ── 협력사 (설치 시공사) ──
+  installerName     String?                      // 협력사명
+  installerContact  String?                      // 협력사 담당자
+  installerPhone    String?                      // 협력사 연락처
+
+  // ── 착수/준공 서류 ──
+  startDocsDone     Boolean  @default(false)     // 착수계 제출 여부
+  startDocsDate     DateTime?                    // 착수계 제출일
+  completionDocsDone Boolean @default(false)     // 준공계 제출 여부
+  completionDocsDate DateTime?                   // 준공계 제출일
+
   description String?  @db.Text
   createdById String
   createdAt   DateTime @default(now())

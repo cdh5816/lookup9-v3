@@ -101,12 +101,26 @@ export async function verifySiteAccess(userId: string, siteId: string) {
   // 회사 스코프 강제
   if (site.teamId && site.teamId !== tm.teamId) return null;
 
-  // 외부 계정은 배정된 현장만
+  // 외부 계정(PARTNER)은 개인 배정 또는 협력사 회사 배정 확인
   if (isExternalRole(tm.role)) {
+    // 개인 배정 확인
     const assignment = await prisma.siteAssignment.findFirst({
       where: { siteId, userId },
     });
-    if (!assignment) return null;
+    if (assignment) return tm;
+
+    // 협력사 회사 단위 배정 확인
+    const partnerAssign = await prisma.partnerMember.findFirst({
+      where: { userId },
+      include: {
+        partnerCompany: {
+          include: { sites: { where: { siteId } } },
+        },
+      },
+    });
+    if (partnerAssign?.partnerCompany?.sites?.length > 0) return tm;
+
+    return null;
   }
 
   return tm;

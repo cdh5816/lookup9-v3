@@ -11,7 +11,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const tm = await getTeamMemberByUserId(session.user.id);
   if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
 
-  // 협력사(PARTNER)도 게스트 생성 가능 (자신이 배정된 현장에 한해)
   const canCreate = hasMinRole(tm.role, 'MANAGER') || tm.role === 'PARTNER';
   if (!canCreate && req.method !== 'GET') {
     return res.status(403).json({ error: { message: 'Forbidden' } });
@@ -37,83 +36,95 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     },
     include: {
       teamMembers: { where: { teamId: tm.teamId }, select: { role: true } },
-      siteAssignments: { include: { site: { select: { id: true, name: true, status: true } } } },
+      siteAssignments: {
+        include: {
+          site: { select: { id: true, name: true, status: true } },
+        },
+      },
     },
     orderBy: { createdAt: 'desc' },
   });
 
-  // 현장 목록 (배정용)
-  const siteWhere: any = { teamId: tm.teamId };
+  // 삭제되지 않은 활성 현장만 필터링 (FAILED/SALES_PIPELINE 제외)
+  const guestsFiltered = guests.map(g => ({
+    ...g,
+    siteAssignments: g.siteAssignments.filter(a =>
+      a.site && ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY', 'SALES_CONFIRMED'].includes(a.site.status)
+    ),
+  }));
+
+  // 현장 목록 (배정용) - 활성 현장만
+  const siteWhere: any = {
+    teamId: tm.teamId,
+    status: { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] },
+  };
   if (tm.role === 'PARTNER') {
     siteWhere.assignments = { some: { userId: tm.userId } };
   }
+
   const siteOptions = await prisma.site.findMany({
     where: siteWhere,
     select: { id: true, name: true, status: true },
-    orderBy: { createdAt: 'desc' },
+    orderBy: { name: 'asc' },
   });
 
-  const creatableRoles = tm.role === 'PARTNER' ? ['GUEST'] : ['GUEST', 'VIEWER'];
+  const creatableRoles = hasMinRole(tm.role, 'MANAGER') ? ['GUEST', 'VIEWER'] : ['GUEST'];
 
   return res.status(200).json({
-    data: guests,
+    data: guestsFiltered,
     meta: { siteOptions, creatableRoles },
   });
 };
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: any, tm: any) => {
-  const { name, username, email, password, company, position, phone, role, assignedSiteIds } = req.body;
+  const { name, username, email, password, position, phone, company, role, siteIds } = req.body;
 
   if (!name || !username || !password) {
     return res.status(400).json({ error: { message: '이름, 아이디, 비밀번호는 필수입니다.' } });
   }
 
+  const targetRole = role || 'GUEST';
+  if (!['GUEST', 'VIEWER'].includes(targetRole)) {
+    return res.status(400).json({ error: { message: '게스트 또는 뷰어 역할만 생성할 수 있습니다.' } });
+  }
+
+  if (!Array.isArray(siteIds) || siteIds.length === 0) {
+    return res.status(400).json({ error: { message: '최소 1개 현장을 지정해야 합니다.' } });
+  }
+
   const existingUsername = await prisma.user.findUnique({ where: { username } });
   if (existingUsername) return res.status(400).json({ error: { message: '이미 사용 중인 아이디입니다.' } });
 
-  const finalEmail = email && email.trim() ? email.trim() : `${username}@internal.lookup9`;
+  const finalEmail = email?.trim() || `${username}@internal.lookup9`;
+  const existingEmail = await prisma.user.findUnique({ where: { email: finalEmail } });
+  if (existingEmail) return res.status(400).json({ error: { message: '이미 사용 중인 아이디입니다.' } });
 
-  const guestRole = role === 'VIEWER' ? 'VIEWER' : 'GUEST';
-
-  // 협력사는 자신이 배정된 현장에만 게스트 생성 가능
-  let allowedSiteIds = assignedSiteIds ?? [];
-  if (tm.role === 'PARTNER' && allowedSiteIds.length > 0) {
+  // PARTNER는 자신이 배정된 현장에만 게스트 생성 가능
+  if (tm.role === 'PARTNER') {
     const myAssignments = await prisma.siteAssignment.findMany({
-      where: { userId: tm.userId, siteId: { in: allowedSiteIds } },
+      where: { userId: tm.userId, siteId: { in: siteIds } },
       select: { siteId: true },
     });
-    allowedSiteIds = myAssignments.map((a: any) => a.siteId);
+    if (myAssignments.length !== siteIds.length) {
+      return res.status(403).json({ error: { message: '배정된 현장에만 게스트를 생성할 수 있습니다.' } });
+    }
   }
-
-  const existing = await prisma.user.findUnique({ where: { email: finalEmail } });
-  if (existing) return res.status(400).json({ error: { message: '이미 사용 중인 이메일입니다.' } });
 
   const hashed = await hashPassword(password);
 
   const user = await prisma.$transaction(async (tx) => {
-    const newUser = await tx.user.create({
+    const created = await tx.user.create({
       data: {
         name, username, email: finalEmail, password: hashed,
-        company: company || null,
-        position: position || null,
-        phone: phone || null,
-        department: '게스트',
+        position: position || null, phone: phone || null, company: company || null,
       },
     });
-
-    await tx.teamMember.create({
-      data: { teamId: tm.teamId, userId: newUser.id, role: guestRole },
+    await tx.teamMember.create({ data: { teamId: tm.teamId, userId: created.id, role: targetRole } });
+    await tx.siteAssignment.createMany({
+      data: siteIds.map((siteId: string) => ({ siteId, userId: created.id, assignedRole: targetRole })),
+      skipDuplicates: true,
     });
-
-    for (const siteId of allowedSiteIds) {
-      await tx.siteAssignment.upsert({
-        where: { siteId_userId: { siteId, userId: newUser.id } },
-        update: {},
-        create: { siteId, userId: newUser.id, assignedRole: guestRole },
-      });
-    }
-
-    return newUser;
+    return created;
   });
 
   return res.status(201).json({ data: user });

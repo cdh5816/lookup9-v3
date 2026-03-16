@@ -107,6 +107,7 @@ model User {
   leaveManaged     LeaveRequest[] @relation("LeaveManager")
   leaveAdmined     LeaveRequest[] @relation("LeaveAdmin")
   productionOrders ProductionOrder[] @relation("ProductionOrderCreator")
+  partnerMemberships PartnerMember[]  @relation("PartnerMemberUser")
 }
 
 model Team {
@@ -125,6 +126,7 @@ model Team {
   sites           Site[]
   clients         Client[]
   notices         Notice[]
+  partnerCompanies PartnerCompany[]
 
   @@index([billingId])
 }
@@ -346,8 +348,7 @@ model Site {
   changeLogs    ChangeLog[]
   schedules     Schedule[]
   productionOrders ProductionOrder[]
-
-  @@index([teamId])
+  partnerAssigns   PartnerSiteAssign[]
   @@index([clientId])
   @@index([createdById])
   @@index([status])
@@ -384,6 +385,58 @@ model Client {
   sites Site[]
 
   @@index([teamId])
+}
+
+// ============================================
+// 협력사 회사 단위 관리
+// ============================================
+model PartnerCompany {
+  id          String   @id @default(uuid())
+  name        String                           // 회사명
+  bizNo       String?                          // 사업자번호
+  contact     String?                          // 담당자명
+  phone       String?                          // 연락처
+  email       String?                          // 이메일
+  address     String?                          // 주소
+  notes       String?  @db.Text
+  teamId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  team     Team?              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  members  PartnerMember[]    // 소속 직원 계정
+  sites    PartnerSiteAssign[] // 배정된 현장들
+
+  @@index([teamId])
+}
+
+// 협력사 소속 직원 (User와 연결)
+model PartnerMember {
+  id               String   @id @default(uuid())
+  partnerCompanyId String
+  userId           String
+  position         String?
+  createdAt        DateTime @default(now())
+
+  partnerCompany PartnerCompany @relation(fields: [partnerCompanyId], references: [id], onDelete: Cascade)
+  user           User           @relation("PartnerMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerCompanyId, userId])
+  @@index([userId])
+}
+
+// 협력사-현장 배정 (회사 단위)
+model PartnerSiteAssign {
+  id               String   @id @default(uuid())
+  partnerCompanyId String
+  siteId           String
+  assignedAt       DateTime @default(now())
+
+  partnerCompany PartnerCompany @relation(fields: [partnerCompanyId], references: [id], onDelete: Cascade)
+  site           Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerCompanyId, siteId])
+  @@index([siteId])
 }
 
 model SalesRecord {

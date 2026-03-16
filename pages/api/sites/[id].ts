@@ -254,6 +254,30 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
     },
   });
 
+  // 시공업체명 변경 시 → 같은 company명 가진 PARTNER 계정 자동 현장 배정
+  if (installerName && installerName.trim()) {
+    const siteInfo = await prisma.site.findUnique({ where: { id }, select: { teamId: true } });
+    if (siteInfo?.teamId) {
+      // 같은 회사명의 PARTNER 계정 찾기
+      const partnerUsers = await prisma.user.findMany({
+        where: {
+          company: { equals: installerName.trim(), mode: 'insensitive' },
+          teamMembers: { some: { teamId: siteInfo.teamId, role: 'PARTNER' } },
+        },
+        select: { id: true },
+      });
+      if (partnerUsers.length > 0) {
+        await prisma.siteAssignment.createMany({
+          data: partnerUsers.map(u => ({ siteId: id, userId: u.id, assignedRole: 'PARTNER' })),
+          skipDuplicates: true,
+        });
+        // 현장 담당자들에게 알림
+        await notifySiteMembers(id, session.user.id, 'PARTNER_ASSIGNED',
+          `시공업체 "${installerName}" 소속 ${partnerUsers.length}명이 현장에 배정되었습니다.`);
+      }
+    }
+  }
+
   return res.status(200).json({ data: site });
 };
 

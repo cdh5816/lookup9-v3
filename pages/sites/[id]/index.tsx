@@ -517,7 +517,7 @@ function OverviewTab({ site, siteId, canManage, onMutate }: any) {
       {/* 배정 인원 (관리 가능) */}
       <AssignmentPanel siteId={siteId} assignments={site.assignments} canManage={canManage} onMutate={onMutate} />
 
-      {/* 시공업체 (협력사) */}
+      {/* 시공업체 */}
       <ContractorPanel site={site} siteId={siteId} canManage={canManage} onMutate={onMutate} />
     </div>
   );
@@ -1110,7 +1110,7 @@ function AssignmentPanel({ siteId, assignments, canManage, onMutate }: any) {
 }
 
 // ══════════════════════════════════════════════════════
-// 시공업체 (협력사) 패널
+// 시공업체 패널
 // ══════════════════════════════════════════════════════
 function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
   const [editing, setEditing] = useState(false);
@@ -1120,32 +1120,37 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
     installerPhone: site.installerPhone || '',
   });
   const [saving, setSaving] = useState(false);
-
-  // 현장에 배정된 협력사 회사 목록
-  const { data: partnerData } = useSWR('/api/partner-companies', fetcher);
-  const allCompanies: any[] = partnerData?.data || [];
-  const assignedCompanies = allCompanies.filter((c: any) =>
-    c.sites?.some((s: any) => s.siteId === siteId)
-  );
+  const [assigned, setAssigned] = useState(0);
 
   const handleSave = async () => {
     setSaving(true);
-    await fetch(`/api/sites/${siteId}`, {
+    const res = await fetch(`/api/sites/${siteId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
     });
-    setSaving(false); setEditing(false); onMutate();
+    const json = await res.json();
+    setSaving(false);
+    setEditing(false);
+    // 자동 배정된 인원 수 표시
+    if (json.data?.autoAssigned) setAssigned(json.data.autoAssigned);
+    onMutate();
   };
 
   return (
-    <div className="rounded-xl border border-gray-800 bg-black/20 p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-gray-400">시공업체 / 협력사</p>
+    <div className="rounded-xl border border-gray-800 bg-black/20 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-medium text-gray-400">시공업체</p>
         {canManage && !editing && (
           <button className="btn btn-ghost btn-xs" onClick={() => setEditing(true)}>수정</button>
         )}
       </div>
+
+      {assigned > 0 && (
+        <div className="mb-2 rounded-lg bg-blue-950/30 border border-blue-800/40 px-3 py-1.5 text-xs text-blue-300">
+          ✓ {form.installerName} 소속 계정 {assigned}명이 현장에 자동 배정되었습니다.
+        </div>
+      )}
 
       {editing ? (
         <div className="space-y-2">
@@ -1153,6 +1158,7 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
             <div>
               <label className="block text-[10px] text-gray-500 mb-1">업체명</label>
               <input className="input input-bordered input-sm w-full"
+                placeholder="예) 덕인금속"
                 value={form.installerName}
                 onChange={e => setForm({ ...form, installerName: e.target.value })} />
             </div>
@@ -1169,6 +1175,9 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
                 onChange={e => setForm({ ...form, installerPhone: e.target.value })} />
             </div>
           </div>
+          <p className="text-[10px] text-gray-600">
+            ※ 업체명을 저장하면 같은 회사명의 협력사 계정이 이 현장에 자동으로 배정됩니다.
+          </p>
           <div className="flex justify-end gap-2">
             <button className="btn btn-ghost btn-xs" onClick={() => setEditing(false)}>취소</button>
             <button className={`btn btn-primary btn-xs ${saving ? 'loading' : ''}`}
@@ -1176,45 +1185,28 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
           </div>
         </div>
       ) : (
-        <div>
-          {site.installerName ? (
-            <div className="grid grid-cols-3 gap-x-4 text-sm">
+        site.installerName ? (
+          <div className="grid grid-cols-3 gap-x-4 text-sm">
+            <div>
+              <p className="text-[10px] text-gray-600 mb-0.5">업체명</p>
+              <p className="text-gray-200 font-medium">{site.installerName}</p>
+            </div>
+            {site.installerContact && (
               <div>
-                <p className="text-[10px] text-gray-600 mb-0.5">업체명</p>
-                <p className="text-gray-200 font-medium">{site.installerName}</p>
+                <p className="text-[10px] text-gray-600 mb-0.5">담당자</p>
+                <p className="text-gray-300">{site.installerContact}</p>
               </div>
-              {site.installerContact && (
-                <div>
-                  <p className="text-[10px] text-gray-600 mb-0.5">담당자</p>
-                  <p className="text-gray-300">{site.installerContact}</p>
-                </div>
-              )}
-              {site.installerPhone && (
-                <div>
-                  <p className="text-[10px] text-gray-600 mb-0.5">연락처</p>
-                  <p className="text-gray-300">{site.installerPhone}</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-600">등록된 시공업체가 없습니다.</p>
-          )}
-
-          {/* 배정된 협력사 계정 */}
-          {assignedCompanies.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-gray-800">
-              <p className="text-[10px] text-gray-600 mb-1.5">배정된 협력사 계정</p>
-              <div className="flex flex-wrap gap-2">
-                {assignedCompanies.map((c: any) => (
-                  <div key={c.id} className="rounded-lg border border-purple-800/40 bg-purple-950/10 px-2.5 py-1.5">
-                    <p className="text-xs font-medium text-purple-300">{c.name}</p>
-                    <p className="text-[10px] text-gray-500">직원 {c.members?.length || 0}명</p>
-                  </div>
-                ))}
+            )}
+            {site.installerPhone && (
+              <div>
+                <p className="text-[10px] text-gray-600 mb-0.5">연락처</p>
+                <p className="text-gray-300">{site.installerPhone}</p>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-600">등록된 시공업체가 없습니다.</p>
+        )
       )}
     </div>
   );

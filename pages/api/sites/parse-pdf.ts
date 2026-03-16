@@ -2,7 +2,6 @@
 /**
  * POST /api/sites/parse-pdf
  * 분할납품요구서 PDF 업로드 → 파싱 결과 반환
- * Body: { fileData: base64string, fileName: string }
  */
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getSession } from '@/lib/session';
@@ -27,7 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const tmpDir = os.tmpdir();
   const tmpPdf = path.join(tmpDir, `proc_${Date.now()}.pdf`);
-  const tmpPy = path.join(tmpDir, `parse_${Date.now()}.py`);
+  const tmpPy  = path.join(tmpDir, `parse_${Date.now()}.py`);
 
   try {
     fs.writeFileSync(tmpPdf, Buffer.from(fileData, 'base64'));
@@ -56,12 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-// Python 파싱 스크립트 (인라인) - 개선버전
-// 주요 개선:
-//   1. pdfplumber crop + rotate 옵션으로 각도 보정
-//   2. 텍스트 정규화 함수로 OCR 노이즈 제거
-//   3. 금액/수량 패턴 복수 후보 탐색
-//   4. 테이블 컬럼 인덱스 동적 탐지
+// ─── Python 파서 ─────────────────────────────────────────────────────────────
 const PYTHON_PARSER = `
 import sys, json, re, subprocess, unicodedata
 
@@ -76,36 +70,27 @@ def ensure_pdfplumber():
         return pdfplumber
 
 def normalize(s):
-    """유니코드 정규화 + 불필요 공백/특수문자 제거"""
     if not s:
         return ''
-    s = unicodedata.normalize('NFKC', s)
-    # 전각 공백, 줄바꿈 → 일반 공백
+    s = unicodedata.normalize('NFKC', str(s))
     s = s.replace('\\u3000', ' ').replace('\\r', ' ').replace('\\n', ' ')
-    # 연속 공백 → 단일 공백
     s = re.sub(r'\\s+', ' ', s)
     return s.strip()
 
 def extract_text_robust(pdf):
-    """각도 보정 포함 텍스트 추출 - 여러 설정으로 시도"""
     text_parts = []
     tables_all = []
-
     for page in pdf.pages:
-        # 1차: 기본 추출
         t = page.extract_text(x_tolerance=3, y_tolerance=3) or ''
         if len(t.strip()) < 50:
-            # 2차: 허용 오차 확대 (스캔 PDF 대응)
-            t = page.extract_text(x_tolerance=5, y_tolerance=5) or ''
+            t = page.extract_text(x_tolerance=6, y_tolerance=6) or ''
         if len(t.strip()) < 50:
-            # 3차: layout 모드 (회전 PDF 대응)
             try:
                 t = page.extract_text(layout=True) or ''
             except Exception:
                 pass
         text_parts.append(normalize(t))
 
-        # 테이블 추출 - 여러 설정 시도
         tbls = page.extract_tables({
             'vertical_strategy': 'lines',
             'horizontal_strategy': 'lines',
@@ -119,7 +104,6 @@ def extract_text_robust(pdf):
     return ' '.join(text_parts), tables_all
 
 def clean_num(s):
-    """숫자 문자열에서 숫자만 추출"""
     if not s:
         return None
     s = re.sub(r'[^\\d.]', '', normalize(str(s)))
@@ -135,51 +119,63 @@ def parse(pdf_path):
     def search(pattern, flags=re.IGNORECASE):
         return re.search(pattern, text, flags)
 
-    def search_all(pattern, flags=re.IGNORECASE):
-        return re.findall(pattern, text, flags)
-
     # ── 납품요구번호 ──
-    # 패턴: R25TB01360601-00 형식
-    m = search(r'납\\s*품\\s*요\\s*구\\s*번\\s*호\\s*[:\\uff1a]?\\s*([A-Z0-9][A-Z0-9\\-]{5,20})')
+    m = search(r'납\\s*품\\s*요\\s*구\\s*번\\s*호\\s*[:\\uff1a]?\\s*([A-Z0-9][A-Z0-9\\-]{5,25})')
     if not m:
         m = search(r'([A-Z]\\d{2}[A-Z]{2}\\d{8,}(?:-\\d+)?)')
     result['contractNo'] = m.group(1).strip() if m else None
 
     # ── 납품요구일자 ──
-    m = search(r'납\\s*품\\s*요\\s*구\\s*일\\s*자\\s*[:\\uff1a]?\\s*(\\d{4}[/\\-.]\\d{1,2}[/\\-.]\\d{1,2})')
+    m = search(r'납\\s*품\\s*요\\s*구\\s*일\\s*자\\s*[:\\uff1a]?\\s*(\\d{4}[/\\-.년]\\s*\\d{1,2}[/\\-.월]\\s*\\d{1,2})')
     if m:
-        result['contractDate'] = re.sub(r'[/.]', '-', m.group(1))
+        raw = m.group(1)
+        nums = re.findall(r'\\d+', raw)
+        if len(nums) >= 3:
+            result['contractDate'] = f'{nums[0]}-{nums[1].zfill(2)}-{nums[2].zfill(2)}'
 
     # ── 계약번호 ──
     m = search(r'계\\s*약\\s*번\\s*호\\s*제?\\s*([0-9\\-]+)\\s*호')
     result['procurementNo'] = m.group(1).strip() if m else None
 
     # ── 수요기관 ──
-    m = search(r'수\\s*요\\s*기\\s*관\\s*[:\\uff1a]?\\s*([가-힣\\s]{2,20}?)\\s*(?=\\d|납품|계약|사업|$)')
+    m = search(r'수\\s*요\\s*기\\s*관\\s*[:\\uff1a]?\\s*([가-힣\\s]{2,20}?)(?=\\s|\\d|납품|계약|사업|$)')
     if m:
         result['clientName'] = re.sub(r'\\s+', '', m.group(1)).strip()
 
     # ── 사업명 ──
-    m = search(r'사\\s*업\\s*명\\s*[:\\uff1a]?\\s*(.+?)(?=납품|계약|수요기관|\\d{4}/|$)', re.DOTALL)
+    m = search(r'사\\s*업\\s*명\\s*[:\\uff1a]?\\s*(.+?)(?=납품요구|계약번호|수요기관|\\d{4}[/\\-]|$)', re.DOTALL)
     if m:
         name = normalize(m.group(1))
-        # 너무 길거나 의미없는 문자 제거
-        name = re.sub(r'[\\[\\]\\(\\)]+', '', name).strip()
-        if 3 < len(name) < 100:
-            result['name'] = name[:100]
+        name = re.sub(r'[\\[\\]\\(\\)\\{\\}]+', '', name).strip()
+        if 3 < len(name) < 120:
+            result['name'] = name[:120]
+
+    # ── 품명 (물품명) ──
+    # 패턴1: 물품명 레이블
+    m = search(r'물\\s*품\\s*명\\s*[:\\uff1a]?\\s*([가-힣A-Za-z0-9\\s\\-\\.]{2,60}?)(?=\\s*규격|\\s*수량|\\s*단가|$)')
+    if m:
+        result['productName'] = normalize(m.group(1))
+    else:
+        # 패턴2: 품명 레이블
+        m = search(r'품\\s*명\\s*[:\\uff1a]?\\s*([가-힣A-Za-z0-9\\s\\-\\.]{2,60}?)(?=\\s*규격|\\s*수량|\\n)')
+        if m:
+            result['productName'] = normalize(m.group(1))
+
+    # ── 규격/사양 ──
+    # 패턴1: 규격 레이블
+    m = search(r'규\\s*격\\s*[:\\uff1a]?\\s*([A-Za-z가-힣0-9\\s\\-\\.×xTtmm²㎡,]{3,80}?)(?=\\s*수량|\\s*단가|\\s*납품|\\n)')
+    if m:
+        result['specification'] = normalize(m.group(1))
 
     # ── 하자담보책임기간 ──
     m = search(r'하\\s*자\\s*담\\s*보\\s*(?:책임)?\\s*기\\s*간\\s*[:\\uff1a]?\\s*(\\d+)\\s*년')
     result['warrantyPeriod'] = int(m.group(1)) if m else 2
 
-    # ── 계약금액 (복수 패턴 시도) ──
-    # 패턴1: 품대계 행
+    # ── 계약금액 ──
     m = search(r'품\\s*대\\s*계[^\\d]*(\\d{1,3}(?:,\\d{3})+)')
     if not m:
-        # 패턴2: 합계 행
         m = search(r'합\\s*계\\s*[:\\uff1a]?\\s*(\\d{1,3}(?:,\\d{3})+)\\s*원')
     if not m:
-        # 패턴3: 계약금액 레이블
         m = search(r'계\\s*약\\s*금\\s*액\\s*[:\\uff1a]?\\s*(\\d{1,3}(?:,\\d{3})+)')
     if m:
         result['contractAmount'] = int(m.group(1).replace(',', ''))
@@ -190,12 +186,10 @@ def parse(pdf_path):
         result['inspectionAgency'] = m.group(1)
         result['acceptanceAgency'] = m.group(2)
     else:
-        # 대안 패턴: 검사기관 레이블
-        m = search(r'검\\s*사\\s*기\\s*관\\s*[:\\uff1a]?\\s*([가-힣\\s조달청수요기관전문]{2,20})')
+        m = search(r'검\\s*사\\s*기\\s*관\\s*[:\\uff1a]?\\s*([가-힣\\s조달청수요기관전문자체]{2,20})')
         if m:
             result['inspectionAgency'] = normalize(m.group(1))
 
-    # 검사기관 유형 판별
     if result.get('inspectionAgency'):
         ag = result['inspectionAgency']
         if '조달청' in ag:
@@ -206,29 +200,27 @@ def parse(pdf_path):
             result['inspectionAgencyType'] = '전문검사기관'
             result['inspectionBody'] = ag
 
-    # ── 테이블에서 단가/수량/납품기한/인도조건 ──
-    # 컬럼 헤더를 동적으로 탐지
+    # ── 테이블에서 단가/수량/납품기한/인도조건/품명/규격 ──
     for table in tables:
         if not table or len(table) < 2:
             continue
 
-        # 헤더 행 탐지
         header_idx = -1
         col_map = {}
-        for ri, row in enumerate(table[:5]):  # 처음 5행에서 헤더 탐색
+        for ri, row in enumerate(table[:6]):
             if not row:
                 continue
             row_str = ' '.join([normalize(str(c)) for c in row if c])
-            if any(k in row_str for k in ['단 가', '단가', '수 량', '수량', '납품기한', '납기']):
+            if any(k in row_str for k in ['단 가', '단가', '수 량', '수량', '납품기한', '납기', '품 명', '물품명']):
                 header_idx = ri
-                # 컬럼 인덱스 매핑
                 for ci, cell in enumerate(row):
                     cs = normalize(str(cell)) if cell else ''
-                    if '단' in cs and '가' in cs: col_map['unit_price'] = ci
-                    elif '수' in cs and '량' in cs: col_map['quantity'] = ci
+                    if ('단' in cs and '가' in cs) or cs == '단가': col_map['unit_price'] = ci
+                    elif ('수' in cs and '량' in cs) or cs == '수량': col_map['quantity'] = ci
                     elif '납' in cs and ('기' in cs or '한' in cs): col_map['deadline'] = ci
                     elif '인도' in cs or '조건' in cs: col_map['delivery_cond'] = ci
                     elif '규격' in cs or '사양' in cs: col_map['spec'] = ci
+                    elif '품명' in cs or '물품명' in cs: col_map['product_name'] = ci
                 break
 
         if header_idx < 0:
@@ -239,8 +231,19 @@ def parse(pdf_path):
                 continue
             c = [normalize(str(x)) if x else '' for x in row]
 
-            # 순번이 있는 데이터 행
             if c[0] and re.match(r'^\\d+$', c[0].strip()):
+                # 품명
+                if 'product_name' in col_map and not result.get('productName'):
+                    pn = c[col_map['product_name']]
+                    if pn and len(pn) > 2:
+                        result['productName'] = pn
+
+                # 규격
+                if 'spec' in col_map and not result.get('specification'):
+                    sp = c[col_map['spec']]
+                    if sp and len(sp) > 3:
+                        result['specification'] = sp[:200]
+
                 # 단가
                 if 'unit_price' in col_map:
                     n = clean_num(c[col_map['unit_price']])
@@ -266,38 +269,36 @@ def parse(pdf_path):
                         except: pass
 
                 # 납품기한
-                deadline_cell = c[col_map['deadline']] if 'deadline' in col_map else (c[8] if len(c) > 8 else '')
-                if deadline_cell:
-                    m2 = re.search(r'(\\d{4}[/\\-.]\\d{1,2}[/\\-.]\\d{1,2})', deadline_cell)
+                dl_cell = c[col_map['deadline']] if 'deadline' in col_map else (c[8] if len(c) > 8 else '')
+                if dl_cell:
+                    m2 = re.search(r'(\\d{4}[/\\-.]\\d{1,2}[/\\-.]\\d{1,2})', dl_cell)
                     if m2:
-                        result['deliveryDeadline'] = re.sub(r'[/.]', '-', m2.group(1))
+                        nums = re.findall(r'\\d+', m2.group(1))
+                        if len(nums) >= 3:
+                            result['deliveryDeadline'] = f'{nums[0]}-{nums[1].zfill(2)}-{nums[2].zfill(2)}'
 
                 # 인도조건
-                cond_cell = c[col_map['delivery_cond']] if 'delivery_cond' in col_map else ''
-                if not cond_cell:
-                    cond_cell = ' '.join(c)
+                cond_cell = c[col_map['delivery_cond']] if 'delivery_cond' in col_map else ' '.join(c)
                 if '설치도' in cond_cell:
                     result['siteType'] = '납품설치도'
                 elif '하차도' in cond_cell:
                     result['siteType'] = '납품하차도'
 
-            # 규격/사양 (빈 순번 행)
-            elif not c[0] and 'spec' not in result:
-                spec_cell = c[col_map['spec']] if 'spec' in col_map else (c[4] if len(c) > 4 else '')
-                if spec_cell and len(spec_cell) > 5:
-                    result['specification'] = spec_cell.replace('  ', ' ').strip()[:200]
+            elif not c[0] and 'specification' not in result:
+                sp_cell = c[col_map['spec']] if 'spec' in col_map else (c[4] if len(c) > 4 else '')
+                if sp_cell and len(sp_cell) > 5:
+                    result['specification'] = sp_cell.replace('  ', ' ').strip()[:200]
 
     result.setdefault('siteType', '납품설치도')
 
-    # ── 실수요부서 담당자 + 전화번호 ──
+    # ── 실수요부서 담당자 ──
     m = re.search(
         r'실수요부서\\s*담당자[,，\\s]*전화번호\\s*[:\\uff1a]?\\s*([^\\d]+?)\\s*(0\\d{1,2}[-\\s]\\d{3,4}[-\\s]\\d{4})',
         text
     )
     if m:
         raw_name = m.group(1).strip()
-        phone = re.sub(r'\\s', '-', m.group(2).strip())
-        result['clientManagerPhone'] = phone
+        result['clientManagerPhone'] = re.sub(r'\\s', '-', m.group(2).strip())
         nm = re.search(r'^(.+?(?:과|팀|부|실|센터|원))\\s*([가-힣]{2,4})$', raw_name)
         if nm:
             result['clientDept'] = nm.group(1).strip()

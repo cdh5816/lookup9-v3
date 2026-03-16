@@ -37,7 +37,11 @@ import { forceConsume } from '@/lib/server-common';
 
 const adapter = PrismaAdapter(prisma);
 const providers: Provider[] = [];
-const sessionMaxAge = 14 * 24 * 60 * 60; // 14 days
+
+// 세션 만료 시간
+const SESSION_MAXAGE_REMEMBER = 14 * 24 * 60 * 60;  // 자동로그인: 14일
+const SESSION_MAXAGE_SESSION  =  8 * 60 * 60;        // 미체크: 8시간 (브라우저 종료 독립적)
+
 const useSecureCookie = env.appUrl.startsWith('https://');
 
 export const sessionTokenCookieName =
@@ -51,6 +55,7 @@ if (isAuthProviderEnabled('credentials')) {
         username: { type: 'text' },
         password: { type: 'password' },
         recaptchaToken: { type: 'text' },
+        rememberMe: { type: 'text' },
       },
       async authorize(credentials) {
         if (!credentials) {
@@ -65,13 +70,11 @@ if (isAuthProviderEnabled('credentials')) {
           return null;
         }
 
-        // username 또는 email로 조회 (이메일 형식이면 email로, 아니면 username으로)
         const isEmail = username.includes('@');
         let user = isEmail
           ? await getUser({ email: username })
           : await getUser({ username }).catch(() => null);
 
-        // username으로 못 찾으면 email fallback (기존 계정 호환)
         if (!user && !isEmail) {
           user = await getUser({ email: `${username}@internal.lookup9` }).catch(() => null);
         }
@@ -99,17 +102,20 @@ if (isAuthProviderEnabled('credentials')) {
           ) {
             throw new Error('exceeded-login-attempts');
           }
-
           throw new Error('invalid-credentials');
         }
 
         await clearLoginAttempts(user);
 
+        if (user.lockedAt) {
+          throw new Error('account-locked');
+        }
+
+        // rememberMe 여부를 user 객체에 임시 저장 (JWT/session 콜백으로 전달)
         return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-        };
+          ...user,
+          rememberMe: credentials.rememberMe === '1',
+        } as any;
       },
     })
   );
@@ -120,7 +126,6 @@ if (isAuthProviderEnabled('github')) {
     GitHubProvider({
       clientId: env.github.clientId,
       clientSecret: env.github.clientSecret,
-      allowDangerousEmailAccountLinking: true,
     })
   );
 }
@@ -130,95 +135,6 @@ if (isAuthProviderEnabled('google')) {
     GoogleProvider({
       clientId: env.google.clientId,
       clientSecret: env.google.clientSecret,
-      allowDangerousEmailAccountLinking: true,
-    })
-  );
-}
-
-if (isAuthProviderEnabled('saml')) {
-  providers.push(
-    BoxyHQSAMLProvider({
-      authorization: { params: { scope: '' } },
-      issuer: env.jackson.selfHosted ? env.jackson.externalUrl : env.appUrl,
-      clientId: 'dummy',
-      clientSecret: 'dummy',
-      allowDangerousEmailAccountLinking: true,
-      httpOptions: {
-        timeout: 30000,
-      },
-    })
-  );
-}
-if (isAuthProviderEnabled('idp-initiated')) {
-  providers.push(
-    CredentialsProvider({
-      id: 'boxyhq-idp',
-      name: 'IdP Login',
-      credentials: {
-        code: {
-          type: 'text',
-        },
-      },
-      async authorize(credentials) {
-        const { code } = credentials || {};
-
-        if (!code) {
-          return null;
-        }
-
-        const samlLoginUrl = env.jackson.selfHosted
-          ? env.jackson.url
-          : env.appUrl;
-
-        const res = await fetch(`${samlLoginUrl}/api/oauth/token`, {
-          method: 'POST',
-          body: JSON.stringify({
-            grant_type: 'authorization_code',
-            client_id: 'dummy',
-            client_secret: 'dummy',
-            redirect_url: process.env.NEXTAUTH_URL,
-            code,
-          }),
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (res.status !== 200) {
-          forceConsume(res);
-          return null;
-        }
-
-        const json = await res.json();
-        if (!json?.access_token) {
-          return null;
-        }
-
-        const resUserInfo = await fetch(`${samlLoginUrl}/api/oauth/userinfo`, {
-          headers: {
-            Authorization: `Bearer ${json.access_token}`,
-          },
-        });
-
-        if (!resUserInfo.ok) {
-          forceConsume(resUserInfo);
-          return null;
-        }
-
-        const profile = await resUserInfo.json();
-
-        if (profile?.id && profile?.email) {
-          return {
-            name: [profile.firstName, profile.lastName]
-              .filter(Boolean)
-              .join(' '),
-            image: null,
-            ...profile,
-          };
-        }
-
-        return null;
-      },
     })
   );
 }
@@ -235,240 +151,213 @@ if (isAuthProviderEnabled('email')) {
         },
       },
       from: env.smtp.from,
-      maxAge: 1 * 60 * 60, // 1 hour
-      sendVerificationRequest: async ({ identifier, url }) => {
-        await sendMagicLink(identifier, url);
-      },
+      sendVerificationRequest: sendMagicLink,
+      maxAge: 1 * 60 * 60,
     })
   );
 }
 
-async function createDatabaseSession(
-  user,
+if (isAuthProviderEnabled('saml')) {
+  providers.push(
+    BoxyHQSAMLProvider({
+      authorization: { params: { scope: '' } },
+      issuer: env.appUrl,
+      clientId: 'dummy',
+      clientSecret: 'dummy',
+    })
+  );
+}
+
+export const isCredentialsProviderCallback = (req: NextApiRequest | GetServerSidePropsContext['req']) => {
+  if (req.method !== 'POST') return false;
+  const url = req.url || '';
+  return url.startsWith('/api/auth/callback/credentials');
+};
+
+const isCredentialsProviderCallbackWithDbSession = (
+  req: NextApiRequest | GetServerSidePropsContext['req']
+) => {
+  return (
+    isCredentialsProviderCallback(req) &&
+    env.nextAuth.sessionStrategy === 'database'
+  );
+};
+
+const createDatabaseSession = async (
+  user: User,
   req: NextApiRequest | GetServerSidePropsContext['req'],
   res: NextApiResponse | GetServerSidePropsContext['res']
-) {
-  const sessionToken = randomUUID();
-  const expires = new Date(Date.now() + sessionMaxAge * 1000);
+) => {
+  // rememberMe에 따라 만료 시간 결정
+  const body = (req as any).body || {};
+  const rememberMe = body.rememberMe === '1';
+  const maxAge = rememberMe ? SESSION_MAXAGE_REMEMBER : SESSION_MAXAGE_SESSION;
 
-  if (adapter.createSession) {
-    await adapter.createSession({
-      sessionToken,
-      userId: user.id,
-      expires,
-    });
-  }
+  const sessionToken = randomUUID();
+  const sessionExpiry = new Date(Date.now() + maxAge * 1000);
+
+  await adapter.createSession!({
+    sessionToken,
+    userId: user.id,
+    expires: sessionExpiry,
+  });
 
   setCookie(sessionTokenCookieName, sessionToken, {
     req,
     res,
-    expires,
+    expires: rememberMe ? sessionExpiry : undefined, // 미체크 시 세션쿠키(브라우저 종료시 삭제)
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
     secure: useSecureCookie,
+  });
+};
+
+export const getAuthOptions: (
+  req: NextApiRequest | GetServerSidePropsContext['req'],
+  res: NextApiResponse | GetServerSidePropsContext['res']
+) => NextAuthOptions = (req, res) => ({
+  adapter,
+  providers,
+  pages: {
+    signIn: '/auth/login',
+    error: '/auth/login',
+    verifyRequest: '/auth/magic-link',
+  },
+  session: {
+    strategy: env.nextAuth.sessionStrategy,
+    maxAge: SESSION_MAXAGE_REMEMBER,
+  },
+  secret: env.nextAuth.secret,
+  callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider === 'credentials') {
+        if (isCredentialsProviderCallbackWithDbSession(req)) {
+          await createDatabaseSession(user, req, res);
+        }
+        return true;
+      }
+
+      if (!user || !user.email || !account) {
+        return false;
+      }
+
+      if (!isEmailAllowed(user.email)) {
+        return '/auth/login?error=allow-only-work-email';
+      }
+
+      const existingUser = await getUser({ email: user.email });
+      const isIdpLogin = account.provider === 'boxyhq-idp';
+
+      if (isCredentialsProviderCallbackWithDbSession(req) && !isIdpLogin) {
+        await createDatabaseSession(user, req, res);
+      }
+
+      if (account?.provider === 'email') {
+        return Boolean(existingUser);
+      }
+
+      if (!existingUser) {
+        const newUser = await createUser({
+          name: `${user.name}`,
+          email: `${user.email}`,
+        });
+
+        await linkAccount(newUser, account);
+
+        if (isIdpLogin && user) {
+          await linkToTeam(user as unknown as Profile, newUser.id);
+        }
+
+        if (account.provider === 'boxyhq-saml' && (user as any).profile) {
+          await linkToTeam((user as any).profile, newUser.id);
+        }
+
+        slackNotify()?.alert({
+          text: 'New user signed up',
+          fields: { Email: user.email || '', Name: user.name || '' },
+        });
+      } else {
+        if (isIdpLogin && user) {
+          await linkToTeam(user as unknown as Profile, existingUser.id);
+        }
+      }
+
+      return true;
+    },
+
+    async session({ session, token }) {
+      if (token && session) {
+        session.user = {
+          ...session.user,
+          id: token.sub as string,
+        };
+      }
+      return session;
+    },
+
+    async jwt({ token, user }) {
+      if (user) {
+        token.sub = user.id;
+      }
+      return token;
+    },
+  },
+  jwt: {
+    encode: async ({ secret, token, maxAge }) => {
+      const body = (req as any).body || {};
+      const rememberMe = body.rememberMe === '1';
+      const effectiveMaxAge = rememberMe ? SESSION_MAXAGE_REMEMBER : SESSION_MAXAGE_SESSION;
+
+      if (isCredentialsProviderCallbackWithDbSession(req)) {
+        const cookie = getCookie(sessionTokenCookieName, { req, res });
+        if (cookie) return cookie as string;
+        return '';
+      }
+      return encode({ secret, token, maxAge: effectiveMaxAge });
+    },
+    decode: async ({ secret, token }) => {
+      if (isCredentialsProviderCallbackWithDbSession(req)) {
+        return null;
+      }
+      return decode({ secret, token });
+    },
+  },
+});
+
+async function linkAccount(user: { id: string }, account: Account) {
+  return await getAccount({ userId: user.id }).then(async (existingAccount) => {
+    if (!existingAccount) {
+      return prisma.account.create({
+        data: {
+          userId: user.id,
+          type: account.type,
+          provider: account.provider,
+          providerAccountId: account.providerAccountId,
+          access_token: account.access_token,
+          refresh_token: account.refresh_token,
+          id_token: account.id_token,
+          token_type: account.token_type,
+          scope: account.scope,
+          expires_at: account.expires_at,
+        },
+      });
+    }
   });
 }
 
-export const getAuthOptions = (
-  req: NextApiRequest | GetServerSidePropsContext['req'],
-  res: NextApiResponse | GetServerSidePropsContext['res']
-) => {
-  const isCredentialsProviderCallbackWithDbSession =
-    (req as NextApiRequest).query &&
-    (req as NextApiRequest).query.nextauth?.includes('callback') &&
-    ((req as NextApiRequest).query.nextauth?.includes('credentials') ||
-      (req as NextApiRequest).query.nextauth?.includes('boxyhq-idp')) &&
-    req.method === 'POST' &&
-    env.nextAuth.sessionStrategy === 'database';
-
-  const authOptions: NextAuthOptions = {
-    adapter,
-    providers,
-    pages: {
-      signIn: '/auth/login',
-      verifyRequest: '/auth/verify-request',
-    },
-    session: {
-      strategy: env.nextAuth.sessionStrategy,
-      maxAge: sessionMaxAge,
-    },
-    secret: env.nextAuth.secret,
-    callbacks: {
-      async signIn({ user, account, profile }) {
-        // credentials 로그인은 authorize()에서 이미 검증됨 - 바로 통과
-        if (account?.provider === 'credentials') {
-          if (isCredentialsProviderCallbackWithDbSession) {
-            await createDatabaseSession(user, req, res);
-          }
-          return true;
-        }
-
-        if (!user || !user.email || !account) {
-          return false;
-        }
-
-        if (!isEmailAllowed(user.email)) {
-          return '/auth/login?error=allow-only-work-email';
-        }
-
-        const existingUser = await getUser({ email: user.email });
-        const isIdpLogin = account.provider === 'boxyhq-idp';
-
-        // Handle credentials provider (database session)
-        if (isCredentialsProviderCallbackWithDbSession && !isIdpLogin) {
-          await createDatabaseSession(user, req, res);
-        }
-
-        // Login via email (Magic Link)
-        if (account?.provider === 'email') {
-          return Boolean(existingUser);
-        }
-
-        // First time users
-        if (!existingUser) {
-          const newUser = await createUser({
-            name: `${user.name}`,
-            email: `${user.email}`,
-          });
-
-          await linkAccount(newUser, account);
-
-          if (isIdpLogin && user) {
-            await linkToTeam(user as unknown as Profile, newUser.id);
-          }
-
-          if (account.provider === 'boxyhq-saml' && profile) {
-            await linkToTeam(profile, newUser.id);
-          }
-
-          if (isCredentialsProviderCallbackWithDbSession) {
-            await createDatabaseSession(newUser, req, res);
-          }
-
-          slackNotify()?.alert({
-            text: 'New user signed up',
-            fields: {
-              Name: user.name || '',
-              Email: user.email,
-            },
-          });
-
-          return true;
-        }
-
-        // Existing users reach here
-        if (isCredentialsProviderCallbackWithDbSession) {
-          await createDatabaseSession(existingUser, req, res);
-        }
-
-        const linkedAccount = await getAccount({ userId: existingUser.id });
-
-        if (!linkedAccount) {
-          await linkAccount(existingUser, account);
-        }
-
-        return true;
-      },
-
-      async session({ session, token, user }) {
-        // When using JWT for sessions, the JWT payload (token) is provided.
-        // When using database sessions, the User (user) object is provided.
-        if (session && (token || user)) {
-          session.user.id = token?.sub || user?.id;
-        }
-
-        if (user?.name) {
-          user.name = user.name.substring(0, maxLengthPolicies.name);
-        }
-        if (session?.user?.name) {
-          session.user.name = session.user.name.substring(
-            0,
-            maxLengthPolicies.name
-          );
-        }
-
-        return session;
-      },
-
-      async jwt({ token, trigger, session, account }) {
-        if (trigger === 'signIn' && account?.provider === 'boxyhq-idp') {
-          const userByAccount = await adapter.getUserByAccount!({
-            providerAccountId: account.providerAccountId,
-            provider: account.provider,
-          });
-
-          return { ...token, sub: userByAccount?.id };
-        }
-
-        if (trigger === 'update' && 'name' in session && session.name) {
-          return { ...token, name: session.name };
-        }
-
-        return token;
-      },
-    },
-    jwt: {
-      encode: async (params) => {
-        if (isCredentialsProviderCallbackWithDbSession) {
-          return (await getCookie(sessionTokenCookieName, { req, res })) || '';
-        }
-
-        return encode(params);
-      },
-
-      decode: async (params) => {
-        if (isCredentialsProviderCallbackWithDbSession) {
-          return null;
-        }
-
-        return decode(params);
-      },
-    },
-  };
-
-  return authOptions;
-};
-
-const linkAccount = async (user: User, account: Account) => {
-  if (adapter.linkAccount) {
-    return await adapter.linkAccount({
-      providerAccountId: account.providerAccountId,
-      userId: user.id,
-      provider: account.provider,
-      type: 'oauth',
-      scope: account.scope,
-      token_type: account.token_type,
-      access_token: account.access_token,
+async function linkToTeam(profile: Profile, userId: string) {
+  const team = await getTeam({ id: (profile as any)?.requested?.tenant });
+  if (team) {
+    const existingMember = await prisma.teamMember.findFirst({
+      where: { teamId: team.id, userId },
     });
-  }
-};
-
-const linkToTeam = async (profile: Profile, userId: string) => {
-  const team = await getTeam({
-    id: profile.requested.tenant,
-  });
-
-  // Sort out roles
-  const roles = profile.roles || profile.groups || [];
-  let userRole: Role = team.defaultRole || Role.MEMBER;
-
-  for (let role of roles) {
-    if (env.groupPrefix) {
-      role = role.replace(env.groupPrefix, '');
-    }
-
-    // Owner > Admin > Member
-    if (
-      role.toUpperCase() === Role.ADMIN &&
-      userRole.toUpperCase() !== Role.OWNER.toUpperCase()
-    ) {
-      userRole = Role.ADMIN;
-      continue;
-    }
-
-    if (role.toUpperCase() === Role.OWNER) {
-      userRole = Role.OWNER;
-      break;
+    if (!existingMember) {
+      await addTeamMember(team.id, userId, team.defaultRole as Role);
     }
   }
+}
 
-  await addTeamMember(team.id, userId, userRole);
-};
+export async function forceConsumeAsync(req: NextApiRequest | GetServerSidePropsContext['req']) {
+  return forceConsume(req);
+}

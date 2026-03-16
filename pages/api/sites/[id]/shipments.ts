@@ -13,17 +13,33 @@ async function notifyShipmentUsers(siteId: string, senderId: string, title: stri
   const deptUsers = await prisma.user.findMany({
     where: {
       teamMembers: { some: { teamId: site.teamId } },
-      department: { in: ['출하팀', '생산관리팀', '공사팀', '경영지원부'] },
+      department: { in: ['출하팀', '생산관리팀', '공사팀', '경영지원부', '생산부', '출하부'] },
       NOT: { id: senderId },
     },
     select: { id: true },
   });
 
-  const userIds = Array.from(new Set([...assignments.map((a) => a.userId), ...deptUsers.map((u) => u.id)].filter((id) => id && id !== senderId)));
+  const userIds = Array.from(new Set(
+    [...assignments.map((a) => a.userId), ...deptUsers.map((u) => u.id)]
+      .filter((id) => id && id !== senderId)
+  ));
   if (!userIds.length) return;
 
   await prisma.message.createMany({
     data: userIds.map((receiverId) => ({ senderId, receiverId, title, content })),
+    skipDuplicates: true,
+  });
+
+  // 알림(Notification)도 생성
+  await prisma.notification.createMany({
+    data: userIds.map((userId) => ({
+      userId,
+      type: 'SHIPMENT_REGISTERED',
+      title,
+      message: content,
+      link: `/sites/${siteId}?tab=shipping`,
+      siteId,
+    })),
     skipDuplicates: true,
   });
 }
@@ -43,6 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const { shipmentNo, shippedAt, shipmentType, quantity, vehicleInfo, driverInfo, destination, receivedBy, notes } = req.body;
         const lastShipment = await prisma.shippingRecord.findFirst({ where: { siteId: id }, orderBy: { sequence: 'desc' } });
         const sequence = (lastShipment?.sequence || 0) + 1;
+
         const record = await prisma.shippingRecord.create({
           data: {
             siteId: id,
@@ -60,30 +77,91 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           },
           include: { createdBy: { select: { name: true, position: true } } },
         });
-        await notifyShipmentUsers(id, session.user.id, `[출하등록] ${record.shipmentNo || `차수 ${record.sequence}`}`, `차량 ${record.vehicleInfo || '-'} / 기사 ${record.driverInfo || '-'} / 수량 ${record.quantity || '-'} 등록`);
+
+        // ── 출하 등록 시 → 생산 차수에 공급일 자동 기록 ──
+        // 같은 차수(sequence)의 생산 발주가 있으면 supplyDate를 shippedAt으로 업데이트
+        if (shippedAt) {
+          const prodOrder = await prisma.productionOrder.findFirst({
+            where: { siteId: id, sequence },
+          });
+          if (prodOrder && !prodOrder.supplyDate) {
+            await prisma.productionOrder.update({
+              where: { id: prodOrder.id },
+              data: { supplyDate: new Date(shippedAt) },
+            });
+          } else if (!prodOrder) {
+            // 생산 발주 차수가 없으면 자동 생성
+            await prisma.productionOrder.create({
+              data: {
+                siteId: id,
+                sequence,
+                quantity: quantity ? Number(String(quantity).replace(/,/g, '')) : null,
+                supplyDate: new Date(shippedAt),
+                notes: `출하 ${sequence}차 자동 연동`,
+                createdById: session.user.id,
+              },
+            });
+          }
+        }
+
+        await notifyShipmentUsers(
+          id,
+          session.user.id,
+          `[출하등록] ${record.shipmentNo || `${sequence}차`} 출하 등록됨`,
+          `수량: ${record.quantity || '-'} / 차량: ${record.vehicleInfo || '-'} / 기사: ${record.driverInfo || '-'} / 출고일: ${shippedAt || '-'}`
+        );
+
         return res.status(201).json({ data: record });
       }
+
       case 'PUT': {
         const { recordId, status, ...fields } = req.body;
         if (!recordId) return res.status(400).json({ error: { message: 'recordId is required' } });
+
         const data: any = { ...fields, updatedAt: new Date() };
         if (status) data.status = status;
         if (fields.shippedAt) data.shippedAt = new Date(fields.shippedAt);
-        const record = await prisma.shippingRecord.update({ where: { id: recordId }, data, include: { createdBy: { select: { name: true, position: true } } } });
-        await notifyShipmentUsers(id, session.user.id, `[출하상태변경] ${record.shipmentNo || `차수 ${record.sequence}`}`, `${record.status} 상태로 변경되었습니다.`);
+
+        const record = await prisma.shippingRecord.update({
+          where: { id: recordId },
+          data,
+          include: { createdBy: { select: { name: true, position: true } } },
+        });
+
+        // 출하 상태가 '인수완료'로 변경될 때 생산 공급일도 업데이트
+        if (status === '인수완료' && record.shippedAt) {
+          const prodOrder = await prisma.productionOrder.findFirst({
+            where: { siteId: id, sequence: record.sequence },
+          });
+          if (prodOrder) {
+            await prisma.productionOrder.update({
+              where: { id: prodOrder.id },
+              data: { supplyDate: record.shippedAt },
+            });
+          }
+        }
+
+        await notifyShipmentUsers(
+          id,
+          session.user.id,
+          `[출하상태변경] ${record.shipmentNo || `${record.sequence}차`}`,
+          `${record.status} 상태로 변경되었습니다.`
+        );
+
         return res.status(200).json({ data: record });
       }
+
       case 'DELETE': {
         const { recordId } = req.body;
         if (!recordId) return res.status(400).json({ error: { message: 'recordId is required' } });
         await prisma.shippingRecord.delete({ where: { id: recordId } });
         return res.status(200).json({ data: { message: 'Deleted' } });
       }
+
       default:
-        res.setHeader('Allow', 'POST, PUT, DELETE');
-        return res.status(405).json({ error: { message: `Method ${req.method} Not Allowed` } });
+        return res.status(405).json({ error: { message: 'Method not allowed' } });
     }
-  } catch (error: any) {
-    return res.status(500).json({ error: { message: error.message || 'Internal server error' } });
+  } catch (err: any) {
+    return res.status(500).json({ error: { message: err.message || 'Internal server error' } });
   }
 }

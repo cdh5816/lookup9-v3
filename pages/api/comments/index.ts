@@ -9,28 +9,59 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     switch (req.method) {
+      // 타임라인(업무일지) 조회 - siteId 쿼리 파라미터 필요
+      case 'GET': {
+        const { siteId } = req.query;
+        if (!siteId || typeof siteId !== 'string') {
+          return res.status(400).json({ error: { message: 'siteId required' } });
+        }
+        const tm = await verifySiteAccess(session.user.id, siteId);
+        if (!tm) return res.status(403).json({ error: { message: 'Forbidden' } });
+
+        const comments = await prisma.comment.findMany({
+          where: { siteId, parentId: null },
+          include: {
+            author: { select: { name: true, position: true, department: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+        return res.status(200).json({ data: comments });
+      }
+
       case 'POST': {
         const { siteId, content, parentId, isInternal } = req.body;
-        if (!siteId || !content) return res.status(400).json({ error: { message: 'siteId and content required' } });
-
-        // 현장 접근 검증
+        if (!siteId || !content) {
+          return res.status(400).json({ error: { message: 'siteId and content required' } });
+        }
         const tm = await verifySiteAccess(session.user.id, siteId);
         if (!tm) return res.status(403).json({ error: { message: 'Forbidden' } });
 
         const comment = await prisma.comment.create({
-          data: { siteId, content, authorId: session.user.id, parentId: parentId || null, isInternal: isInternal !== false },
-          include: { author: { select: { name: true, position: true, department: true } } },
+          data: {
+            siteId,
+            content,
+            authorId: session.user.id,
+            parentId: parentId || null,
+            isInternal: isInternal !== false,
+          },
+          include: {
+            author: { select: { name: true, position: true, department: true } },
+          },
         });
         return res.status(201).json({ data: comment });
       }
+
       case 'DELETE': {
         const { commentId } = req.body;
         if (!commentId) return res.status(400).json({ error: { message: 'commentId required' } });
         const comment = await prisma.comment.findUnique({ where: { id: commentId } });
-        if (!comment || comment.authorId !== session.user.id) return res.status(403).json({ error: { message: 'Forbidden' } });
+        if (!comment || comment.authorId !== session.user.id) {
+          return res.status(403).json({ error: { message: 'Forbidden' } });
+        }
         await prisma.comment.delete({ where: { id: commentId } });
         return res.status(200).json({ data: { message: 'Deleted' } });
       }
+
       default:
         return res.status(405).json({ error: { message: 'Method not allowed' } });
     }

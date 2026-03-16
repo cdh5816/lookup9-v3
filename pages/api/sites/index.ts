@@ -28,13 +28,11 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
 
   const where: any = { teamId: tm.teamId };
 
-  // salesOnly=true: 영업관리 페이지용 (영업중/수주확정/실패)
   if (salesOnly === 'true') {
     where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'FAILED'] };
   } else if (status && status !== 'all') {
     where.status = status;
   } else if (!salesOnly) {
-    // 기본 현장관리: 영업중/실패 제외
     where.status = { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] };
   }
 
@@ -54,17 +52,14 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     include: {
       client: { select: { name: true } },
       createdBy: { select: { name: true, position: true } },
-      productionOrders: {
-        select: { quantity: true, supplyDate: true },
-      },
+      shipments: { select: { quantity: true, status: true } },
+      productionOrders: { select: { quantity: true, supplyDate: true } },
       sales: {
         orderBy: { createdAt: 'desc' },
         take: 1,
         select: { status: true, estimateAmount: true, meetingNotes: true, createdAt: true },
       },
-      _count: {
-        select: { issues: true, documents: true },
-      },
+      _count: { select: { issues: true, documents: true } },
     },
     orderBy: { updatedAt: 'desc' },
   });
@@ -79,13 +74,15 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
     clientDept, clientManager, clientManagerPhone,
     // 계약 정보 (분할납품요구서)
     contractNo, procurementNo, contractDate, contractAmount,
-    contractQuantity, unitPrice, specification, deliveryDeadline, warrantyPeriod,
+    contractQuantity, unitPrice, specification, productName,
+    deliveryDeadline, warrantyPeriod,
+    // 검사기관
+    inspectionAgency, inspectionBody, acceptanceAgency,
   } = req.body;
 
   if (!name) return res.status(400).json({ error: { message: 'Name is required' } });
 
   const site = await prisma.$transaction(async (tx) => {
-    // clientName으로 Client 자동 생성
     let resolvedClientId = clientId || null;
     if (clientName && !clientId) {
       const existing = await tx.client.findFirst({ where: { name: clientName, teamId: tm.teamId } });
@@ -112,7 +109,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
         clientDept: clientDept || null,
         clientManager: clientManager || null,
         clientManagerPhone: clientManagerPhone || null,
-        // 계약 정보
         contractNo: contractNo || null,
         procurementNo: procurementNo || null,
         contractDate: contractDate ? new Date(contractDate) : null,
@@ -120,8 +116,12 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
         contractQuantity: contractQuantity ? Number(String(contractQuantity).replace(/,/g, '')) : null,
         unitPrice: unitPrice ? Number(String(unitPrice).replace(/,/g, '')) : null,
         specification: specification || null,
+        productName: productName || null,
         deliveryDeadline: deliveryDeadline ? new Date(deliveryDeadline) : null,
         warrantyPeriod: warrantyPeriod ? Number(warrantyPeriod) : 2,
+        inspectionAgency: inspectionAgency || null,
+        inspectionBody: inspectionBody || null,
+        acceptanceAgency: acceptanceAgency || null,
         createdById: session.user.id,
       },
     });

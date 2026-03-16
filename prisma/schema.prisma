@@ -310,7 +310,7 @@ model Site {
   // ── 수요기관 담당자 ──
   clientDept        String?                      // 담당부서 (예: 인구정책과)
   clientManager     String?                      // 담당자명 (예: 김지혜)
-  clientManagerPhone String?                     // 담당자 전화번호 (예: 041-950-4344)
+  clientManagerPhone String?                     // 담당자 전화번호
 
   // ── 협력사 (설치 시공사) ──
   installerName     String?                      // 협력사명

@@ -6,7 +6,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import {
   DocumentArrowUpIcon, CheckCircleIcon, XCircleIcon,
-  ArrowLeftIcon, PencilIcon, ArrowPathIcon,
+  ArrowLeftIcon, ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 
 // ── 파싱 결과 타입 ──────────────────────────────────

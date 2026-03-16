@@ -36,11 +36,6 @@ const fmtMoney = (v: any) => {
   if (n >= 100000000) return `${(n / 100000000).toFixed(1)}억`;
   return `${Math.round(n / 10000).toLocaleString()}만`;
 };
-const fmtDateShort = (v: any) => {
-  if (!v) return null;
-  const d = new Date(v);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-};
 
 const getDday = (dateVal: any) => {
   if (!dateVal) return null;

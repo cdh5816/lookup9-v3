@@ -6,7 +6,7 @@ import {
   ShieldCheckIcon,
   UserCircleIcon,
   UserPlusIcon,
-  MegaphoneIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline';
 import { useTranslation } from 'next-i18next';
 import NavigationItems from './NavigationItems';
@@ -74,7 +74,7 @@ const MainNavigation = ({ activePathname, onNavigate }: NavigationProps) => {
     const dept = profile?.department || '';
     const isSalesOrManager = isManager || dept === '영업' || dept === '영업팀';
     if (isSalesOrManager) {
-      menus.push({ name: '영업관리', href: '/sales', icon: MegaphoneIcon, active: active('/sales') });
+      menus.push({ name: '영업관리', href: '/sales', icon: ChartBarIcon, active: active('/sales') });
     }
     menus.push({ name: t('nav-sites'), href: '/sites', icon: BuildingOffice2Icon, active: active('/sites') });
   }

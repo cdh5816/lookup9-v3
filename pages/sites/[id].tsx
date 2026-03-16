@@ -1,7 +1,7 @@
 /* eslint-disable i18next/no-literal-string */
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import useSWR from 'swr';
@@ -300,6 +300,9 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
       acceptanceAgency: site.acceptanceAgency || '',
       inspectionDone: site.inspectionDone || false,
       inspectionDoneAt: site.inspectionDoneAt ? new Date(site.inspectionDoneAt).toISOString().split('T')[0] : '',
+      clientDept: site.clientDept || '',
+      clientManager: site.clientManager || '',
+      clientManagerPhone: site.clientManagerPhone || '',
       installerName: site.installerName || '',
       installerContact: site.installerContact || '',
       installerPhone: site.installerPhone || '',
@@ -433,6 +436,9 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
               <InfoRow label="검사기관명" value={site.inspectionBody} />
             )}
             <InfoRow label="검수기관" value={site.acceptanceAgency} />
+            <InfoRow label="수요기관 담당부서" value={site.clientDept} />
+            <InfoRow label="수요기관 담당자" value={site.clientManager} />
+            <InfoRow label="담당자 전화" value={site.clientManagerPhone} />
             <div>
               <p className="text-[11px] text-gray-500 mb-0.5">검사 완료</p>
               <div className="flex items-center gap-1.5">
@@ -477,6 +483,27 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
                 <input type="date" className="input input-bordered input-xs"
                   value={form.inspectionDoneAt} onChange={e => setForm({ ...form, inspectionDoneAt: e.target.value })} />
               )}
+            </div>
+            {/* 수요기관 담당자 */}
+            <div className="col-span-full border-t border-gray-800 pt-3">
+              <p className="text-[11px] text-gray-500 mb-2">수요기관 담당자</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div>
+                  <label className="block text-[11px] text-gray-400 mb-1">담당부서</label>
+                  <input type="text" className="input input-bordered input-sm w-full"
+                    value={form.clientDept} onChange={e => setForm({ ...form, clientDept: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-gray-400 mb-1">담당자명</label>
+                  <input type="text" className="input input-bordered input-sm w-full"
+                    value={form.clientManager} onChange={e => setForm({ ...form, clientManager: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-gray-400 mb-1">담당자 전화</label>
+                  <input type="text" className="input input-bordered input-sm w-full"
+                    value={form.clientManagerPhone} onChange={e => setForm({ ...form, clientManagerPhone: e.target.value })} />
+                </div>
+              </div>
             </div>
             <div className="col-span-full"><SaveCancelBar /></div>
           </div>

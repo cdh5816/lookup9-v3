@@ -76,7 +76,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
   const {
     name, address, clientId, clientName, status, description,
     siteType, salesStage, estimatedAmount, salesNote,
-    clientDept, clientManager, clientManagerPhone,
     // 계약 정보 (분할납품요구서)
     contractNo, procurementNo, contractDate, contractAmount,
     contractQuantity, unitPrice, specification, deliveryDeadline, warrantyPeriod,
@@ -109,9 +108,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
         estimatedAmount: estimatedAmount ? Number(String(estimatedAmount).replace(/,/g, '')) : null,
         salesNote: salesNote || null,
         description: description || null,
-        clientDept: clientDept || null,
-        clientManager: clientManager || null,
-        clientManagerPhone: clientManagerPhone || null,
         // 계약 정보
         contractNo: contractNo || null,
         procurementNo: procurementNo || null,

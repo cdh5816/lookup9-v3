@@ -307,11 +307,6 @@ model Site {
   salesNote         String?  @db.Text            // 영업 활동 메모
   estimatedAmount   Decimal? @db.Decimal(15, 0)  // 예상 계약금액
 
-  // ── 수요기관 담당자 ──
-  clientDept        String?                      // 담당부서 (예: 인구정책과)
-  clientManager     String?                      // 담당자명 (예: 김지혜)
-  clientManagerPhone String?                     // 담당자 전화번호
-
   // ── 협력사 (설치 시공사) ──
   installerName     String?                      // 협력사명
   installerContact  String?                      // 협력사 담당자

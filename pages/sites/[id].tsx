@@ -1,7 +1,7 @@
 /* eslint-disable i18next/no-literal-string */
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import useSWR from 'swr';
@@ -9,7 +9,7 @@ import fetcher from '@/lib/fetcher';
 import {
   PlusIcon, TrashIcon, MagnifyingGlassIcon,
   ExclamationTriangleIcon, PencilIcon, CheckIcon,
-  XMarkIcon, DocumentArrowUpIcon, ArrowUpCircleIcon,
+  XMarkIcon, DocumentArrowUpIcon,
 } from '@heroicons/react/24/outline';
 
 // ── 상수 ──────────────────────────────────────────────
@@ -286,7 +286,6 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
   const [editSection, setEditSection] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
-  const [showPdfModal, setShowPdfModal] = useState(false);
 
   const startEdit = (section: string) => {
     setEditSection(section);
@@ -301,9 +300,6 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
       acceptanceAgency: site.acceptanceAgency || '',
       inspectionDone: site.inspectionDone || false,
       inspectionDoneAt: site.inspectionDoneAt ? new Date(site.inspectionDoneAt).toISOString().split('T')[0] : '',
-      clientDept: site.clientDept || '',
-      clientManager: site.clientManager || '',
-      clientManagerPhone: site.clientManagerPhone || '',
       installerName: site.installerName || '',
       installerContact: site.installerContact || '',
       installerPhone: site.installerPhone || '',
@@ -339,61 +335,24 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
     <div className="space-y-3">
 
       {/* 계약 정보 (분할납품요구서 파싱값) */}
-      {!isSaleStage && (
-        <SectionCard
-          title="계약 정보 (분할납품요구서)"
-          accent={site.contractNo ? "blue" : undefined}
-          action={canManage ? (
-            <button
-              className="btn btn-ghost btn-xs gap-1 text-blue-400"
-              onClick={() => setShowPdfModal(true)}
-            >
-              <ArrowUpCircleIcon className="h-3.5 w-3.5" />
-              {site.contractNo ? 'PDF로 갱신' : 'PDF 업로드'}
-            </button>
-          ) : null}
-        >
-          {site.contractNo || site.contractAmount || site.contractQuantity ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              <InfoRow label="납품요구번호" value={site.contractNo} mono />
-              <InfoRow label="계약번호" value={site.procurementNo} mono />
-              <InfoRow label="납품요구일" value={fmtDate(site.contractDate)} />
-              <InfoRow label="납품기한" value={fmtDate(site.deliveryDeadline)} />
-              <InfoRow label="계약물량" value={site.contractQuantity ? `${fmtNum(site.contractQuantity)} m²` : '-'} />
-              <InfoRow label="단가" value={site.unitPrice ? `${fmtNum(site.unitPrice)} 원/m²` : '-'} />
-              <InfoRow label="계약금액" value={fmtMoney(site.contractAmount)} highlight />
-              <InfoRow label="하자담보기간" value={`${site.warrantyPeriod ?? 2}년`} />
-              {site.specification && (
-                <div className="col-span-2 sm:col-span-4">
-                  <InfoRow label="규격/사양" value={site.specification} />
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="py-4 text-center">
-              <p className="text-sm text-gray-500 mb-2">계약 정보가 없습니다.</p>
-              <button
-                className="btn btn-outline btn-sm gap-2 border-blue-700/60 text-blue-400 hover:bg-blue-950/40"
-                onClick={() => setShowPdfModal(true)}
-              >
-                <ArrowUpCircleIcon className="h-4 w-4" />
-                분할납품요구서 PDF 업로드
-              </button>
-              <p className="text-xs text-gray-600 mt-2">조달청 분할납품요구서를 업로드하면 자동으로 입력됩니다.</p>
-            </div>
-          )}
+      {!isSaleStage && (site.contractNo || site.contractAmount || site.contractQuantity) && (
+        <SectionCard title="계약 정보 (분할납품요구서)" accent="blue">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <InfoRow label="납품요구번호" value={site.contractNo} mono />
+            <InfoRow label="계약번호" value={site.procurementNo} mono />
+            <InfoRow label="납품요구일" value={fmtDate(site.contractDate)} />
+            <InfoRow label="납품기한" value={fmtDate(site.deliveryDeadline)} />
+            <InfoRow label="계약물량" value={site.contractQuantity ? `${fmtNum(site.contractQuantity)} m²` : '-'} />
+            <InfoRow label="단가" value={site.unitPrice ? `${fmtNum(site.unitPrice)} 원/m²` : '-'} />
+            <InfoRow label="계약금액" value={fmtMoney(site.contractAmount)} highlight />
+            <InfoRow label="하자담보기간" value={`${site.warrantyPeriod ?? 2}년`} />
+            {site.specification && (
+              <div className="col-span-2 sm:col-span-4">
+                <InfoRow label="규격/사양" value={site.specification} />
+              </div>
+            )}
+          </div>
         </SectionCard>
-      )}
-
-      {/* PDF 파싱 모달 */}
-      {showPdfModal && (
-        <PdfParseModal
-          siteId={siteId}
-          siteName={site.name}
-          isOverwrite={!!(site.contractNo || site.contractAmount)}
-          onClose={() => setShowPdfModal(false)}
-          onDone={() => { setShowPdfModal(false); onMutate(); }}
-        />
       )}
 
       {/* 현장 기본 정보 */}
@@ -474,9 +433,6 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
               <InfoRow label="검사기관명" value={site.inspectionBody} />
             )}
             <InfoRow label="검수기관" value={site.acceptanceAgency} />
-            <InfoRow label="수요기관 담당부서" value={site.clientDept} />
-            <InfoRow label="수요기관 담당자" value={site.clientManager} />
-            <InfoRow label="담당자 전화" value={site.clientManagerPhone} />
             <div>
               <p className="text-[11px] text-gray-500 mb-0.5">검사 완료</p>
               <div className="flex items-center gap-1.5">
@@ -521,27 +477,6 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
                 <input type="date" className="input input-bordered input-xs"
                   value={form.inspectionDoneAt} onChange={e => setForm({ ...form, inspectionDoneAt: e.target.value })} />
               )}
-            </div>
-            {/* 수요기관 담당자 */}
-            <div className="col-span-full border-t border-gray-800 pt-3">
-              <p className="text-[11px] text-gray-500 mb-2">수요기관 담당자</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <div>
-                  <label className="block text-[11px] text-gray-400 mb-1">담당부서</label>
-                  <input type="text" className="input input-bordered input-sm w-full"
-                    value={form.clientDept} onChange={e => setForm({ ...form, clientDept: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-gray-400 mb-1">담당자명</label>
-                  <input type="text" className="input input-bordered input-sm w-full"
-                    value={form.clientManager} onChange={e => setForm({ ...form, clientManager: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-gray-400 mb-1">담당자 전화</label>
-                  <input type="text" className="input input-bordered input-sm w-full"
-                    value={form.clientManagerPhone} onChange={e => setForm({ ...form, clientManagerPhone: e.target.value })} />
-                </div>
-              </div>
             </div>
             <div className="col-span-full"><SaveCancelBar /></div>
           </div>
@@ -823,7 +758,6 @@ const SalesPanel = ({ site, siteId, canManage, onMutate }: any) => {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ status: '영업접촉', estimateAmount: '', meetingNotes: '' });
   const [saving, setSaving] = useState(false);
-  const [showPdfModal, setShowPdfModal] = useState(false);
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -842,44 +776,8 @@ const SalesPanel = ({ site, siteId, canManage, onMutate }: any) => {
     '실패': 'bg-red-900/50 text-red-300',
   };
 
-  const isConfirmed = site.status === 'SALES_CONFIRMED';
-
   return (
     <div className="space-y-3">
-
-      {/* 수주확정 → 계약서 업로드 안내 */}
-      {isConfirmed && canManage && (
-        <div className="rounded-xl border border-green-800/40 bg-green-950/10 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-green-300 mb-1">수주 확정 — 계약서를 업로드하세요</p>
-              <p className="text-xs text-gray-400">
-                분할납품요구서를 업로드하면 계약 정보가 자동 입력되고<br />
-                영업 이력을 유지한 채로 진행중 현장으로 전환됩니다.
-              </p>
-            </div>
-            <button
-              className="btn btn-success btn-sm gap-1.5 flex-shrink-0"
-              onClick={() => setShowPdfModal(true)}
-            >
-              <ArrowUpCircleIcon className="h-4 w-4" />계약서 업로드
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* PDF 파싱 모달 */}
-      {showPdfModal && (
-        <PdfParseModal
-          siteId={siteId}
-          siteName={site.name}
-          isOverwrite={false}
-          convertToActive={true}
-          onClose={() => setShowPdfModal(false)}
-          onDone={() => { setShowPdfModal(false); onMutate(); }}
-        />
-      )}
-
       <SectionCard
         title={`영업 활동 이력 (${sales.length}건)`}
         action={canManage ? (
@@ -1571,253 +1469,3 @@ export async function getServerSideProps({ locale }: GetServerSidePropsContext) 
 }
 
 export default SiteDetail;
-
-// ══════════════════════════════════════════════════════
-// PDF 파싱 모달 (현장 상세 내 계약정보 업로드/갱신)
-// ══════════════════════════════════════════════════════
-const PdfParseModal = ({ siteId, siteName, isOverwrite, convertToActive, onClose, onDone }: {
-  siteId: string;
-  siteName: string;
-  isOverwrite: boolean;
-  convertToActive?: boolean;
-  onClose: () => void;
-  onDone: () => void;
-}) => {
-  const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
-  const [parsing, setParsing] = useState(false);
-  const [parseError, setParseError] = useState('');
-  const [parsed, setParsed] = useState<any>(null);
-  const [fileName, setFileName] = useState('');
-  const [fileData, setFileData] = useState('');
-  const [form, setForm] = useState<any>({});
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState('');
-
-  const fmtMoney = (v: any) => {
-    if (!v) return '';
-    const n = Number(v);
-    if (n >= 100000000) return `${(n / 100000000).toFixed(1)}억원`;
-    return `${Math.round(n / 10000).toLocaleString()}만원`;
-  };
-
-  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      setParseError('PDF 파일만 가능합니다.'); return;
-    }
-    setParseError(''); setParsing(true); setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const b64 = (reader.result as string).split(',')[1];
-      setFileData(b64);
-      try {
-        const res = await fetch('/api/sites/parse-pdf', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileData: b64, fileName: file.name }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json?.error?.message || '파싱 실패');
-        setParsed(json.data);
-        setForm({ ...json.data });
-        setStep('preview');
-      } catch (err: any) {
-        setParseError(err.message || '파싱 중 오류가 발생했습니다.');
-      } finally { setParsing(false); }
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  }, []);
-
-  const handleApply = async () => {
-    setSaving(true); setSaveError('');
-    try {
-      // 1. 현장 데이터 덮어씌우기
-      const updateData: any = {
-        contractNo: form.contractNo,
-        procurementNo: form.procurementNo,
-        contractDate: form.contractDate,
-        contractAmount: form.contractAmount,
-        contractQuantity: form.contractQuantity,
-        unitPrice: form.unitPrice,
-        specification: form.specification,
-        deliveryDeadline: form.deliveryDeadline,
-        warrantyPeriod: form.warrantyPeriod,
-        siteType: form.siteType,
-        inspectionAgency: form.inspectionAgencyType || form.inspectionAgency,
-        inspectionBody: form.inspectionBody,
-        acceptanceAgency: form.acceptanceAgency,
-        clientDept: form.clientDept,
-        clientManager: form.clientManager,
-        clientManagerPhone: form.clientManagerPhone,
-      };
-      // 영업현장 → 진행중 전환
-      if (convertToActive) updateData.status = 'CONTRACT_ACTIVE';
-      // clientName으로 수요기관 업데이트
-      if (form.clientName) updateData.clientName = form.clientName;
-
-      const res = await fetch(`/api/sites/${siteId}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updateData),
-      });
-      if (!res.ok) {
-        const j = await res.json();
-        throw new Error(j?.error?.message || '저장 실패');
-      }
-
-      // 2. PDF를 서류 탭에 자동 저장
-      if (fileData) {
-        await fetch(`/api/sites/${siteId}/documents`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileName: fileName || '분할납품요구서.pdf',
-            fileData, mimeType: 'application/pdf',
-          }),
-        });
-      }
-
-      setStep('done');
-      setTimeout(() => onDone(), 1200);
-    } catch (err: any) {
-      setSaveError(err.message || '저장 실패');
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-xl rounded-2xl border border-gray-700 bg-gray-900 shadow-2xl">
-
-        {/* 헤더 */}
-        <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4">
-          <div>
-            <h3 className="text-base font-bold">
-              {convertToActive ? '계약서 업로드 → 현장 전환' : isOverwrite ? '분할납품요구서 갱신' : '분할납품요구서 업로드'}
-            </h3>
-            <p className="text-xs text-gray-500 mt-0.5 truncate max-w-xs">{siteName}</p>
-          </div>
-          <button className="btn btn-ghost btn-sm btn-circle" onClick={onClose}>
-            <XMarkIcon className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="p-5">
-          {/* STEP 1: 업로드 */}
-          {step === 'upload' && (
-            <div className="text-center space-y-4 py-4">
-              {isOverwrite && (
-                <div className="rounded-lg border border-yellow-800/40 bg-yellow-950/20 px-4 py-2.5 text-xs text-yellow-300 text-left">
-                  ⚠️ 기존 계약 정보를 덮어씌웁니다. PDF 파싱 후 확인 후 적용됩니다.
-                </div>
-              )}
-              {parseError && (
-                <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-2.5 text-sm text-red-300">
-                  {parseError}
-                </div>
-              )}
-              <div className="flex justify-center">
-                <div className="rounded-full bg-blue-950/40 border border-blue-800/30 p-5">
-                  <DocumentArrowUpIcon className="h-10 w-10 text-blue-400" />
-                </div>
-              </div>
-              <p className="text-xs text-gray-400">
-                조달청 분할납품요구서 PDF를 업로드하면<br />
-                계약 정보가 자동으로 파싱됩니다.
-              </p>
-              <label className="btn btn-primary gap-2 cursor-pointer">
-                {parsing
-                  ? <><span className="loading loading-spinner loading-sm" />분석 중...</>
-                  : <><DocumentArrowUpIcon className="h-5 w-5" />PDF 파일 선택</>
-                }
-                <input type="file" accept=".pdf" className="hidden"
-                  onChange={handleFileChange} disabled={parsing} />
-              </label>
-            </div>
-          )}
-
-          {/* STEP 2: 파싱 결과 미리보기 */}
-          {step === 'preview' && parsed && (
-            <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
-              <div className="rounded-lg border border-green-800/40 bg-green-950/15 px-3 py-2.5 text-xs text-green-300">
-                ✅ 파싱 완료 — 내용을 확인하고 적용하세요.
-                <span className="ml-2 text-blue-400">PDF는 서류 탭에 자동 저장됩니다.</span>
-              </div>
-
-              {/* 핵심 정보 미리보기 */}
-              <div className="rounded-lg border border-blue-900/30 bg-blue-950/10 p-3 space-y-2">
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider">파싱 결과 요약</p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-                  {[
-                    { l: '납품요구번호', v: form.contractNo },
-                    { l: '수요기관', v: form.clientName },
-                    { l: '계약금액', v: fmtMoney(form.contractAmount) },
-                    { l: '계약물량', v: form.contractQuantity ? `${form.contractQuantity} m²` : null },
-                    { l: '단가', v: form.unitPrice ? `${Number(form.unitPrice).toLocaleString()}원` : null },
-                    { l: '납품기한', v: form.deliveryDeadline },
-                    { l: '계약유형', v: form.siteType },
-                    { l: '검사기관', v: form.inspectionAgencyType || form.inspectionAgency },
-                    { l: '담당자', v: form.clientManager ? `${form.clientDept || ''} ${form.clientManager}` : null },
-                    { l: '담당자 전화', v: form.clientManagerPhone },
-                  ].map(({ l, v }) => (
-                    <div key={l} className="flex items-baseline gap-1.5">
-                      <span className="text-gray-500 flex-shrink-0">{l}</span>
-                      <span className={`font-medium truncate ${v ? 'text-gray-200' : 'text-gray-600'}`}>
-                        {v || '-'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 납품기한 직접 수정 (자주 바뀌는 필드) */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] text-gray-400 mb-1">납품기한 확인/수정</label>
-                  <input type="date" className="input input-bordered input-sm w-full"
-                    value={form.deliveryDeadline || ''}
-                    onChange={e => setForm({ ...form, deliveryDeadline: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-gray-400 mb-1">계약물량 확인/수정 (m²)</label>
-                  <input type="number" className="input input-bordered input-sm w-full"
-                    value={form.contractQuantity || ''}
-                    onChange={e => setForm({ ...form, contractQuantity: e.target.value })} />
-                </div>
-              </div>
-
-              {saveError && (
-                <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-3 py-2 text-sm text-red-300">
-                  {saveError}
-                </div>
-              )}
-
-              <div className="flex items-center justify-between gap-3 pt-1 border-t border-gray-800">
-                <button className="btn btn-ghost btn-sm" onClick={() => setStep('upload')}>
-                  다시 업로드
-                </button>
-                <button className="btn btn-primary btn-sm gap-2 min-w-[120px]"
-                  onClick={handleApply} disabled={saving}>
-                  {saving
-                    ? <><span className="loading loading-spinner loading-xs" />적용 중...</>
-                    : convertToActive ? '✅ 현장 전환' : isOverwrite ? '✅ 갱신 적용' : '✅ 정보 저장'
-                  }
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 3: 완료 */}
-          {step === 'done' && (
-            <div className="text-center py-6 space-y-3">
-              <CheckIcon className="h-12 w-12 text-green-400 mx-auto" />
-              <p className="font-semibold text-green-300">
-                {convertToActive ? '현장이 진행중으로 전환되었습니다!' : '계약 정보가 업데이트되었습니다!'}
-              </p>
-              <p className="text-xs text-gray-500">PDF가 서류 탭에 저장되었습니다.</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};

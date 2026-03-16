@@ -9,6 +9,8 @@ import {
   canAssignRole,
   isExternalRole,
   deleteUserFully,
+  isCompanyAdminRole,
+  isSystemRole,
 } from '@/lib/team-helper';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -40,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 }
 
 const handleGET = async (teamId: string, actorRole: string, actorUserId: string, res: NextApiResponse) => {
-  const [members, sites, companyAdminCount] = await Promise.all([
+  const [members, sites] = await Promise.all([
     prisma.teamMember.findMany({
       where: { teamId },
       include: {
@@ -70,16 +72,15 @@ const handleGET = async (teamId: string, actorRole: string, actorUserId: string,
       orderBy: { createdAt: 'desc' },
       select: { id: true, name: true, status: true },
     }),
-    prisma.teamMember.count({ where: { teamId, role: 'ADMIN_HR' } }),
   ]);
 
-  // SUPER_ADMIN/OWNER 계정은 항상 비노출 (회사 계정으로 보면 안 됨)
+  // SUPER_ADMIN/OWNER 계정은 항상 비노출
   const users = members
     .filter((m) => !['SUPER_ADMIN', 'OWNER'].includes(m.role))
     .map((m) => ({
       ...m.user,
       role: m.role,
-      teamMembers: [{ role: m.role, team: { name: m.team?.name || teamId } }],
+      teamMembers: [{ role: m.role, team: { name: (m as any).team?.name || teamId } }],
       assignedSites: (m.user.siteAssignments || []).map((a) => a.site),
     }));
 
@@ -87,8 +88,11 @@ const handleGET = async (teamId: string, actorRole: string, actorUserId: string,
     data: users,
     meta: {
       sites,
-      companyAdminExists: companyAdminCount > 0,
       actorRole,
+      // 삭제 가능 여부: ADMIN_HR 또는 SUPER_ADMIN만
+      canDelete: isCompanyAdminRole(actorRole) || isSystemRole(actorRole),
+      // ADMIN_HR 생성 가능 여부: SUPER_ADMIN 전용
+      canCreateAdmin: isSystemRole(actorRole),
     },
   });
 };
@@ -103,26 +107,16 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
   const existingUsername = await prisma.user.findUnique({ where: { username } });
   if (existingUsername) return res.status(400).json({ error: { message: '이미 사용 중인 아이디입니다.' } });
 
-  // 내부 이메일 생성 (email 미입력 시 username@internal.lookup9 으로 자동 생성)
+  // 내부 이메일 생성
   const finalEmail = email && email.trim() ? email.trim() : `${username}@internal.lookup9`;
 
   const targetRole = role || 'USER';
 
   if (!canAssignRole(actorTm.role, targetRole)) {
-    return res.status(403).json({ error: { message: `${targetRole} 역할을 부여할 수 없습니다.` } });
-  }
-
-  // COMPANY_ADMIN(ADMIN_HR): 회사당 1명만 허용
-  if (targetRole === 'ADMIN_HR') {
-    const adminExists = await prisma.teamMember.findFirst({
-      where: { teamId: actorTm.teamId, role: { in: ['ADMIN_HR', 'ADMIN'] } },
-      select: { id: true },
-    });
-    if (adminExists) {
-      return res
-        .status(400)
-        .json({ error: { message: 'COMPANY_ADMIN 계정은 회사당 1개만 생성할 수 있습니다.' } });
+    if (targetRole === 'ADMIN_HR' || targetRole === 'ADMIN') {
+      return res.status(403).json({ error: { message: 'Company Admin 계정은 시스템 관리자만 생성할 수 있습니다.' } });
     }
+    return res.status(403).json({ error: { message: `${targetRole} 역할을 부여할 수 없습니다.` } });
   }
 
   const normalizedSiteIds = Array.isArray(siteIds)

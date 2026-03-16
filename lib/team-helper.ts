@@ -40,26 +40,47 @@ export function isCompanyAdminRole(role: string): boolean {
   return role === 'ADMIN_HR' || role === 'ADMIN';
 }
 
+/**
+ * 삭제 권한:
+ * - SUPER_ADMIN: 자기 자신 제외 모두 삭제 가능
+ * - ADMIN_HR: 자기 자신 제외, SUPER_ADMIN/OWNER 제외, 자신보다 낮은 역할만 삭제 가능
+ * - MANAGER 이하: 삭제 불가
+ */
 export function canDeleteUser(
   actorRole: string,
   actorUserId: string,
   targetRole: string,
   targetUserId: string
 ): boolean {
+  // 자기 자신은 항상 삭제 불가
   if (actorUserId === targetUserId) return false;
-  // SUPER_ADMIN은 삭제 불가 (DB 시드 전용)
+  // SUPER_ADMIN/OWNER 계정은 절대 삭제 불가
   if (isSystemRole(targetRole)) return false;
+  // SUPER_ADMIN은 모두 삭제 가능
+  if (actorRole === 'SUPER_ADMIN') return true;
+  // ADMIN_HR만 삭제 가능 (MANAGER 이하 불가)
+  if (!isCompanyAdminRole(actorRole)) return false;
+  // 자신보다 낮은 역할만 삭제 가능
   if (getRoleLevel(actorRole) <= getRoleLevel(targetRole)) return false;
   return true;
 }
 
+/**
+ * 역할 부여 권한:
+ * - SUPER_ADMIN만 ADMIN_HR 생성 가능
+ * - SUPER_ADMIN/OWNER 역할은 어떤 경우에도 생성 불가
+ */
 export function canAssignRole(actorRole: string, targetRole: string): boolean {
   // SUPER_ADMIN/OWNER는 절대 생성 불가 (UI/API 막음)
   if (targetRole === 'SUPER_ADMIN') return false;
   if (targetRole === 'OWNER') return false;
-  // SUPER_ADMIN은 COMPANY_ADMIN(ADMIN_HR) 생성 가능 (여러 회사에 각 1개씩)
+  // ADMIN_HR 생성은 SUPER_ADMIN 전용
+  if (targetRole === 'ADMIN_HR' || targetRole === 'ADMIN') {
+    return actorRole === 'SUPER_ADMIN' || actorRole === 'OWNER';
+  }
+  // 그 외: SUPER_ADMIN/OWNER는 모두 가능
   if (actorRole === 'SUPER_ADMIN' || actorRole === 'OWNER') return true;
-  // COMPANY_ADMIN은 자기보다 낮은 역할 생성 가능 (SUPER_ADMIN/OWNER 제외 위에서 처리)
+  // 자신보다 낮은 역할만 생성 가능
   if (getRoleLevel(targetRole) >= getRoleLevel(actorRole)) return false;
   return true;
 }
@@ -126,12 +147,15 @@ export function getPermissionFlags(role: string, department?: string | null) {
   const isManager = role === 'MANAGER';
   const isInternal = isSuper || isCompanyAdmin || isManager || role === 'USER' || role === 'MEMBER';
   const dept = department || '';
+  const isSalesDept = dept.includes('영업');
 
   return {
     isSuper,
     isCompanyAdmin,
     isManager,
     isInternal,
+    // 영업관리 메뉴: 영업부서 소속 또는 상위관리자
+    canAccessSalesMenu: isSuper || isCompanyAdmin || isSalesDept,
     canManageUsers: isSuper || isCompanyAdmin || isManager,
     canManageGuests: canManageGuests(role),
     canViewApprovals: isSuper || isCompanyAdmin || isManager,

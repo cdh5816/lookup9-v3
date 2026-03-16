@@ -39,6 +39,7 @@ const Login: NextPageWithLayout<
   const [recaptchaToken, setRecaptchaToken] = useState<string>('');
   const [message, setMessage] = useState<Message>({ text: null, status: null });
   const [isPasswordVisible, setIsPasswordVisible] = useState<boolean>(false);
+  const [rememberMe, setRememberMe] = useState<boolean>(false);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
 
   const { error, success, token } = router.query as {
@@ -86,6 +87,8 @@ const Login: NextPageWithLayout<
         redirect: false,
         callbackUrl: redirectUrl,
         recaptchaToken,
+        // 자동로그인 미체크 시 브라우저 세션 쿠키로 처리 (브라우저 닫으면 만료)
+        rememberMe: rememberMe ? '1' : '0',
       });
 
       formik.resetForm();
@@ -95,6 +98,17 @@ const Login: NextPageWithLayout<
         setMessage({ text: response.error, status: 'error' });
         return;
       }
+
+      // 자동로그인 체크 여부를 localStorage에 저장 (세션 만료 시 참고용)
+      if (typeof window !== 'undefined') {
+        if (rememberMe) {
+          localStorage.setItem('lookup9_remember', '1');
+        } else {
+          localStorage.removeItem('lookup9_remember');
+        }
+      }
+
+      router.push(redirectUrl);
     },
   });
 
@@ -157,6 +171,19 @@ const Login: NextPageWithLayout<
                 handlePasswordVisibility={handlePasswordVisibility}
               />
             </div>
+
+            {/* 자동 로그인 체크박스 */}
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm checkbox-primary"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <span className="text-sm text-gray-400">자동 로그인</span>
+              <span className="text-xs text-gray-600">(체크 해제 시 브라우저 종료 후 자동 로그아웃)</span>
+            </label>
+
             <GoogleReCAPTCHA
               recaptchaRef={recaptchaRef}
               onChange={setRecaptchaToken}

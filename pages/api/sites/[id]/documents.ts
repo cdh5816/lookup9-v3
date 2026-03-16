@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     switch (req.method) {
-      case 'GET': return await handleGET(id, res);
+      case 'GET': return await handleGET(id, req, res);
       case 'POST': return await handlePOST(id, req, res, session);
       case 'DELETE': return await handleDELETE(req, res);
       default:
@@ -30,7 +30,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-const handleGET = async (siteId: string, res: NextApiResponse) => {
+const handleGET = async (siteId: string, req: NextApiRequest, res: NextApiResponse) => {
+  const { download, docId } = req.query;
+
+  // 단일 문서 다운로드 모드
+  if (download === '1' && docId) {
+    const doc = await prisma.document.findFirst({
+      where: { id: String(docId), siteId },
+      select: { fileName: true, fileData: true, mimeType: true },
+    });
+    if (!doc || !doc.fileData) {
+      return res.status(404).json({ error: { message: '파일을 찾을 수 없습니다.' } });
+    }
+    const buffer = Buffer.from(doc.fileData, 'base64');
+    res.setHeader('Content-Type', doc.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(doc.fileName)}`);
+    res.setHeader('Content-Length', buffer.length);
+    return res.end(buffer);
+  }
+
+  // 목록 조회 (fileData 제외 - 목록에서는 불필요)
   const docs = await prisma.document.findMany({
     where: { siteId },
     select: {

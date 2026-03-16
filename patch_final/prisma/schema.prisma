@@ -1,0 +1,775 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN_HR
+  MANAGER
+  USER
+  PARTNER
+  GUEST
+  VIEWER
+  ADMIN
+  OWNER
+  MEMBER
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id                     String    @id @default(uuid())
+  name                   String
+  email                  String    @unique
+  username               String?   @unique
+  emailVerified          DateTime?
+  password               String?
+  image                  String?
+  company                String?
+  department             String?
+  position               String?
+  phone                  String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @default(now())
+  invalid_login_attempts Int       @default(0)
+  lockedAt               DateTime?
+
+  teamMembers    TeamMember[]
+  accounts       Account[]
+  sessions       Session[]
+  invitations    Invitation[]
+  createdSites   Site[]           @relation("SiteCreator")
+  siteAssignments SiteAssignment[]
+  salesRecords   SalesRecord[]    @relation("SalesCreator")
+  contracts      Contract[]       @relation("ContractCreator")
+  documents      Document[]       @relation("DocumentUploader")
+  comments       Comment[]        @relation("CommentAuthor")
+  sentMessages   Message[]        @relation("MessageSender")
+  receivedMessages Message[]      @relation("MessageReceiver")
+  notices          Notice[]       @relation("NoticeAuthor")
+  statusChanges    SiteStatusHistory[] @relation("StatusChanger")
+  paintSpecs       PaintSpec[]    @relation("PaintConfirmer")
+  shippingRecords  ShippingRecord[] @relation("ShippingCreator")
+  requests         Request[]      @relation("RequestCreator")
+  requestsHandled  Request[]      @relation("RequestHandler")
+  notifications    Notification[] @relation("NotifyUser")
+  workLogs         WorkLog[]      @relation("WorkLogAuthor")
+  workLogViews     WorkLogViewLog[] @relation("WorkLogViewer")
+  workLogViewedBy  WorkLogViewLog[] @relation("WorkLogTarget")
+  issues           Issue[]        @relation("IssueCreator")
+  issuesHandled    Issue[]        @relation("IssueHandler")
+  changeLogs       ChangeLog[]    @relation("ChangeRequester")
+  changeApprovals  ChangeLog[]    @relation("ChangeApprover")
+  schedules        Schedule[]     @relation("ScheduleOwner")
+  leaveBalances    LeaveBalance[] @relation("LeaveBalanceUser")
+  leaveRequests    LeaveRequest[] @relation("LeaveRequestUser")
+  leaveManaged     LeaveRequest[] @relation("LeaveManager")
+  leaveAdmined     LeaveRequest[] @relation("LeaveAdmin")
+  productionOrders ProductionOrder[] @relation("ProductionOrderCreator")
+}
+
+model Team {
+  id              String       @id @default(uuid())
+  name            String
+  slug            String       @unique
+  domain          String?      @unique
+  defaultRole     Role         @default(MEMBER)
+  billingId       String?
+  billingProvider String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @default(now())
+  members         TeamMember[]
+  invitations     Invitation[]
+  apiKeys         ApiKey[]
+  sites           Site[]
+  clients         Client[]
+  notices         Notice[]
+
+  @@index([billingId])
+}
+
+model TeamMember {
+  id        String   @id @default(uuid())
+  teamId    String
+  userId    String
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model Invitation {
+  id             String   @id @default(uuid())
+  teamId         String
+  email          String?
+  role           Role     @default(MEMBER)
+  token          String   @unique
+  expires        DateTime
+  invitedBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now())
+  sentViaEmail   Boolean  @default(true)
+  allowedDomains String[] @default([])
+
+  user User @relation(fields: [invitedBy], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, email])
+  @@index([email])
+}
+
+model PasswordReset {
+  id        Int      @id @default(autoincrement())
+  email     String
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  name       String
+  teamId     String
+  hashedKey  String    @unique
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now())
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+}
+
+model Subscription {
+  id         String    @id
+  customerId String
+  priceId    String
+  active     Boolean   @default(false)
+  startDate  DateTime
+  endDate    DateTime
+  cancelAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now())
+
+  @@index([customerId])
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  description String
+  features    String[]
+  image       String
+  name        String
+  created     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+  Price       Price[]
+}
+
+model Price {
+  id            String   @id @default(uuid())
+  billingScheme String
+  currency      String
+  serviceId     String
+  amount        Int?
+  metadata      Json
+  type          String
+  created       DateTime
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+}
+
+model jackson_store {
+  key        String    @id(map: "_jackson_store_key") @db.VarChar(1500)
+  value      String
+  iv         String?   @db.VarChar(64)
+  tag        String?   @db.VarChar(64)
+  createdAt  DateTime  @default(now()) @db.Timestamp(6)
+  modifiedAt DateTime? @db.Timestamp(6)
+  namespace  String?   @db.VarChar(256)
+
+  jackson_index jackson_index[]
+
+  @@index([namespace], map: "_jackson_store_namespace")
+  @@ignore
+}
+
+model jackson_index {
+  id       Int    @id(map: "_jackson_index_id") @default(autoincrement())
+  key      String @db.VarChar(1500)
+  storeKey String @db.VarChar(1500)
+
+  store jackson_store @relation(fields: [storeKey], references: [key], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([key], map: "_jackson_index_key")
+  @@index([key, storeKey], map: "_jackson_index_key_store")
+  @@ignore
+}
+
+model jackson_ttl {
+  key       String @id(map: "jackson_ttl_key") @db.VarChar(1500)
+  expiresAt BigInt
+
+  @@index([expiresAt], map: "_jackson_ttl_expires_at")
+  @@ignore
+}
+
+// ============================================
+// LOOKUP9 업무 테이블
+// ============================================
+
+model Site {
+  id          String   @id @default(uuid())
+  name        String                             // 사업명 (현장명)
+  address     String?                            // 현장 주소
+  clientId    String?                            // 수요기관 (발주처)
+  teamId      String?
+
+  // ── 현장 상태 (SaaS 통합 라이프사이클) ──
+  // SALES_PIPELINE: 영업중 (계약서 없음)
+  // SALES_CONFIRMED: 수주확정 (계약서 대기)
+  // CONTRACT_ACTIVE: 계약완료, 진행중
+  // COMPLETED: 준공완료
+  // WARRANTY: 하자기간
+  // FAILED: 영업실패 (아카이브)
+  status      String   @default("SALES_PIPELINE")
+  siteType    String   @default("납품설치도")    // 납품설치도 | 납품하차도
+
+  // ── 분할납품요구서 파싱 필드 ──
+  contractNo        String?                      // 납품요구번호 (R25TB01360601-00)
+  procurementNo     String?                      // 계약번호 (002370053-11)
+  contractDate      DateTime?                    // 납품요구일자
+  contractAmount    Decimal? @db.Decimal(15, 0)  // 계약금액
+  contractQuantity  Decimal? @db.Decimal(12, 2)  // 계약물량 (m²)
+  unitPrice         Decimal? @db.Decimal(15, 0)  // 단가
+  specification     String?                      // 규격/사양
+  deliveryDeadline  DateTime?                    // 납품기한
+  warrantyPeriod    Int?     @default(2)         // 하자담보기간 (년)
+  completionDate    DateTime?                    // 준공일
+
+  // ── 검사/검수 기관 ──
+  inspectionAgency  String?                      // 검사기관 (수요기관자체 | 전문검사기관 | 조달청)
+  inspectionBody    String?                      // 검사기관명 (전문검사기관인 경우)
+  acceptanceAgency  String?                      // 검수기관
+  inspectionDone    Boolean  @default(false)     // 검사 완료 여부
+  inspectionDoneAt  DateTime?                    // 검사 완료일
+
+  // ── 영업 정보 (SALES_PIPELINE 단계) ──
+  salesStage        String?                      // 접촉중 | 제안 | 협의중 | 수주확정 | 실패
+  salesNote         String?  @db.Text            // 영업 활동 메모
+  estimatedAmount   Decimal? @db.Decimal(15, 0)  // 예상 계약금액
+
+  // ── 수요기관 담당자 ──
+  clientDept        String?                      // 담당부서 (예: 인구정책과)
+  clientManager     String?                      // 담당자명 (예: 김지혜)
+  clientManagerPhone String?                     // 담당자 전화번호
+
+  // ── 협력사 (설치 시공사) ──
+  installerName     String?                      // 협력사명
+  installerContact  String?                      // 협력사 담당자
+  installerPhone    String?                      // 협력사 연락처
+
+  // ── 착수/준공 서류 ──
+  startDocsDone     Boolean  @default(false)     // 착수계 제출 여부
+  startDocsDate     DateTime?                    // 착수계 제출일
+  completionDocsDone Boolean @default(false)     // 준공계 제출 여부
+  completionDocsDate DateTime?                   // 준공계 제출일
+
+  description String?  @db.Text
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  team        Team?            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  client      Client?          @relation(fields: [clientId], references: [id])
+  createdBy   User             @relation("SiteCreator", fields: [createdById], references: [id])
+  assignments SiteAssignment[]
+  sales       SalesRecord[]
+  contracts   Contract[]
+  documents   Document[]
+  comments    Comment[]
+  statusHistory SiteStatusHistory[]
+  paintSpecs    PaintSpec[]
+  shipments     ShippingRecord[]
+  requests      Request[]
+  notifications Notification[]
+  issues        Issue[]
+  changeLogs    ChangeLog[]
+  schedules     Schedule[]
+  productionOrders ProductionOrder[]
+
+  @@index([teamId])
+  @@index([clientId])
+  @@index([createdById])
+  @@index([status])
+}
+
+model SiteAssignment {
+  id           String   @id @default(uuid())
+  siteId       String
+  userId       String
+  assignedRole String   @default("USER")
+  assignedAt   DateTime @default(now())
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, userId])
+  @@index([userId])
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  contact   String?
+  phone     String?
+  email     String?
+  address   String?
+  type      String   @default("발주처")
+  teamId    String?
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  team  Team?  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sites Site[]
+
+  @@index([teamId])
+}
+
+model SalesRecord {
+  id             String   @id @default(uuid())
+  siteId         String
+  status         String   @default("영업접촉")
+  estimateAmount Decimal? @db.Decimal(15, 0)
+  meetingNotes   String?  @db.Text
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now())
+
+  site      Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User @relation("SalesCreator", fields: [createdById], references: [id])
+
+  @@index([siteId])
+}
+
+model Contract {
+  id             String   @id @default(uuid())
+  siteId         String
+  contractAmount Decimal? @db.Decimal(15, 0)
+  quantity       Decimal? @db.Decimal(12, 2)   // 계약물량 (m2)
+  unitPrice      Decimal? @db.Decimal(15, 0)   // 단가 (원/m2)
+  specification  String?                        // 사양 (예: AL 3T)
+  contractDate   DateTime?                      // 계약일
+  isAdditional   Boolean  @default(false)       // 추가계약 여부
+  specialNotes   String?  @db.Text
+  status         String   @default("수주등록")
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now())
+
+  site      Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User @relation("ContractCreator", fields: [createdById], references: [id])
+
+  @@index([siteId])
+}
+
+// 생산 발주 차수 테이블
+model ProductionOrder {
+  id          String   @id @default(uuid())
+  siteId      String
+  sequence    Int                    // 차수 (1, 2, 3...)
+  quantity    Decimal? @db.Decimal(12, 2)  // 발주물량
+  orderDate   DateTime?              // 발주일
+  supplyDate  DateTime?              // 공급일 (입고일)
+  notes       String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  site      Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User @relation("ProductionOrderCreator", fields: [createdById], references: [id])
+
+  @@index([siteId])
+}
+
+model Document {
+  id           String   @id @default(uuid())
+  siteId       String?
+  type         String?
+  fileName     String
+  filePath     String?
+  fileData     String?  @db.Text
+  fileSize     Int?
+  mimeType     String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  site       Site? @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  uploadedBy User  @relation("DocumentUploader", fields: [uploadedById], references: [id])
+
+  @@index([siteId])
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  siteId     String
+  parentId   String?
+  content    String   @db.Text
+  authorId   String
+  isInternal Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
+
+  site   Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  author User     @relation("CommentAuthor", fields: [authorId], references: [id])
+  parent Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[] @relation("CommentReplies")
+
+  @@index([siteId])
+  @@index([parentId])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  title      String
+  content    String   @db.Text
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("MessageSender", fields: [senderId], references: [id])
+  receiver User @relation("MessageReceiver", fields: [receiverId], references: [id])
+
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+model Notice {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   @db.Text
+  isPinned  Boolean  @default(false)
+  teamId    String?
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  team   Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  author User @relation("NoticeAuthor", fields: [authorId], references: [id])
+
+  @@index([teamId])
+  @@index([createdAt])
+}
+
+// ============================================
+// LOOKUP9 v2 모델
+// ============================================
+
+model SiteStatusHistory {
+  id           String   @id @default(uuid())
+  siteId       String
+  fromStatus   String
+  toStatus     String
+  reason       String?  @db.Text
+  changedById  String
+  createdAt    DateTime @default(now())
+
+  site      Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  changedBy User @relation("StatusChanger", fields: [changedById], references: [id])
+
+  @@index([siteId])
+}
+
+model PaintSpec {
+  id            String   @id @default(uuid())
+  siteId        String
+  colorCode     String
+  colorName     String
+  manufacturer  String?
+  finishType    String?
+  area          String?
+  quantity      Decimal? @db.Decimal(15, 2)
+  isPrimary     Boolean  @default(false)
+  status        String   @default("임시")
+  confirmedById String?
+  confirmedAt   DateTime?
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+
+  site        Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  confirmedBy User? @relation("PaintConfirmer", fields: [confirmedById], references: [id])
+
+  @@index([siteId])
+}
+
+model ShippingRecord {
+  id            String   @id @default(uuid())
+  siteId        String
+  shipmentNo    String?
+  sequence      Int      @default(1)
+  shippedAt     DateTime?
+  shipmentType  String?
+  status        String   @default("출하예정")
+  quantity      Decimal? @db.Decimal(15, 2)
+  vehicleInfo   String?
+  driverInfo    String?
+  destination   String?
+  receivedBy    String?
+  notes         String?  @db.Text
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+
+  site      Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User @relation("ShippingCreator", fields: [createdById], references: [id])
+
+  @@index([siteId])
+  @@index([status])
+}
+
+model Request {
+  id              String   @id @default(uuid())
+  siteId          String
+  title           String
+  type            String   @default("내부 요청")
+  priority        String   @default("보통")
+  targetDept      String?
+  deadline        DateTime?
+  status          String   @default("등록")
+  description     String?  @db.Text
+  result          String?  @db.Text
+  createdById     String
+  handledById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now())
+
+  site      Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("RequestCreator", fields: [createdById], references: [id])
+  handledBy User? @relation("RequestHandler", fields: [handledById], references: [id])
+
+  @@index([siteId])
+  @@index([status])
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String
+  type       String
+  title      String
+  message    String?  @db.Text
+  link       String?
+  siteId     String?
+  entityType String?
+  entityId   String?
+  isRead     Boolean  @default(false)
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  user User  @relation("NotifyUser", fields: [userId], references: [id], onDelete: Cascade)
+  site Site? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([siteId])
+}
+
+model WorkLog {
+  id        String   @id @default(uuid())
+  userId    String
+  date      DateTime @db.Date
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  user User @relation("WorkLogAuthor", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+}
+
+model Issue {
+  id           String   @id @default(uuid())
+  siteId       String
+  title        String
+  type         String   @default("기타")
+  occurredAt   DateTime?
+  location     String?
+  description  String?  @db.Text
+  responsibility String?
+  status       String   @default("발생")
+  handledById  String?
+  resolution   String?  @db.Text
+  prevention   String?  @db.Text
+  createdById  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+
+  site      Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("IssueCreator", fields: [createdById], references: [id])
+  handledBy User? @relation("IssueHandler", fields: [handledById], references: [id])
+
+  @@index([siteId])
+  @@index([status])
+}
+
+model ChangeLog {
+  id           String   @id @default(uuid())
+  siteId       String
+  type         String   @default("기타")
+  beforeValue  String?  @db.Text
+  afterValue   String?  @db.Text
+  reason       String?  @db.Text
+  impact       String?  @db.Text
+  requesterId  String
+  approverId   String?
+  approvedAt   DateTime?
+  status       String   @default("요청")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+
+  site      Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  requester User  @relation("ChangeRequester", fields: [requesterId], references: [id])
+  approver  User? @relation("ChangeApprover", fields: [approverId], references: [id])
+
+  @@index([siteId])
+}
+
+model Schedule {
+  id          String   @id @default(uuid())
+  siteId      String
+  title       String
+  type        String   @default("기타")
+  startDate   DateTime
+  endDate     DateTime?
+  assigneeId  String?
+  isDone      Boolean  @default(false)
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  site     Site  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  assignee User? @relation("ScheduleOwner", fields: [assigneeId], references: [id])
+
+  @@index([siteId])
+  @@index([startDate])
+}
+
+// ============================================
+// 연차 관리
+// ============================================
+
+model LeaveBalance {
+  id          String   @id @default(uuid())
+  userId      String
+  teamId      String?
+  year        Int
+  totalDays   Decimal  @default(15) @db.Decimal(4, 1)
+  usedDays    Decimal  @default(0)  @db.Decimal(4, 1)
+  resetDate   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  user User @relation("LeaveBalanceUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, year])
+  @@index([userId])
+  @@index([year])
+}
+
+model LeaveRequest {
+  id            String   @id @default(uuid())
+  userId        String
+  teamId        String?
+  type          String   @default("연차")
+  startDate     DateTime @db.Date
+  endDate       DateTime @db.Date
+  days          Decimal  @db.Decimal(4, 1)
+  reason        String?  @db.Text
+  status        String   @default("신청")
+  currentStep   String   @default("부서장승인대기")
+  managerId     String?
+  managerAction String?
+  managerAt     DateTime?
+  managerNote   String?
+  adminId       String?
+  adminAction   String?
+  adminAt       DateTime?
+  adminNote     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+
+  user    User  @relation("LeaveRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  manager User? @relation("LeaveManager", fields: [managerId], references: [id])
+  admin   User? @relation("LeaveAdmin", fields: [adminId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([currentStep])
+}
+
+
+model WorkLogViewLog {
+  id           String   @id @default(uuid())
+  viewerId     String
+  targetUserId String
+  keyword      String?
+  viewedAt     DateTime @default(now())
+
+  viewer     User @relation("WorkLogViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  targetUser User @relation("WorkLogTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@index([viewerId, viewedAt])
+  @@index([targetUserId, viewedAt])
+}

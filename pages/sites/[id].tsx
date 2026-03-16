@@ -433,6 +433,9 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
               <InfoRow label="검사기관명" value={site.inspectionBody} />
             )}
             <InfoRow label="검수기관" value={site.acceptanceAgency} />
+            <InfoRow label="담당부서" value={site.clientDept} />
+            <InfoRow label="담당자명" value={site.clientManager} />
+            <InfoRow label="담당자 전화" value={site.clientManagerPhone} />
             <div>
               <p className="text-[11px] text-gray-500 mb-0.5">검사 완료</p>
               <div className="flex items-center gap-1.5">
@@ -604,7 +607,7 @@ const AssignmentPanel = ({ siteId, assignments, canManage, isExternal, onMutate 
   const [sq, setSq] = useState('');
   const [sr, setSr] = useState<any[]>([]);
   const [mode, setMode] = useState<null | 'partner' | 'guest'>(null);
-  const [form, setForm] = useState({ name: '', email: '', password: '', company: '', position: '', phone: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', company: '', position: '', phone: '', assignedSiteId: siteId });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -634,17 +637,23 @@ const AssignmentPanel = ({ siteId, assignments, canManage, isExternal, onMutate 
 
   const handleCreate = async () => {
     if (!form.name || !form.email || !form.password) { setError('이름, 이메일, 비밀번호는 필수입니다.'); return; }
+    if (mode === 'guest' && !form.assignedSiteId) { setError('게스트는 반드시 현장을 지정해야 합니다.'); return; }
     setSaving(true); setError('');
     const roleVal = mode === 'partner' ? 'PARTNER' : 'GUEST';
     try {
+      const body: any = { ...form, role: roleVal, department: roleVal === 'PARTNER' ? '협력사' : '게스트' };
+      // 게스트: 현장 지정
+      if (mode === 'guest' && form.assignedSiteId) {
+        body.assignedSiteIds = [form.assignedSiteId];
+      }
+      // 협력사: 현장 미지정으로 생성 (company 기반으로 자동 접근)
       const res = await fetch('/api/admin/users', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        // 현장 미지정으로 생성 — assignedSiteIds 제거
-        body: JSON.stringify({ ...form, role: roleVal, department: roleVal === 'PARTNER' ? '협력사' : '게스트' }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error?.message || '생성 실패');
-      setForm({ name: '', email: '', password: '', company: '', position: '', phone: '' });
+      setForm({ name: '', email: '', password: '', company: '', position: '', phone: '', assignedSiteId: siteId });
       setMode(null); onMutate();
     } catch (e: any) {
       setError(e.message);
@@ -695,11 +704,19 @@ const AssignmentPanel = ({ siteId, assignments, canManage, isExternal, onMutate 
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold">
               {mode === 'partner' ? '협력사 계정 생성' : '게스트 계정 생성'}
-              <span className="ml-2 text-xs font-normal text-gray-400">(현장 미지정으로 생성됩니다)</span>
+              {mode === 'partner' && <span className="ml-2 text-xs font-normal text-gray-400">(회사명 등록 시 해당 현장 자동 접근)</span>}
+              {mode === 'guest' && <span className="ml-2 text-xs font-normal text-orange-400">* 현장 지정 필수</span>}
             </p>
             <button onClick={() => setMode(null)}><XMarkIcon className="h-4 w-4 text-gray-500" /></button>
           </div>
           {error && <p className="text-xs text-red-400">{error}</p>}
+          {/* 게스트: 현장 지정 (현재 현장으로 기본값) */}
+          {mode === 'guest' && (
+            <div className="rounded-lg border border-orange-800/40 bg-orange-950/20 px-3 py-2">
+              <p className="text-[11px] text-orange-300">배정 현장: <strong className="text-white">현재 현장 (자동 지정)</strong></p>
+              <p className="text-[10px] text-gray-500 mt-0.5">게스트 생성 후 이 현장에 자동으로 배정됩니다.</p>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {[
               { key: 'name', label: '이름 *' }, { key: 'email', label: '이메일 *' },

@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import useSWR from 'swr';
-import { PlusIcon, MagnifyingGlassIcon, ExclamationTriangleIcon, BellAlertIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, MagnifyingGlassIcon, ExclamationTriangleIcon, BellAlertIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline';
 import fetcher from '@/lib/fetcher';
 
 const STATUS_DOT: Record<string, string> = {
@@ -105,11 +105,18 @@ const SitesList = () => {
             </p>
           </div>
           {canCreate && (
-            <Link href="/sites/create">
-              <button className="btn btn-primary btn-sm gap-1.5">
-                <PlusIcon className="h-4 w-4" />현장 등록
-              </button>
-            </Link>
+            <div className="flex gap-2">
+              <Link href="/sites/create-from-pdf">
+                <button className="btn btn-outline btn-sm gap-1.5 border-blue-700 text-blue-400 hover:bg-blue-950/40">
+                  <DocumentArrowUpIcon className="h-4 w-4" />PDF로 생성
+                </button>
+              </Link>
+              <Link href="/sites/create">
+                <button className="btn btn-primary btn-sm gap-1.5">
+                  <PlusIcon className="h-4 w-4" />현장 등록
+                </button>
+              </Link>
+            </div>
           )}
         </div>
 

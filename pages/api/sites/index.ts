@@ -1,7 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { getTeamMemberByUserId } from '@/lib/team-helper';
+import { getTeamMemberByUserId, hasMinRole } from '@/lib/team-helper';
+
+// 영업부서 여부 확인 헬퍼
+async function isSalesDept(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { department: true } });
+  return ['영업', '영업팀', '영업부'].includes(user?.department || '');
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -28,13 +34,18 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
 
   const where: any = { teamId: tm.teamId };
 
-  // salesOnly=true: 영업관리 페이지용 (영업중/수주확정/실패)
+  // salesOnly=true: 영업관리 페이지 — 영업팀(dept=영업) 또는 ADMIN_HR 이상만 접근
   if (salesOnly === 'true') {
+    const isSalesAllowed = hasMinRole(tm.role, 'ADMIN_HR') ||
+      (['USER', 'MANAGER'].includes(tm.role) && await isSalesDept(tm.userId));
+    if (!isSalesAllowed) {
+      return res.status(403).json({ error: { message: '영업관리는 영업팀/경영진만 접근 가능합니다.' } });
+    }
     where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'FAILED'] };
   } else if (status && status !== 'all') {
     where.status = status;
-  } else if (!salesOnly) {
-    // 기본 현장관리: 영업중/실패 제외
+  } else {
+    // 기본 현장관리: 영업/실패 제외
     where.status = { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] };
   }
 
@@ -45,7 +56,19 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     ];
   }
 
-  if (['PARTNER', 'GUEST', 'VIEWER'].includes(tm.role)) {
+  // PARTNER: 자기 company명 = site.installerName 인 현장만
+  if (tm.role === 'PARTNER') {
+    const user = await prisma.user.findUnique({ where: { id: tm.userId }, select: { company: true } });
+    if (user?.company) {
+      where.installerName = user.company;
+    } else {
+      // company 미등록 PARTNER는 개별 배정 현장만
+      where.assignments = { some: { userId: tm.userId } };
+    }
+  }
+
+  // GUEST/VIEWER: 개별 배정 현장만
+  if (tm.role === 'GUEST' || tm.role === 'VIEWER') {
     where.assignments = { some: { userId: tm.userId } };
   }
 
@@ -76,6 +99,8 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
   const {
     name, address, clientId, clientName, status, description,
     siteType, salesStage, estimatedAmount, salesNote,
+    // 수요기관 담당자
+    clientDept, clientManager, clientManagerPhone,
     // 계약 정보 (분할납품요구서)
     contractNo, procurementNo, contractDate, contractAmount,
     contractQuantity, unitPrice, specification, deliveryDeadline, warrantyPeriod,
@@ -108,6 +133,9 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
         estimatedAmount: estimatedAmount ? Number(String(estimatedAmount).replace(/,/g, '')) : null,
         salesNote: salesNote || null,
         description: description || null,
+        clientDept: clientDept || null,
+        clientManager: clientManager || null,
+        clientManagerPhone: clientManagerPhone || null,
         // 계약 정보
         contractNo: contractNo || null,
         procurementNo: procurementNo || null,

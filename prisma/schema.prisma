@@ -820,7 +820,7 @@ model PartnerSiteAssign {
   id               String   @id @default(uuid())
   partnerCompanyId String
   siteId           String
-  createdAt        DateTime @default(now())
+  createdAt        DateTime? @default(now())
 
   company PartnerCompany @relation(fields: [partnerCompanyId], references: [id], onDelete: Cascade)
   site    Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)

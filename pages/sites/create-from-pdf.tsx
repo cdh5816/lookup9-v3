@@ -277,16 +277,31 @@ const CreateFromPdf = () => {
                 </div>
               </div>
 
-              {/* 계약금액 강조 */}
-              <div className="rounded-lg border border-blue-900/40 bg-blue-950/20 px-3 py-2.5">
+              {/* 계약금액 강조 + 직접 수정 가능 */}
+              <div className="rounded-lg border border-blue-900/40 bg-blue-950/20 px-3 py-2.5 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-400">계약금액 (품대계)</span>
-                  <span className="text-base font-bold text-blue-300">
-                    {fmtMoney(form.contractAmount)} <span className="text-xs text-gray-500">({fmtNum(form.contractAmount)}원)</span>
-                  </span>
+                  {form.contractAmount ? (
+                    <span className="text-base font-bold text-blue-300">
+                      {fmtMoney(form.contractAmount)} <span className="text-xs text-gray-500">({fmtNum(form.contractAmount)}원)</span>
+                    </span>
+                  ) : (
+                    <span className="text-xs text-red-400">파싱 실패 — 아래에서 직접 입력</span>
+                  )}
                 </div>
+                {/* 계약금액 직접 수정 */}
+                <input
+                  type="text"
+                  className="input input-bordered input-sm w-full bg-black/30"
+                  placeholder="계약금액 직접 입력 (예: 27000000)"
+                  value={form.contractAmount ? Number(form.contractAmount).toLocaleString() : ''}
+                  onChange={e => {
+                    const v = e.target.value.replace(/,/g, '');
+                    setForm({ ...form, contractAmount: v ? Number(v) : undefined });
+                  }}
+                />
                 {form.contractQuantity && form.unitPrice && (
-                  <p className="text-[11px] text-gray-500 mt-1">
+                  <p className="text-[11px] text-gray-500">
                     계산: {fmtNum(form.contractQuantity)} m² × {fmtNum(form.unitPrice)}원 = {fmtMoney(Number(form.contractQuantity) * Number(form.unitPrice))}
                   </p>
                 )}

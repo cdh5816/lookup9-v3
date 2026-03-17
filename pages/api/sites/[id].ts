@@ -135,6 +135,7 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
       contractQuantity: true,
       deliveryDeadline: true,
       contractAmount: true,
+      installerName: true,
     },
   });
 
@@ -250,9 +251,8 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
     if (!teamId) {
       // teamId 없으면 스킵
     } else {
-      // 현재 저장된 이전 시공업체명 조회 (변경 전)
-      const prevSite = await prisma.site.findUnique({ where: { id }, select: { installerName: true } });
-      const prevName = prevSite?.installerName || null;
+      // currentSite에서 이미 조회된 이전 시공업체명 사용 (추가 DB쿼리 불필요)
+      const prevName = currentSite?.installerName || null;
       const newName  = installerName || null;
 
       // ── 이전 업체 해제 (이전 업체가 있고, 새 업체와 다를 때) ──

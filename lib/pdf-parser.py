@@ -158,6 +158,7 @@ def parse(pdf_path):
     # 계약금액 - 여러 패턴 순서대로 시도
     amount_patterns = [
         r"품\s*대\s*계?\s*(\d{1,3}(?:,\d{3})+)",
+        r"물\s*품\s*대\s*계?\s*(\d{1,3}(?:,\d{3})+)",  # 추가: "물품대계" 패턴
         r"합\s*계\s*금\s*액\s*(\d{1,3}(?:,\d{3})+)",
         r"납\s*품\s*금\s*액\s*(\d{1,3}(?:,\d{3})+)",
         r"계\s*약\s*금\s*액\s*(\d{1,3}(?:,\d{3})+)",
@@ -180,7 +181,7 @@ def parse(pdf_path):
             for row in table:
                 if not row: continue
                 row_text = " ".join(N(str(c)) for c in row if c)
-                if any(k in row_text for k in ["합 계","합계","품대계","총 계","총계","소 계","소계"]):
+                if any(k in row_text for k in ["합 계","합계","품대계","총 계","총계","소 계","소계","물품대"]):  # "물품대" 추가
                     for cell in reversed(row):
                         cs = N(str(cell)) if cell else ""
                         digits = re.sub(r"[^\d]","",cs)
@@ -193,6 +194,17 @@ def parse(pdf_path):
                             except: pass
                     if result.get("contractAmount"): break
             if result.get("contractAmount"): break
+
+    # 최후 수단: 텍스트에서 콤마 포함 대형 금액 (기존 패턴 모두 실패 시만 동작)
+    if not result.get("contractAmount"):
+        candidates = []
+        for m2 in re.finditer(r"(\d{1,3}(?:,\d{3}){2,})", full):
+            v = int(m2.group(1).replace(",",""))
+            if 1000000 <= v <= 9999999999:
+                candidates.append(v)
+        if candidates:
+            from collections import Counter
+            result["contractAmount"] = Counter(candidates).most_common(1)[0][0]
 
     # 검사/검수기관 - 테이블 열 위치
     insp_found = False

@@ -155,16 +155,44 @@ def parse(pdf_path):
     m = SA(r"하\s*자\s*담\s*보\s*(?:책임)?\s*기\s*간\s*[:\uff1a비고]?\s*(\d+)\s*년")
     result["warrantyPeriod"] = int(m.group(1)) if m else 2
 
-    # 계약금액 - 품대계 우선
-    m = SA(r"품\s*대\s*계?\s*(\d{1,3}(?:,\d{3})+)")
-    if m:
-        v = int(m.group(1).replace(",",""))
-        if v >= 100000: result["contractAmount"] = v
-    if not result.get("contractAmount"):
-        m = SA(r"합\s*계\s*금\s*액\s*(\d{1,3}(?:,\d{3})+)")
+    # 계약금액 - 여러 패턴 순서대로 시도
+    amount_patterns = [
+        r"품\s*대\s*계?\s*(\d{1,3}(?:,\d{3})+)",
+        r"합\s*계\s*금\s*액\s*(\d{1,3}(?:,\d{3})+)",
+        r"납\s*품\s*금\s*액\s*(\d{1,3}(?:,\d{3})+)",
+        r"계\s*약\s*금\s*액\s*(\d{1,3}(?:,\d{3})+)",
+        r"총\s*금\s*액\s*(\d{1,3}(?:,\d{3})+)",
+        r"공\s*급\s*가\s*액\s*(\d{1,3}(?:,\d{3})+)",
+        r"물\s*품\s*대\s*금\s*(\d{1,3}(?:,\d{3})+)",
+    ]
+    for pat in amount_patterns:
+        m = SA(pat)
         if m:
             v = int(m.group(1).replace(",",""))
-            if v >= 1000000: result["contractAmount"] = v
+            if v >= 100000:
+                result["contractAmount"] = v
+                break
+
+    # 테이블 합계행에서 금액 추출 (텍스트 패턴 모두 실패 시)
+    if not result.get("contractAmount"):
+        for table in tables:
+            if not table or len(table) < 2: continue
+            for row in table:
+                if not row: continue
+                row_text = " ".join(N(str(c)) for c in row if c)
+                if any(k in row_text for k in ["합 계","합계","품대계","총 계","총계","소 계","소계"]):
+                    for cell in reversed(row):
+                        cs = N(str(cell)) if cell else ""
+                        digits = re.sub(r"[^\d]","",cs)
+                        if len(digits) >= 6:
+                            try:
+                                v = int(digits)
+                                if v >= 100000:
+                                    result["contractAmount"] = v
+                                    break
+                            except: pass
+                    if result.get("contractAmount"): break
+            if result.get("contractAmount"): break
 
     # 검사/검수기관 - 테이블 열 위치
     insp_found = False

@@ -12,7 +12,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const tm = await getTeamMemberByUserId(session.user.id);
   if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
 
-  if (!hasMinRole(tm.role, 'MANAGER')) {
+  // GET은 팀 소속이면 누구나 (현장 상세 시공업체 검색용)
+  // POST/PUT/DELETE는 MANAGER 이상만
+  if (req.method !== 'GET' && !hasMinRole(tm.role, 'MANAGER')) {
     return res.status(403).json({ error: { message: 'Forbidden' } });
   }
 

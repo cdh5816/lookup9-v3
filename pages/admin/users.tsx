@@ -44,18 +44,14 @@ const ROLE_LABEL: Record<string, string> = {
 // 메인 컴포넌트
 // ══════════════════════════════════════════════════════
 const AdminUsers = () => {
-  const [tab, setTab] = useState<'staff' | 'partner'>('staff');
-
-  // 현재 로그인 사용자
-  const { data: profileData } = useSWR('/api/my/profile', fetcher);
-  const myRole = profileData?.data?.role || profileData?.data?.teamMembers?.[0]?.role || 'USER';
-  const isAdminHR = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN'].includes(myRole);
-  const canAccessPartner = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'PARTNER'].includes(myRole);
-
-  // ADMIN_HR가 아니면 partner 탭이 기본
+  const { data: profileData, isLoading: profileLoading } = useSWR("/api/my/profile", fetcher);
+  const myRole = profileData?.data?.role || profileData?.data?.teamMembers?.[0]?.role || "";
+  const isAdminHR = ["SUPER_ADMIN", "OWNER", "ADMIN_HR", "ADMIN"].includes(myRole);
+  const canAccessPartner = ["SUPER_ADMIN", "OWNER", "ADMIN_HR", "ADMIN", "MANAGER"].includes(myRole);
+  const [tab, setTab] = useState<"staff" | "partner">("staff");
   useEffect(() => {
-    if (!isAdminHR && canAccessPartner) setTab('partner');
-  }, [isAdminHR, canAccessPartner]);
+    if (!profileLoading && myRole) setTab(isAdminHR ? "staff" : "partner");
+  }, [myRole, isAdminHR, profileLoading]);
 
   return (
     <>
@@ -69,17 +65,24 @@ const AdminUsers = () => {
         </div>
 
         {/* 탭 */}
-        <div className="flex gap-1 border-b border-gray-700/50">
-          {isAdminHR && (
-            <TabBtn active={tab === 'staff'} onClick={() => setTab('staff')}>직원</TabBtn>
-          )}
-          {canAccessPartner && (
-            <TabBtn active={tab === 'partner'} onClick={() => setTab('partner')}>협력업체</TabBtn>
-          )}
-        </div>
-
-        {tab === 'staff'   && isAdminHR    && <StaffPanel myRole={myRole} isAdminHR={isAdminHR} />}
-        {tab === 'partner' && canAccessPartner && <PartnerPanel />}
+        {profileLoading ? (
+          <div className="py-10 text-center"><span className="loading loading-spinner loading-sm text-gray-500" /></div>
+        ) : !isAdminHR && !canAccessPartner ? (
+          <div className="py-10 text-center text-sm text-gray-500">접근 권한이 없습니다.</div>
+        ) : (
+          <>
+            <div className="flex gap-1 border-b border-gray-700/50">
+              {isAdminHR && (
+                <TabBtn active={tab === 'staff'} onClick={() => setTab('staff')}>직원</TabBtn>
+              )}
+              {canAccessPartner && (
+                <TabBtn active={tab === 'partner'} onClick={() => setTab('partner')}>협력업체</TabBtn>
+              )}
+            </div>
+            {tab === 'staff'   && isAdminHR       && <StaffPanel myRole={myRole} isAdminHR={isAdminHR} />}
+            {tab === 'partner' && canAccessPartner && <PartnerPanel />}
+          </>
+        )}
       </div>
     </>
   );

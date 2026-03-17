@@ -267,9 +267,9 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
                     <td className="px-4 py-3 text-gray-400 font-mono text-xs">{user.username || user.email}</td>
                     {filter === 'partner' ? (
                       <td className="px-4 py-3 hidden sm:table-cell">
-                        {user.partnerCompanyName ? (
+                        {(user as any).partnerCompanyName ? (
                           <span className="inline-block rounded border border-purple-800/40 bg-purple-900/20 px-2 py-0.5 text-xs text-purple-300 font-medium">
-                            {user.partnerCompanyName}
+                            {(user as any).partnerCompanyName}
                           </span>
                         ) : (
                           <span className="text-gray-600 text-xs">업체 미지정</span>
@@ -337,8 +337,8 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
             {filter === 'partner' && (
               <div className="mb-4 rounded-lg border border-blue-800/40 bg-blue-950/20 px-3 py-2.5">
                 <p className="text-xs text-blue-300">
-                  계정 생성 후 <strong>협력업체 탭</strong>에서 소속 업체에 등록하세요.<br />
-                  현장 상세 → 시공업체 등록 시 소속 계정 전원이 해당 현장에 자동 배정됩니다.
+                  계정 생성 후 <strong>협력업체 탭</strong>에서 해당 업체에 등록하세요.<br />
+                  현장 배정은 <strong>현장 상세 → 시공업체 등록</strong>으로 처리됩니다.
                 </p>
               </div>
             )}
@@ -420,7 +420,6 @@ const PartnerPanel = () => {
   const [sites, setSites] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showSiteAssign, setShowSiteAssign] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -524,7 +523,7 @@ const PartnerPanel = () => {
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-400">
-          업체 등록 후 현장을 배정하면 소속 계정이 해당 현장에 자동 접근합니다.
+          현장 상세 → 시공업체 등록 시 소속 계정 전원이 해당 현장에 자동 배정됩니다.
         </p>
         <button className="btn btn-primary btn-sm gap-1.5" onClick={() => { setShowCreate(true); setError(''); }}>
           <PlusIcon className="h-4 w-4" />업체 등록
@@ -584,7 +583,6 @@ const PartnerPanel = () => {
                       </>
                     ) : (
                       <>
-                        <button className="btn btn-ghost btn-xs text-blue-400" onClick={() => { setShowSiteAssign(showSiteAssign === co.id ? null : co.id); setExpandedId(co.id); }}>현장배정</button>
                         <button className="btn btn-ghost btn-xs gap-1" onClick={() => { setShowMember(co.id); setMForm({ name:'',username:'',password:'',position:'',phone:'' }); setError(''); }}>
                           <UserPlusIcon className="h-3.5 w-3.5" />계정추가
                         </button>
@@ -599,28 +597,7 @@ const PartnerPanel = () => {
                   </div>
                 </div>
 
-                {/* 현장 배정 패널 */}
-                {showSiteAssign === co.id && (
-                  <div className="border-t border-gray-700/50 bg-blue-950/10 px-4 py-3">
-                    <p className="text-xs font-bold text-blue-300 mb-2">현장 배정 — 체크하면 소속 계정 전체가 해당 현장에 접근</p>
-                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-                      {sites.map((s: any) => {
-                        const assigned = siteAssigned.includes(s.id);
-                        return (
-                          <label key={s.id} className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 cursor-pointer transition ${assigned ? 'border-blue-700/50 bg-blue-950/20' : 'border-gray-700/40 hover:border-gray-600'}`}>
-                            <input type="checkbox" className="checkbox checkbox-sm checkbox-primary" checked={assigned}
-                              onChange={() => handleToggleSite(co.id, s.id, assigned)} />
-                            <div className="min-w-0">
-                              <p className="text-xs font-medium truncate">{s.name}</p>
-                              <p className="text-[10px] text-gray-500">{STATUS_LABEL[s.status] || s.status}</p>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <button className="btn btn-ghost btn-xs mt-2" onClick={() => setShowSiteAssign(null)}>닫기</button>
-                  </div>
-                )}
+                {/* 현장 배정은 현장 상세 → 시공업체 등록으로 처리 */}
 
                 {/* 소속 계정 (펼침) */}
                 {expanded && (

@@ -51,6 +51,7 @@ const handleGET = async (teamId: string, actorRole: string, actorUserId: string,
           select: {
             id: true,
             name: true,
+            username: true,
             email: true,
             company: true,
             department: true,
@@ -90,7 +91,7 @@ const handleGET = async (teamId: string, actorRole: string, actorUserId: string,
       teamMembers: [{ role: m.role, team: { name: (m as any).team?.name || teamId } }],
       assignedSites: (m.user.siteAssignments || []).map((a) => a.site),
       partnerCompanyName: (m.user as any).partnerMembers?.[0]?.company?.name || null,
-      partnerCompanyId: (m.user as any).partnerMembers?.[0]?.company?.id || null,
+      partnerCompanyId:   (m.user as any).partnerMembers?.[0]?.company?.id   || null,
     }));
 
   return res.status(200).json({

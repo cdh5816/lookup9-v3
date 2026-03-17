@@ -47,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   type: 'MEETING_REQUEST',
                   title: notifTitle,
                   message: notifMsg,
-                  link: \`/sites/${id}\`,
+                  link: `/sites/${id}`,
                   siteId: id,
                 })),
                 skipDuplicates: true,

@@ -176,6 +176,48 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
       data: { teamId: actorTm.teamId, userId: created.id, role: targetRole },
     });
 
+    // PARTNER 역할이고 company명이 있으면 PartnerCompany 찾아서 PartnerMember 자동 연결
+    if (targetRole === 'PARTNER' && company) {
+      // 같은 팀의 PartnerCompany에서 이름으로 검색
+      let partnerCompany = await tx.partnerCompany.findFirst({
+        where: { name: company, teamId: actorTm.teamId },
+      });
+      // 없으면 새로 생성
+      if (!partnerCompany) {
+        partnerCompany = await tx.partnerCompany.create({
+          data: { name: company, teamId: actorTm.teamId },
+        });
+      }
+      // PartnerMember 연결 (중복 방지)
+      const existingMember = await tx.partnerMember.findFirst({
+        where: { partnerCompanyId: partnerCompany.id, userId: created.id },
+      });
+      if (!existingMember) {
+        await tx.partnerMember.create({
+          data: {
+            partnerCompanyId: partnerCompany.id,
+            userId: created.id,
+            position: position || null,
+          },
+        });
+      }
+      // 이미 배정된 현장이 있으면 SiteAssignment도 자동 생성
+      const assigns = await tx.partnerSiteAssign.findMany({
+        where: { partnerCompanyId: partnerCompany.id },
+        select: { siteId: true },
+      });
+      if (assigns.length > 0) {
+        await tx.siteAssignment.createMany({
+          data: assigns.map((a: any) => ({
+            siteId: a.siteId,
+            userId: created.id,
+            assignedRole: 'PARTNER',
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
     if (normalizedSiteIds.length > 0) {
       await tx.siteAssignment.createMany({
         data: normalizedSiteIds.map((siteId: string) => ({

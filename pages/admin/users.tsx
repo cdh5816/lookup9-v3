@@ -272,7 +272,7 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
                             {(user as any).partnerCompanyName}
                           </span>
                         ) : (
-                          <span className="text-gray-600 text-xs">업체 미지정</span>
+                          <span className="text-yellow-600 text-xs">⚠ 업체 미지정 — 협력업체 탭에서 소속 업체에 등록하세요</span>
                         )}
                         {user.position && <div className="text-[11px] text-gray-500 mt-0.5">{user.position}</div>}
                       </td>
@@ -337,7 +337,8 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
             {filter === 'partner' && (
               <div className="mb-4 rounded-lg border border-blue-800/40 bg-blue-950/20 px-3 py-2.5">
                 <p className="text-xs text-blue-300">
-                  계정 생성 후 <strong>협력업체 탭</strong>에서 해당 업체에 등록하세요.<br />
+                  아래 <strong>회사명</strong>에 협력업체명을 입력하면 자동으로 소속 업체에 연결됩니다.<br />
+                  등록되지 않은 업체명이면 새 업체로 자동 생성됩니다.<br />
                   현장 배정은 <strong>현장 상세 → 시공업체 등록</strong>으로 처리됩니다.
                 </p>
               </div>

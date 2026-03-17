@@ -50,6 +50,12 @@ const AdminUsers = () => {
   const { data: profileData } = useSWR('/api/my/profile', fetcher);
   const myRole = profileData?.data?.role || profileData?.data?.teamMembers?.[0]?.role || 'USER';
   const isAdminHR = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN'].includes(myRole);
+  const canAccessPartner = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'PARTNER'].includes(myRole);
+
+  // ADMIN_HR가 아니면 partner 탭이 기본
+  useEffect(() => {
+    if (!isAdminHR && canAccessPartner) setTab('partner');
+  }, [isAdminHR, canAccessPartner]);
 
   return (
     <>
@@ -58,20 +64,22 @@ const AdminUsers = () => {
         <div>
           <h2 className="text-xl font-bold">계정 관리</h2>
           <p className="text-sm text-gray-400 mt-0.5">
-            직원·게스트 계정과 협력업체를 통합 관리합니다.
+            직원 계정과 협력업체를 통합 관리합니다.
           </p>
         </div>
 
         {/* 탭 */}
         <div className="flex gap-1 border-b border-gray-700/50">
-          <TabBtn active={tab === 'staff'} onClick={() => setTab('staff')}>직원 · 게스트</TabBtn>
           {isAdminHR && (
+            <TabBtn active={tab === 'staff'} onClick={() => setTab('staff')}>직원</TabBtn>
+          )}
+          {canAccessPartner && (
             <TabBtn active={tab === 'partner'} onClick={() => setTab('partner')}>협력업체</TabBtn>
           )}
         </div>
 
-        {tab === 'staff'  && <StaffPanel myRole={myRole} isAdminHR={isAdminHR} />}
-        {tab === 'partner' && isAdminHR && <PartnerPanel />}
+        {tab === 'staff'   && isAdminHR    && <StaffPanel myRole={myRole} isAdminHR={isAdminHR} />}
+        {tab === 'partner' && canAccessPartner && <PartnerPanel />}
       </div>
     </>
   );
@@ -89,13 +97,13 @@ const TabBtn = ({ active, onClick, children }: { active: boolean; onClick: () =>
 );
 
 // ══════════════════════════════════════════════════════
-// 직원 · 게스트 패널
+// 직원 패널
 // ══════════════════════════════════════════════════════
 const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean }) => {
   const [users, setUsers] = useState<UserData[]>([]);
   const [sites, setSites] = useState<SiteLite[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'internal' | 'guest' | 'partner'>('internal');
+  const [filter, setFilter] = useState<'internal' | 'partner'>('internal');
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
@@ -105,14 +113,14 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
   const { data: profileData } = useSWR('/api/my/profile', fetcher);
   const currentUserId = profileData?.data?.id;
 
-  // 권한: 내부직원 생성은 ADMIN_HR 이상, 게스트/협력사는 MANAGER 이상
+  // 권한: 내부직원 생성은 ADMIN_HR 이상
   const canCreateInternal = isAdminHR;
   const canCreateExternal = ['SUPER_ADMIN','OWNER','ADMIN_HR','ADMIN','MANAGER'].includes(myRole);
 
   const emptyForm = () => ({
     name: '', username: '', email: '', password: '',
     company: '', department: '', position: '', phone: '',
-    role: filter === 'internal' ? 'USER' : filter === 'partner' ? 'PARTNER' : 'GUEST',
+    role: filter === 'internal' ? 'USER' : 'PARTNER',
     assignedSiteIds: [] as string[],
   });
   const [form, setForm] = useState(emptyForm());
@@ -135,7 +143,6 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
     const role = u.teamMembers?.[0]?.role || 'USER';
     if (filter === 'internal') return !['PARTNER', 'GUEST', 'VIEWER'].includes(role);
     if (filter === 'partner')  return role === 'PARTNER';
-    if (filter === 'guest')    return role === 'GUEST' || role === 'VIEWER';
     return true;
   }), [users, filter]);
 
@@ -148,8 +155,7 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
       if (canCreateAdmin) r.unshift({ value: 'ADMIN_HR', label: 'COMPANY_ADMIN - 회사 관리자' });
       return r;
     }
-    if (filter === 'partner') return [{ value: 'PARTNER', label: 'PARTNER - 협력사 직원' }];
-    return [{ value: 'GUEST', label: 'GUEST - 게스트' }];
+    return [{ value: 'PARTNER', label: 'PARTNER - 협력사 직원' }];
   }, [filter, canCreateAdmin]);
 
   const handleCreate = async () => {
@@ -190,20 +196,19 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
       {/* 필터 + 생성 버튼 */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1.5">
-          {(['internal', 'partner', 'guest'] as const).map(f => (
+          {(['internal', 'partner'] as const).map(f => (
             <button key={f} onClick={() => { setFilter(f); setShowCreate(false); }}
               className={`rounded-lg border px-3.5 py-1.5 text-xs font-semibold transition ${
                 filter === f
                   ? 'border-blue-600 bg-blue-950/40 text-blue-300'
                   : 'border-gray-700 text-gray-400 hover:border-gray-600'
               }`}>
-              {f === 'internal' ? '내부 직원' : f === 'partner' ? '협력사 직원' : '게스트'}
+              {f === 'internal' ? '내부 직원' : '협력사 직원'}
               <span className="ml-1.5 text-[10px] opacity-60">
                 {users.filter(u => {
                   const r = u.teamMembers?.[0]?.role || 'USER';
                   if (f === 'internal') return !['PARTNER','GUEST','VIEWER'].includes(r);
-                  if (f === 'partner') return r === 'PARTNER';
-                  return r === 'GUEST' || r === 'VIEWER';
+                  return r === 'PARTNER';
                 }).length}
               </span>
             </button>
@@ -215,7 +220,7 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
             onClick={() => { setForm(emptyForm()); setShowCreate(true); setError(''); }}
           >
             <PlusIcon className="h-4 w-4" />
-            {filter === 'internal' ? '직원 추가' : filter === 'partner' ? '협력사 계정 추가' : '게스트 추가'}
+            {filter === 'internal' ? '직원 추가' : '협력사 계정 추가'}
           </button>
         )}
       </div>
@@ -300,7 +305,7 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
           <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-700 bg-gray-900 p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold">
-                {filter === 'internal' ? '직원 계정 생성' : filter === 'partner' ? '협력사 계정 생성' : '게스트 계정 생성'}
+                {filter === 'internal' ? '직원 계정 생성' : '협력사 계정 생성'}
               </h3>
               <button onClick={() => setShowCreate(false)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-800">
                 <XMarkIcon className="h-5 w-5" />

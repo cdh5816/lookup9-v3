@@ -78,7 +78,7 @@ export default function SiteDetail() {
   const hiddenAll = new Set([...hiddenByRole, ...hiddenBySiteType, ...hiddenByDept]);
   const tabs = ALL_TABS.filter(t => !hiddenAll.has(t));
 
-  const canManage = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER'].includes(userRole);
+  const canManage = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'USER', 'PARTNER'].includes(userRole);
   const canDelete = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN'].includes(userRole);
 
   useEffect(() => {
@@ -1122,6 +1122,30 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
   const [saving, setSaving] = useState(false);
   const [assigned, setAssigned] = useState(0);
 
+  // 협력업체 검색
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  useEffect(() => {
+    if (!editing) return;
+    fetch('/api/partner-companies')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(j => setCompanies(j.data || []));
+  }, [editing]);
+
+  const filtered = form.installerName.trim()
+    ? companies.filter(c => c.name.includes(form.installerName))
+    : companies;
+
+  const selectCompany = (co: any) => {
+    setForm({
+      installerName: co.name,
+      installerContact: co.contact || '',
+      installerPhone: co.phone || '',
+    });
+    setShowDropdown(false);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     const res = await fetch(`/api/sites/${siteId}`, {
@@ -1132,7 +1156,6 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
     const json = await res.json();
     setSaving(false);
     setEditing(false);
-    // 자동 배정된 인원 수 표시
     if (json.data?.autoAssigned) setAssigned(json.data.autoAssigned);
     onMutate();
   };
@@ -1142,7 +1165,7 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs font-medium text-gray-400">시공업체</p>
         {canManage && !editing && (
-          <button className="btn btn-ghost btn-xs" onClick={() => setEditing(true)}>수정</button>
+          <button className="btn btn-ghost btn-xs" onClick={() => { setEditing(true); setShowDropdown(false); }}>수정</button>
         )}
       </div>
 
@@ -1155,12 +1178,39 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
       {editing ? (
         <div className="space-y-2">
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <div>
+            {/* 업체명 — 검색 드롭다운 */}
+            <div className="relative">
               <label className="block text-[10px] text-gray-500 mb-1">업체명</label>
-              <input className="input input-bordered input-sm w-full"
-                placeholder="예) 덕인금속"
+              <input
+                className="input input-bordered input-sm w-full"
+                placeholder="업체명 검색 또는 직접 입력"
                 value={form.installerName}
-                onChange={e => setForm({ ...form, installerName: e.target.value })} />
+                onChange={e => { setForm({ ...form, installerName: e.target.value }); setShowDropdown(true); }}
+                onFocus={() => setShowDropdown(true)}
+                autoComplete="off"
+              />
+              {showDropdown && filtered.length > 0 && (
+                <div className="absolute z-50 left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-700 bg-gray-900 shadow-2xl">
+                  {filtered.map((co: any) => (
+                    <button
+                      key={co.id}
+                      type="button"
+                      className="w-full text-left px-3 py-2.5 hover:bg-gray-800 transition-colors border-b border-gray-700/40 last:border-0"
+                      onMouseDown={() => selectCompany(co)}
+                    >
+                      <p className="text-sm font-semibold text-white">{co.name}</p>
+                      <p className="text-[11px] text-gray-400">
+                        {co.contact && `담당: ${co.contact}`}{co.contact && co.phone && ' · '}{co.phone && co.phone}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {showDropdown && form.installerName.trim() && filtered.length === 0 && (
+                <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-xs text-gray-500 shadow-2xl">
+                  등록된 업체 없음 — 직접 입력으로 저장됩니다
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-[10px] text-gray-500 mb-1">담당자</label>
@@ -1176,10 +1226,10 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
             </div>
           </div>
           <p className="text-[10px] text-gray-600">
-            ※ 업체명을 저장하면 같은 회사명의 협력사 계정이 이 현장에 자동으로 배정됩니다.
+            ※ 등록된 협력업체를 선택하면 담당자·연락처가 자동으로 채워지고, 소속 계정이 이 현장에 자동 배정됩니다.
           </p>
           <div className="flex justify-end gap-2">
-            <button className="btn btn-ghost btn-xs" onClick={() => setEditing(false)}>취소</button>
+            <button className="btn btn-ghost btn-xs" onClick={() => { setEditing(false); setShowDropdown(false); }}>취소</button>
             <button className={`btn btn-primary btn-xs ${saving ? 'loading' : ''}`}
               disabled={saving} onClick={handleSave}>저장</button>
           </div>

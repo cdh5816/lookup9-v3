@@ -56,15 +56,12 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
   const where: any = { teamId: tm.teamId };
 
   if (salesOnly === 'true') {
-    // 영업관리: 영업중/수주확정/실패
     where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'FAILED'] };
   } else if (status && status !== 'all') {
     where.status = normalizeStatus(status as string);
   } else if (includeCompleted === 'true') {
-    // 완료 현장 포함
     where.status = { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] };
   } else {
-    // 기본 현장관리: 진행중만 (완료/하자 제외 - 별도 섹션으로)
     where.status = { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] };
   }
 
@@ -76,8 +73,43 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     ];
   }
 
+  // PARTNER: SiteAssignment(직접배정) OR PartnerSiteAssign(업체배정) 둘 다 체크
   if (['PARTNER', 'GUEST', 'VIEWER'].includes(tm.role)) {
-    where.assignments = { some: { userId: tm.userId } };
+    if (tm.role === 'PARTNER') {
+      // 내 userId가 속한 PartnerMember → PartnerSiteAssign 의 siteId 목록 조회
+      const partnerMember = await prisma.partnerMember.findFirst({
+        where: { userId: tm.userId },
+        select: { partnerCompanyId: true },
+      });
+
+      let partnerSiteIds: string[] = [];
+      if (partnerMember) {
+        const assigns = await prisma.partnerSiteAssign.findMany({
+          where: { partnerCompanyId: partnerMember.partnerCompanyId },
+          select: { siteId: true },
+        });
+        partnerSiteIds = assigns.map((a) => a.siteId);
+      }
+
+      // SiteAssignment 직접 배정된 siteId 목록
+      const directAssigns = await prisma.siteAssignment.findMany({
+        where: { userId: tm.userId },
+        select: { siteId: true },
+      });
+      const directSiteIds = directAssigns.map((a) => a.siteId);
+
+      // 합집합
+      const allSiteIds = Array.from(new Set([...partnerSiteIds, ...directSiteIds]));
+
+      if (allSiteIds.length === 0) {
+        return res.status(200).json({ data: [] });
+      }
+
+      where.id = { in: allSiteIds };
+    } else {
+      // GUEST, VIEWER: 기존 방식 (SiteAssignment만)
+      where.assignments = { some: { userId: tm.userId } };
+    }
   }
 
   const sites = await prisma.site.findMany({
@@ -113,7 +145,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
 
   if (!name) return res.status(400).json({ error: { message: 'Name is required' } });
 
-  // 한글 상태값 → enum 정규화
   const normalizedStatus = normalizeStatus(status);
 
   const site = await prisma.$transaction(async (tx) => {
@@ -123,7 +154,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
       resolvedClientId = existing?.id ?? (await tx.client.create({ data: { name: clientName, teamId: tm.teamId } })).id;
     }
 
-    // quantity 필드 호환 (create.tsx는 quantity, API는 contractQuantity)
     const resolvedQty = contractQuantity ?? quantity ?? null;
 
     return await tx.site.create({

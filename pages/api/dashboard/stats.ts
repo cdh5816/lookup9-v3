@@ -13,9 +13,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
 
   try {
+    const isPartner = tm.role === 'PARTNER';
     const isExternal = ['PARTNER', 'GUEST', 'VIEWER'].includes(tm.role);
     const baseWhere: any = { teamId: tm.teamId };
-    if (isExternal) {
+
+    // PARTNER: PartnerSiteAssign + SiteAssignment 합집합으로 현장 범위 결정
+    if (isPartner) {
+      const partnerMember = await prisma.partnerMember.findFirst({
+        where: { userId: tm.userId },
+        select: { partnerCompanyId: true },
+      });
+
+      let partnerSiteIds: string[] = [];
+      if (partnerMember) {
+        const assigns = await prisma.partnerSiteAssign.findMany({
+          where: { partnerCompanyId: partnerMember.partnerCompanyId },
+          select: { siteId: true },
+        });
+        partnerSiteIds = assigns.map((a) => a.siteId);
+      }
+
+      const directAssigns = await prisma.siteAssignment.findMany({
+        where: { userId: tm.userId },
+        select: { siteId: true },
+      });
+      const directSiteIds = directAssigns.map((a) => a.siteId);
+
+      const allSiteIds = Array.from(new Set([...partnerSiteIds, ...directSiteIds]));
+      baseWhere.id = allSiteIds.length > 0 ? { in: allSiteIds } : { in: ['__none__'] };
+    } else if (isExternal) {
+      // GUEST, VIEWER
       baseWhere.assignments = { some: { userId: tm.userId } };
     }
 
@@ -24,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where: { ...baseWhere, status: { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] } },
     });
 
-    // 이슈 현장 (완료되지 않은 이슈가 있는 현장)
+    // 이슈 현장
     const issueSites = await prisma.site.count({
       where: {
         ...baseWhere,
@@ -32,11 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
 
-    // 납기 임박 (7일 이내)
-    const sevenDaysLater = new Date();
-    sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
-
-    // 최근 현장 (배정 혹은 전체)
+    // 최근 현장
     const recentSites = await prisma.site.findMany({
       where: { ...baseWhere, status: { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] } },
       include: {
@@ -59,7 +82,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where: { receiverId: session.user.id, isRead: false },
     });
 
-    // 미처리 요청 (내가 관련된 현장 기준)
+    // 미처리 요청
     const openRequests = await prisma.request.count({
       where: {
         site: baseWhere,
@@ -85,7 +108,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
       select: { id: true, name: true, completionDate: true, siteType: true },
     });
-    // JS에서 만료일(+2년) 계산 후 필터
     const warrantyExpiring = warrantySites
       .map((s) => {
         const exp = new Date(s.completionDate!);

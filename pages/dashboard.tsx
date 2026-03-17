@@ -3,10 +3,11 @@ import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useState } from 'react';
 import {
   BuildingOffice2Icon, ExclamationTriangleIcon,
   EnvelopeIcon, ClipboardDocumentListIcon,
-  MegaphoneIcon, ChevronRightIcon,
+  MegaphoneIcon, ChevronRightIcon, XMarkIcon,
 } from '@heroicons/react/24/outline';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
@@ -20,7 +21,67 @@ const STATUS_DOT: Record<string, string> = {
   FAILED: 'bg-gray-500',
 };
 
+// ── 공지사항 모달 ──
+const NoticeModal = ({ notice, onClose }: { notice: any; onClose: () => void }) => {
+  if (!notice) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-lg rounded-2xl border p-6 shadow-2xl"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-base)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            {notice.isPinned && (
+              <span className="badge badge-xs badge-warning">공지</span>
+            )}
+            <h3 className="text-base font-bold leading-snug">{notice.title}</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex-shrink-0 rounded-lg p-1 hover:bg-gray-700/50 transition"
+          >
+            <XMarkIcon className="h-5 w-5 text-gray-400" />
+          </button>
+        </div>
+
+        {/* 메타 */}
+        <div className="mb-4 flex items-center gap-3 text-xs text-gray-500">
+          {notice.author?.name && <span>{notice.author.name}</span>}
+          {notice.author?.position && <span>{notice.author.position}</span>}
+          <span>{new Date(notice.createdAt).toLocaleDateString('ko-KR')}</span>
+        </div>
+
+        {/* 본문 */}
+        <div
+          className="text-sm leading-relaxed whitespace-pre-wrap"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          {notice.content}
+        </div>
+
+        {/* 닫기 버튼 */}
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={onClose}
+            className="btn btn-sm btn-ghost"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Dashboard = () => {
+  const [selectedNotice, setSelectedNotice] = useState<any>(null);
+
   const { data: profileData } = useSWR('/api/my/profile', fetcher, { refreshInterval: 30000 });
   const profile = profileData?.data || {};
   const userRole = profile.role || profile.teamMembers?.[0]?.role || 'USER';
@@ -63,6 +124,12 @@ const Dashboard = () => {
   return (
     <>
       <Head><title>대시보드 | LOOKUP9</title></Head>
+
+      {/* 공지사항 모달 */}
+      {selectedNotice && (
+        <NoticeModal notice={selectedNotice} onClose={() => setSelectedNotice(null)} />
+      )}
+
       <div className="space-y-5">
         {/* 헤더 */}
         <div>
@@ -98,15 +165,22 @@ const Dashboard = () => {
             ) : (
               <div className="divide-y" style={{borderColor:"var(--border-base)"}}>
                 {stats.notices.map((n: any) => (
-                  <div key={n.id} className="py-2.5">
+                  <div
+                    key={n.id}
+                    className="py-2.5 cursor-pointer rounded px-1 -mx-1 transition hover:bg-gray-700/20"
+                    onClick={() => setSelectedNotice(n)}
+                  >
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        {n.isPinned && <span className="badge badge-xs badge-warning mr-1.5">공지</span>}
-                        <span className="text-sm">{n.title}</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {n.isPinned && <span className="badge badge-xs badge-warning flex-shrink-0">공지</span>}
+                        <span className="text-sm truncate">{n.title}</span>
                       </div>
-                      <span className="text-[11px] text-gray-500 flex-shrink-0">
-                        {new Date(n.createdAt).toLocaleDateString('ko-KR')}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-[11px] text-gray-500">
+                          {new Date(n.createdAt).toLocaleDateString('ko-KR')}
+                        </span>
+                        <ChevronRightIcon className="h-3 w-3 text-gray-600" />
+                      </div>
                     </div>
                   </div>
                 ))}

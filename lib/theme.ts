@@ -11,28 +11,34 @@ export type ThemesProps = {
 };
 
 export const applyTheme = (theme: Theme) => {
+  const html = document.documentElement;
   switch (theme) {
     case 'dark':
-      document.documentElement.classList.add('dark');
-      document.documentElement.setAttribute('data-theme', 'black');
+      html.classList.add('dark');
+      html.setAttribute('data-theme', 'black');
+      html.style.colorScheme = 'dark';
       localStorage.setItem('theme', 'dark');
       break;
     case 'light':
-      document.documentElement.classList.remove('dark');
-      document.documentElement.setAttribute('data-theme', 'corporate');
+      html.classList.remove('dark');
+      html.setAttribute('data-theme', 'corporate');
+      html.style.colorScheme = 'light';
       localStorage.setItem('theme', 'light');
       break;
     case 'system':
-    default:
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.classList.add('dark');
-        document.documentElement.setAttribute('data-theme', 'black');
-        localStorage.removeItem('theme');
+    default: {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (prefersDark) {
+        html.classList.add('dark');
+        html.setAttribute('data-theme', 'black');
+        html.style.colorScheme = 'dark';
       } else {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.setAttribute('data-theme', 'corporate');
-        localStorage.removeItem('theme');
+        html.classList.remove('dark');
+        html.setAttribute('data-theme', 'corporate');
+        html.style.colorScheme = 'light';
       }
+      localStorage.removeItem('theme');
       break;
+    }
   }
 };

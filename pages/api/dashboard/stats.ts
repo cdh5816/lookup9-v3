@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 진행중 현장
     const activeSites = await prisma.site.count({
-      where: { ...baseWhere, status: { in: ['진행중', '부분완료', '계약완료'] } },
+      where: { ...baseWhere, status: { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] } },
     });
 
     // 이슈 현장 (완료되지 않은 이슈가 있는 현장)
@@ -38,7 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 최근 현장 (배정 혹은 전체)
     const recentSites = await prisma.site.findMany({
-      where: { ...baseWhere, status: { in: ['진행중', '부분완료', '계약완료'] } },
+      where: { ...baseWhere, status: { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] } },
       include: {
         client: { select: { name: true } },
         contracts: { select: { quantity: true, isAdditional: true }, orderBy: { createdAt: 'asc' }, take: 1 },

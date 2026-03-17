@@ -16,9 +16,9 @@ function MyApp({ Component, pageProps }: AppPropsWithLayout) {
   const { session, ...props } = pageProps;
 
   useEffect(() => {
-    if (env.darkModeEnabled) {
-      applyTheme(localStorage.getItem('theme') as Theme);
-    }
+    // 저장된 테마 적용 (없으면 dark 기본)
+    const saved = localStorage.getItem('theme') as Theme;
+    applyTheme(saved || 'dark');
   }, []);
 
   const getLayout =

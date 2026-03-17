@@ -7,6 +7,7 @@ import {
   EnvelopeIcon,
   MagnifyingGlassIcon,
   SunIcon,
+  MoonIcon,
   UserCircleIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
@@ -23,7 +24,7 @@ interface HeaderProps {
 }
 
 const Header = ({ setSidebarOpen }: HeaderProps) => {
-  const { toggleTheme } = useTheme();
+  const { toggleTheme, theme } = useTheme();
   const { t } = useTranslation('common');
   const [showSearch, setShowSearch] = useState(false);
   const [query, setQuery] = useState('');
@@ -78,11 +79,11 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
   }, []);
 
   return (
-    <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-gray-800 bg-black px-4 sm:px-6 lg:px-8">
+    <div className="top-header px-4 sm:px-6 lg:px-8 flex h-14 shrink-0 items-center gap-3">
       {/* 모바일 햄버거 */}
       <button
         type="button"
-        className="-m-2.5 p-2.5 text-gray-400 lg:hidden"
+        className="-m-2.5 p-2.5 lg:hidden" style={{color:"var(--header-icon)"}}
         onClick={() => setSidebarOpen(true)}
       >
         <span className="sr-only">{t('open-sidebar')}</span>
@@ -90,7 +91,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
       </button>
 
       {/* 회사명 (모바일) */}
-      <span className="block max-w-[160px] truncate text-sm font-semibold text-white lg:hidden">
+      <span className="block max-w-[160px] truncate text-sm font-semibold lg:hidden" style={{color:"var(--text-primary)"}}>
         {companyDisplayName}
       </span>
 
@@ -99,17 +100,17 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
         {/* 검색 */}
         <div className="relative" ref={searchRef}>
           <button
-            className="rounded-md p-2 text-gray-400 transition hover:bg-gray-800 hover:text-white"
+            className="rounded-md p-2 transition" style={{color:"var(--header-icon)"}}
             onClick={() => setShowSearch(!showSearch)}
           >
             {showSearch ? <XMarkIcon className="h-5 w-5" /> : <MagnifyingGlassIcon className="h-5 w-5" />}
           </button>
           {showSearch && (
-            <div className="absolute right-0 top-full mt-2 w-[min(22rem,90vw)] rounded-lg border border-gray-700 bg-gray-900 shadow-2xl">
+            <div className="absolute right-0 top-full mt-2 w-[min(22rem,90vw)] rounded-lg shadow-2xl" style={{background:"var(--bg-elevated)",border:"1px solid var(--border-base)"}}>
               <input
                 type="text"
                 autoFocus
-                className="w-full border-b border-gray-700 bg-transparent px-4 py-3 text-sm outline-none placeholder:text-gray-500"
+                className="w-full px-4 py-3 text-sm outline-none bg-transparent" style={{borderBottom:"1px solid var(--border-base)",color:"var(--text-primary)"}}
                 placeholder={t('search-placeholder')}
                 value={query}
                 onChange={(e) => handleSearch(e.target.value)}
@@ -118,16 +119,16 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                 <div className="max-h-72 overflow-y-auto p-2">
                   {results.sites?.length > 0 && (
                     <div className="mb-2">
-                      <p className="px-2 py-1 text-xs font-medium text-gray-500">{t('nav-sites')}</p>
+                      <p className="px-2 py-1 text-xs font-medium" style={{color:"var(--text-muted)"}}>{t('nav-sites')}</p>
                       {results.sites.map((s: any) => (
                         <Link
                           key={s.id}
                           href={`/sites/${s.id}`}
                           onClick={() => { setShowSearch(false); setResults(null); setQuery(''); }}
                         >
-                          <div className="cursor-pointer rounded px-3 py-2 text-sm hover:bg-gray-800">
+                          <div className="cursor-pointer rounded px-3 py-2 text-sm transition" style={{color:"var(--text-primary)"}}>
                             {s.name}
-                            <span className="ml-2 text-xs text-gray-500">{s.status}</span>
+                            <span className="ml-2 text-xs" style={{color:"var(--text-muted)"}}>{s.status}</span>
                           </div>
                         </Link>
                       ))}
@@ -135,17 +136,17 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                   )}
                   {results.users?.length > 0 && (
                     <div className="mb-2">
-                      <p className="px-2 py-1 text-xs font-medium text-gray-500">{t('members')}</p>
+                      <p className="px-2 py-1 text-xs font-medium" style={{color:"var(--text-muted)"}}>{t('members')}</p>
                       {results.users.map((u: any) => (
-                        <div key={u.id} className="rounded px-3 py-2 text-sm hover:bg-gray-800">
+                        <div key={u.id} className="rounded px-3 py-2 text-sm">
                           {u.position ? `${u.position} ` : ''}{u.name}
-                          <span className="ml-2 text-xs text-gray-500">{u.department || ''}</span>
+                          <span className="ml-2 text-xs" style={{color:"var(--text-muted)"}}>{u.department || ''}</span>
                         </div>
                       ))}
                     </div>
                   )}
                   {!results.sites?.length && !results.users?.length && (
-                    <p className="px-3 py-4 text-center text-sm text-gray-500">검색 결과가 없습니다.</p>
+                    <p className="px-3 py-4 text-center text-sm" style={{color:"var(--text-muted)"}}>검색 결과가 없습니다.</p>
                   )}
                 </div>
               )}
@@ -156,7 +157,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
         {/* 알림 아이콘 — 배지 포함 */}
         <Link
           href="/notifications"
-          className="relative rounded-md p-2 text-gray-400 transition hover:bg-gray-800 hover:text-white"
+          className="relative rounded-md p-2 transition" style={{color:"var(--header-icon)"}}
         >
           <BellIcon className="h-5 w-5" />
           {unreadNotificationCount > 0 && (
@@ -169,7 +170,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
         {/* 쪽지 아이콘 — 배지 포함 */}
         <Link
           href="/messages"
-          className="relative rounded-md p-2 text-gray-400 transition hover:bg-gray-800 hover:text-white"
+          className="relative rounded-md p-2 transition" style={{color:"var(--header-icon)"}}
         >
           <EnvelopeIcon className="h-5 w-5" />
           {unreadMessageCount > 0 && (
@@ -182,7 +183,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
         {/* 다크모드 */}
         {env.darkModeEnabled && (
           <button
-            className="rounded-md p-2 text-gray-400 transition hover:bg-gray-800 hover:text-white"
+            className="rounded-md p-2 transition" style={{color:"var(--header-icon)"}}
             onClick={toggleTheme}
           >
             <SunIcon className="h-5 w-5" />
@@ -190,13 +191,13 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
         )}
 
         {/* 내 정보 */}
-        <Link href="/my" className="rounded-md p-2 text-gray-400 transition hover:bg-gray-800 hover:text-white">
+        <Link href="/my" className="rounded-md p-2 transition" style={{color:"var(--header-icon)"}}>
           <UserCircleIcon className="h-5 w-5" />
         </Link>
 
         {/* 로그아웃 */}
         <button
-          className="rounded-md p-2 text-gray-400 transition hover:bg-gray-800 hover:text-red-400"
+          className="rounded-md p-2 transition" style={{color:"var(--header-icon)"}}
           onClick={handleLogout}
         >
           <ArrowRightOnRectangleIcon className="h-5 w-5" />

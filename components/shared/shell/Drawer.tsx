@@ -39,7 +39,7 @@ const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
                 </button>
               </div>
 
-              <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-800 bg-black px-5 pb-4 shadow-2xl">
+              <div className="sidebar-wrapper flex grow flex-col gap-y-5 overflow-y-auto px-5 pb-4 shadow-2xl">
                 <Brand />
                 {data?.user && (
                   <div className="-mt-3 break-words text-xs leading-5 text-gray-500">
@@ -55,8 +55,8 @@ const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
       )}
 
       {/* 데스크탑 고정 사이드바 */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-800 bg-black px-6">
+      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col sidebar-wrapper">
+        <div className="flex grow flex-col gap-y-5 overflow-y-auto px-6">
           <Brand />
           {data?.user && (
             <div className="-mt-3 break-words text-xs leading-5 text-gray-500">

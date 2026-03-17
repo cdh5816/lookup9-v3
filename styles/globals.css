@@ -2,18 +2,111 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── 기본 설정 ─────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   CSS 변수 기반 테마 시스템
+   data-theme="black"  → 다크
+   data-theme="corporate" → 라이트
+   ═══════════════════════════════════════════════════════ */
+
+/* ── 다크 테마 (기본) ── */
+[data-theme="black"],
 :root {
   color-scheme: dark;
   --brand: #1B3FAE;
   --brand-hover: #1534a0;
+
+  --bg-base:       #000000;
+  --bg-surface:    #0a0a0a;
+  --bg-elevated:   #111111;
+  --bg-card:       rgba(17,17,17,0.7);
+  --bg-hover:      rgba(255,255,255,0.05);
+
+  --border-base:   #1f2937;
+  --border-subtle: #111827;
+
+  --text-primary:  #f9fafb;
+  --text-secondary:#9ca3af;
+  --text-muted:    #4b5563;
+  --text-placeholder: #374151;
+
+  --sidebar-bg:    #000000;
+  --sidebar-border:#1f2937;
+  --sidebar-text:  #6b7280;
+  --sidebar-hover-bg: rgba(255,255,255,0.06);
+  --sidebar-hover-text: #f9fafb;
+  --sidebar-active-bg: rgba(59,130,246,0.15);
+  --sidebar-active-text: #60a5fa;
+
+  --header-bg:     rgba(0,0,0,0.92);
+  --header-border: #1f2937;
+  --header-icon:   #6b7280;
+  --header-icon-hover-bg: rgba(255,255,255,0.08);
+  --header-icon-hover: #f9fafb;
+
+  --input-bg:      #111827;
+  --input-border:  #374151;
+  --input-text:    #f3f4f6;
+
+  --scrollbar-thumb: #374151;
+  --scrollbar-hover: #4b5563;
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.5);
 }
 
-html, body {
+/* ── 라이트 테마 ── */
+[data-theme="corporate"] {
+  color-scheme: light;
+  --brand: #1B3FAE;
+  --brand-hover: #1534a0;
+
+  --bg-base:       #f5f7fa;
+  --bg-surface:    #ffffff;
+  --bg-elevated:   #ffffff;
+  --bg-card:       #ffffff;
+  --bg-hover:      rgba(0,0,0,0.04);
+
+  --border-base:   #e5e7eb;
+  --border-subtle: #f3f4f6;
+
+  --text-primary:  #111827;
+  --text-secondary:#374151;
+  --text-muted:    #9ca3af;
+  --text-placeholder: #d1d5db;
+
+  --sidebar-bg:    #ffffff;
+  --sidebar-border:#e5e7eb;
+  --sidebar-text:  #6b7280;
+  --sidebar-hover-bg: rgba(0,0,0,0.05);
+  --sidebar-hover-text: #111827;
+  --sidebar-active-bg: rgba(27,63,174,0.08);
+  --sidebar-active-text: #1B3FAE;
+
+  --header-bg:     rgba(255,255,255,0.95);
+  --header-border: #e5e7eb;
+  --header-icon:   #6b7280;
+  --header-icon-hover-bg: rgba(0,0,0,0.06);
+  --header-icon-hover: #111827;
+
+  --input-bg:      #ffffff;
+  --input-border:  #d1d5db;
+  --input-text:    #111827;
+
+  --scrollbar-thumb: #d1d5db;
+  --scrollbar-hover: #9ca3af;
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+}
+
+/* ─── 베이스 ─────────────────────────────────────────── */
+html, body, #__next {
+  height: 100%;
+}
+
+body {
   padding: 0;
   margin: 0;
-  background: #000;
-  color: #e5e7eb;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
   font-family:
     'Pretendard', 'Noto Sans KR',
     -apple-system, BlinkMacSystemFont,
@@ -22,21 +115,25 @@ html, body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 a { color: inherit; text-decoration: none; }
 * { box-sizing: border-box; }
 
-/* ─── DaisyUI/Input 초기화 ──────────────────────────── */
+/* ─── DaisyUI Input 초기화 ───────────────────────────── */
 @layer base {
   input:not([type='checkbox']):not([type='radio']),
   textarea,
   select {
     @apply rounded-lg !important;
     font-size: 13px !important;
+    background-color: var(--input-bg) !important;
+    color: var(--input-text) !important;
+    border-color: var(--input-border) !important;
   }
   input:focus, textarea:focus, select:focus {
-    outline: 2px solid rgba(59, 130, 246, 0.5) !important;
+    outline: 2px solid rgba(27, 63, 174, 0.4) !important;
     outline-offset: 0 !important;
   }
 }
@@ -53,34 +150,59 @@ a { color: inherit; text-decoration: none; }
   .btn-primary {
     background-color: var(--brand) !important;
     border-color: var(--brand) !important;
+    color: #ffffff !important;
   }
   .btn-primary:hover {
     background-color: var(--brand-hover) !important;
     border-color: var(--brand-hover) !important;
   }
+  .btn-ghost {
+    color: var(--text-secondary) !important;
+  }
+  .btn-ghost:hover {
+    background-color: var(--bg-hover) !important;
+    color: var(--text-primary) !important;
+  }
 
-  .modal-box { @apply rounded-xl; }
+  .modal-box {
+    @apply rounded-xl;
+    background-color: var(--bg-elevated) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-base) !important;
+  }
 
   .table th {
-    @apply text-xs text-gray-500 uppercase tracking-wide bg-transparent;
+    @apply text-xs uppercase tracking-wide bg-transparent;
     font-weight: 600;
+    color: var(--text-muted) !important;
   }
   .table td {
     @apply text-sm py-2.5;
     vertical-align: middle;
+    color: var(--text-primary);
   }
-  .table tr:hover td { @apply bg-gray-800/30; }
+  .table tr:hover td {
+    background-color: var(--bg-hover) !important;
+  }
 
   .badge { @apply text-[11px] font-medium; }
+
+  /* 카드 */
+  .card-base {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-base);
+    border-radius: 0.75rem;
+    box-shadow: var(--shadow-card);
+  }
 }
 
-/* ─── 공통 스크롤바 ─────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+/* ─── 사이드바 ───────────────────────────────────────── */
+.sidebar-wrapper {
+  background-color: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
 
-/* ─── 사이드바 스타일 ───────────────────────────────── */
 .sidebar-link {
   display: flex;
   align-items: center;
@@ -88,17 +210,17 @@ a { color: inherit; text-decoration: none; }
   padding: 7px 10px;
   border-radius: 8px;
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--sidebar-text);
   transition: all 0.12s ease;
   text-decoration: none;
 }
 .sidebar-link:hover {
-  background: rgba(255,255,255,0.06);
-  color: #f9fafb;
+  background-color: var(--sidebar-hover-bg);
+  color: var(--sidebar-hover-text);
 }
 .sidebar-link.active {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
+  background-color: var(--sidebar-active-bg);
+  color: var(--sidebar-active-text);
   font-weight: 600;
 }
 .sidebar-link .icon {
@@ -110,7 +232,7 @@ a { color: inherit; text-decoration: none; }
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: #4b5563;
+  color: var(--text-muted);
   text-transform: uppercase;
   padding: 12px 10px 4px;
 }
@@ -124,10 +246,18 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   height: 52px;
   padding: 0 1rem;
-  border-bottom: 1px solid #1f2937;
-  background: rgba(0, 0, 0, 0.92);
+  border-bottom: 1px solid var(--header-border);
+  background: var(--header-bg);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+/* ─── 메인 콘텐츠 영역 ──────────────────────────────── */
+.main-content {
+  background-color: var(--bg-base);
+  min-height: 100vh;
+  transition: background-color 0.2s ease;
 }
 
 /* ─── 폼 라벨 ───────────────────────────────────────── */
@@ -135,7 +265,7 @@ a { color: inherit; text-decoration: none; }
   display: block;
   font-size: 11px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--text-muted);
   margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -143,6 +273,17 @@ a { color: inherit; text-decoration: none; }
 
 /* ─── 로딩 ─────────────────────────────────────────── */
 .loading { color: #3b82f6; }
+
+/* ─── 스크롤바 ──────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
 
 /* ─── 모바일 compact ────────────────────────────────── */
 @media (max-width: 640px) {
@@ -160,22 +301,107 @@ a { color: inherit; text-decoration: none; }
 }
 .fade-in { animation: fade-in 0.18s ease; }
 
-/* ─── DaisyUI 테마 오버라이드 ───────────────────────── */
-[data-theme="black"] {
+/* ─── DaisyUI 라운딩 ─────────────────────────────────── */
+[data-theme="black"], [data-theme="corporate"] {
   --rounded-btn: 0.5rem;
   --rounded-box: 0.75rem;
 }
 
-select { color-scheme: dark; }
-::placeholder { color: #4b5563 !important; opacity: 1 !important; }
+/* ─── select color-scheme ────────────────────────────── */
+[data-theme="black"] select { color-scheme: dark; }
+[data-theme="corporate"] select { color-scheme: light; }
 
-/* btn-md 사이즈 보정 */
+::placeholder { color: var(--text-placeholder) !important; opacity: 1 !important; }
+
+/* btn-md 사이즈 */
 .btn-md { @apply min-h-8 h-10; }
 
-/* scrollbar 클래스 (기존 호환) */
+/* scrollbar 클래스 */
 .scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #555555 transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 .scrollbar::-webkit-scrollbar { width: 5px; }
-.scrollbar::-webkit-scrollbar-thumb { background-color: #555555; border-radius: 3px; }
+.scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+/* ─── 라이트 테마 특별 보정 ──────────────────────────── */
+[data-theme="corporate"] .input,
+[data-theme="corporate"] .select,
+[data-theme="corporate"] .textarea {
+  --tw-ring-color: rgba(27,63,174,0.3) !important;
+}
+
+[data-theme="corporate"] .modal-backdrop {
+  background: rgba(0,0,0,0.3) !important;
+}
+
+/* DaisyUI 라이트 테마에서 input/select 강제 */
+[data-theme="corporate"] input:not([type='checkbox']):not([type='radio']),
+[data-theme="corporate"] textarea,
+[data-theme="corporate"] select {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+}
+
+/* 라이트 모드 테이블 hover */
+[data-theme="corporate"] .table tr:hover td {
+  background-color: #f9fafb !important;
+}
+
+/* 라이트 모드 border 보정 */
+[data-theme="corporate"] .border-gray-800 { border-color: #e5e7eb !important; }
+[data-theme="corporate"] .border-gray-700 { border-color: #d1d5db !important; }
+[data-theme="corporate"] .border-gray-700\/50 { border-color: rgba(209,213,219,0.8) !important; }
+[data-theme="corporate"] .border-gray-700\/60 { border-color: rgba(209,213,219,0.9) !important; }
+[data-theme="corporate"] .border-gray-700\/40 { border-color: rgba(209,213,219,0.6) !important; }
+
+/* 라이트 모드 배경 보정 */
+[data-theme="corporate"] .bg-black\/20,
+[data-theme="corporate"] .bg-black\/30,
+[data-theme="corporate"] .bg-black\/40 { background-color: #ffffff !important; }
+[data-theme="corporate"] .bg-gray-900\/40,
+[data-theme="corporate"] .bg-gray-900\/50,
+[data-theme="corporate"] .bg-gray-900\/60,
+[data-theme="corporate"] .bg-gray-900\/70 { background-color: #ffffff !important; }
+[data-theme="corporate"] .bg-gray-800\/40,
+[data-theme="corporate"] .bg-gray-800\/60 { background-color: #f9fafb !important; }
+
+/* 라이트 모드 텍스트 보정 */
+[data-theme="corporate"] .text-gray-100 { color: #111827 !important; }
+[data-theme="corporate"] .text-gray-200 { color: #1f2937 !important; }
+[data-theme="corporate"] .text-gray-300 { color: #374151 !important; }
+[data-theme="corporate"] .text-gray-400 { color: #6b7280 !important; }
+[data-theme="corporate"] .text-gray-500 { color: #9ca3af !important; }
+[data-theme="corporate"] .text-gray-600 { color: #d1d5db !important; }
+[data-theme="corporate"] .text-white { color: #111827 !important; }
+
+/* 라이트 모드 divider */
+[data-theme="corporate"] .divide-gray-800 > * + * { border-color: #f3f4f6 !important; }
+
+/* 라이트 모드 btn-ghost */
+[data-theme="corporate"] .btn-ghost {
+  color: #374151 !important;
+}
+[data-theme="corporate"] .btn-ghost:hover {
+  background-color: rgba(0,0,0,0.06) !important;
+  color: #111827 !important;
+}
+
+/* 라이트 모드 badge */
+[data-theme="corporate"] .badge-ghost {
+  background-color: #f3f4f6 !important;
+  color: #374151 !important;
+  border-color: #e5e7eb !important;
+}
+
+/* 드롭다운/팝오버 */
+[data-theme="corporate"] .dropdown-content,
+[data-theme="corporate"] [class*="bg-gray-900"]:not([class*="bg-gray-900/0"]) {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+  color: #111827 !important;
+}

@@ -37,18 +37,14 @@ const useTheme = () => {
   const selectedTheme = themes.find((t) => t.id === theme) || themes[0];
 
   const toggleTheme = () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    selectedTheme.id === 'light' ? applyTheme('dark') : applyTheme('light');
-
-    if (selectedTheme.id === 'light') {
+    // data-theme 속성 직접 읽어서 현재 테마 판단 (가장 정확)
+    const currentDataTheme = document.documentElement.getAttribute('data-theme');
+    if (currentDataTheme === 'corporate') {
       applyTheme('dark');
       setTheme('dark');
-    } else if (selectedTheme.id === 'dark') {
+    } else {
       applyTheme('light');
       setTheme('light');
-    } else if (selectedTheme.id === 'system') {
-      applyTheme('dark');
-      setTheme('dark');
     }
   };
 

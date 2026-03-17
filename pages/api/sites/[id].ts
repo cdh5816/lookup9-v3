@@ -242,46 +242,57 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
     },
   });
 
-  // installerName 저장 시 → 해당 PartnerCompany 찾아서 현장 자동 연동
+  // installerName 변경 시: 이전 업체 해제 → 새 업체 배정 (A→B 완전 교체)
   let autoAssigned = 0;
   if (installerName !== undefined) {
     const team = await prisma.teamMember.findFirst({ where: { userId: session.user.id }, select: { teamId: true } });
     const teamId = team?.teamId;
-    if (teamId && installerName) {
-      const partnerCompany = await prisma.partnerCompany.findFirst({
-        where: { name: installerName, teamId },
-        include: { members: { select: { userId: true } } },
-      });
-      if (partnerCompany) {
-        // PartnerSiteAssign 연결
-        await prisma.partnerSiteAssign.upsert({
-          where: { partnerCompanyId_siteId: { partnerCompanyId: partnerCompany.id, siteId: id } },
-          create: { partnerCompanyId: partnerCompany.id, siteId: id },
-          update: {},
-        });
-        // 소속 계정 전원 SiteAssignment 자동 생성
-        const memberIds = partnerCompany.members.map((m: any) => m.userId);
-        if (memberIds.length > 0) {
-          await prisma.siteAssignment.createMany({
-            data: memberIds.map((userId: string) => ({ siteId: id, userId, assignedRole: 'PARTNER' })),
-            skipDuplicates: true,
-          });
-          autoAssigned = memberIds.length;
-        }
-      }
-    } else if (teamId && !installerName) {
-      // installerName 비워서 저장 → 기존 업체 배정 해제
+    if (!teamId) {
+      // teamId 없으면 스킵
+    } else {
+      // 현재 저장된 이전 시공업체명 조회 (변경 전)
       const prevSite = await prisma.site.findUnique({ where: { id }, select: { installerName: true } });
-      if (prevSite?.installerName) {
+      const prevName = prevSite?.installerName || null;
+      const newName  = installerName || null;
+
+      // ── 이전 업체 해제 (이전 업체가 있고, 새 업체와 다를 때) ──
+      if (prevName && prevName !== newName) {
         const prevCompany = await prisma.partnerCompany.findFirst({
-          where: { name: prevSite.installerName, teamId },
+          where: { name: prevName, teamId },
           include: { members: { select: { userId: true } } },
         });
         if (prevCompany) {
-          await prisma.partnerSiteAssign.deleteMany({ where: { partnerCompanyId: prevCompany.id, siteId: id } });
-          const memberIds = prevCompany.members.map((m: any) => m.userId);
-          if (memberIds.length > 0) {
-            await prisma.siteAssignment.deleteMany({ where: { siteId: id, userId: { in: memberIds } } });
+          await prisma.partnerSiteAssign.deleteMany({
+            where: { partnerCompanyId: prevCompany.id, siteId: id },
+          });
+          const prevMemberIds = prevCompany.members.map((m: any) => m.userId);
+          if (prevMemberIds.length > 0) {
+            await prisma.siteAssignment.deleteMany({
+              where: { siteId: id, userId: { in: prevMemberIds } },
+            });
+          }
+        }
+      }
+
+      // ── 새 업체 배정 (새 업체가 있고, 이전과 다를 때) ──
+      if (newName && newName !== prevName) {
+        const newCompany = await prisma.partnerCompany.findFirst({
+          where: { name: newName, teamId },
+          include: { members: { select: { userId: true } } },
+        });
+        if (newCompany) {
+          await prisma.partnerSiteAssign.upsert({
+            where: { partnerCompanyId_siteId: { partnerCompanyId: newCompany.id, siteId: id } },
+            create: { partnerCompanyId: newCompany.id, siteId: id },
+            update: {},
+          });
+          const newMemberIds = newCompany.members.map((m: any) => m.userId);
+          if (newMemberIds.length > 0) {
+            await prisma.siteAssignment.createMany({
+              data: newMemberIds.map((userId: string) => ({ siteId: id, userId, assignedRole: 'PARTNER' })),
+              skipDuplicates: true,
+            });
+            autoAssigned = newMemberIds.length;
           }
         }
       }

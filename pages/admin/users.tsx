@@ -625,6 +625,40 @@ const PartnerPanel = () => {
                       </div>
                     )}
 
+                    {/* 배정된 현장 목록 (읽기 전용 — 변경은 현장 상세에서) */}
+                    <div className="mb-4">
+                      <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">
+                        배정된 현장 ({co.sites?.length ?? 0}건)
+                      </p>
+                      {!co.sites?.length ? (
+                        <p className="text-xs text-gray-600 py-1">
+                          배정된 현장이 없습니다.
+                          <span className="ml-1 text-gray-700">현장 상세 → 시공업체 등록으로 배정하세요.</span>
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {co.sites.map((sa: any) => (
+                            <span
+                              key={sa.siteId}
+                              className="inline-flex items-center gap-1 rounded-full border border-blue-800/40 bg-blue-950/20 px-2.5 py-1 text-[11px] text-blue-300"
+                            >
+                              <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                                sa.site?.status === 'CONTRACT_ACTIVE' ? 'bg-green-400' :
+                                sa.site?.status === 'COMPLETED' ? 'bg-blue-400' :
+                                sa.site?.status === 'WARRANTY' ? 'bg-purple-400' : 'bg-gray-500'
+                              }`} />
+                              {sa.site?.name || sa.siteId}
+                              <span className="text-[10px] text-gray-500">
+                                {sa.site?.status === 'CONTRACT_ACTIVE' ? '진행중' :
+                                 sa.site?.status === 'COMPLETED' ? '준공완료' :
+                                 sa.site?.status === 'WARRANTY' ? '하자기간' : ''}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">소속 계정 ({co.members?.length ?? 0}명)</p>
                     {!co.members?.length ? (
                       <p className="text-xs text-gray-500 py-2">등록된 계정이 없습니다. 우측 상단 [계정추가]를 눌러 추가하세요.</p>

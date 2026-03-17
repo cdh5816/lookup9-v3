@@ -158,7 +158,7 @@ const AdminUsers = () => {
             <p className="mt-1 text-sm text-gray-500">
               {meta.canCreateAdmin
                 ? 'COMPANY_ADMIN 계정을 포함한 모든 역할을 생성할 수 있습니다.'
-                : '내부 직원, 협력사, 게스트 계정을 관리합니다. 협력사/게스트 계정은 현장 지정이 필수입니다.'}
+                : '내부 직원 및 게스트 계정을 관리합니다. 협력사 계정은 협력업체 관리에서 등록하세요.'}
             </p>
           </div>
           <Button color="primary" className="gap-2" onClick={() => setShowCreate(true)}>
@@ -288,7 +288,7 @@ const AdminUsers = () => {
                 <Field label="비밀번호 *"><input type="password" className="input input-bordered w-full bg-[#1a1a1a]" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></Field>
                 <Field label="권한 *">
                   <select className="select select-bordered w-full bg-[#1a1a1a]" value={form.role}
-                    onChange={e => setForm({ ...form, role: e.target.value, assignedSiteIds: ['PARTNER', 'GUEST', 'VIEWER'].includes(e.target.value) ? form.assignedSiteIds : [] })}>
+                    onChange={e => setForm({ ...form, role: e.target.value, assignedSiteIds: [] })}>
                     {availableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
                 </Field>
@@ -303,18 +303,20 @@ const AdminUsers = () => {
                 <Field label="회사명"><input className="input input-bordered w-full bg-[#1a1a1a]" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} /></Field>
               </div>
 
-              {isExternalRole && (
-                <div className="mt-5 rounded-xl border border-gray-800 bg-black/20 p-4">
-                  <h4 className="font-semibold mb-1">현장 지정 <span className="text-red-400 text-sm">*필수</span></h4>
-                  <p className="text-xs text-gray-500 mb-3">협력사/게스트 계정은 최소 1개 이상 현장을 지정해야 합니다.</p>
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2 max-h-48 overflow-y-auto">
-                    {sites.map(site => (
-                      <label key={site.id} className="flex items-start gap-3 rounded-lg border border-gray-800 px-3 py-2 text-sm cursor-pointer hover:border-gray-700">
-                        <input type="checkbox" className="checkbox checkbox-sm mt-0.5" checked={form.assignedSiteIds.includes(site.id)} onChange={() => toggleAssignedSite(site.id)} />
-                        <span className="break-words leading-5">{site.name}<span className="text-xs text-gray-500 ml-1">{site.status}</span></span>
-                      </label>
-                    ))}
-                  </div>
+              {form.role === 'PARTNER' && (
+                <div className="mt-4 md:col-span-2 rounded-xl border border-blue-900/40 bg-blue-950/20 px-4 py-3">
+                  <p className="text-sm font-semibold text-blue-300 mb-1">협력사 계정 안내</p>
+                  <p className="text-xs text-gray-400">
+                    계정 생성 후 <span className="text-white font-semibold">계정관리 → 협력업체 관리</span>에서 해당 업체에 이 계정을 등록하세요.<br/>
+                    업체가 현장에 배정되면 소속 계정이 자동으로 해당 현장에 접근할 수 있습니다.
+                  </p>
+                </div>
+              )}
+              {form.role === 'GUEST' && (
+                <div className="mt-4 md:col-span-2 rounded-xl border border-gray-700/40 bg-gray-800/20 px-4 py-3">
+                  <p className="text-xs text-gray-400">
+                    게스트 계정은 현장 상세에서 직접 배정하거나, 생성 후 현장의 <span className="text-white font-semibold">기본정보 탭 → 담당자 배정</span>에서 추가할 수 있습니다.
+                  </p>
                 </div>
               )}
 

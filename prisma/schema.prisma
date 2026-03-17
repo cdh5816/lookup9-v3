@@ -107,6 +107,7 @@ model User {
   leaveManaged     LeaveRequest[] @relation("LeaveManager")
   leaveAdmined     LeaveRequest[] @relation("LeaveAdmin")
   productionOrders ProductionOrder[] @relation("ProductionOrderCreator")
+  partnerMemberships PartnerMember[]
 }
 
 model Team {
@@ -127,6 +128,7 @@ model Team {
   notices         Notice[]
 
   @@index([billingId])
+  partnerCompanies PartnerCompany[]
 }
 
 model TeamMember {
@@ -351,6 +353,7 @@ model Site {
   @@index([clientId])
   @@index([createdById])
   @@index([status])
+  partnerAssignments PartnerSiteAssign[]
 }
 
 model SiteAssignment {
@@ -773,4 +776,56 @@ model WorkLogViewLog {
 
   @@index([viewerId, viewedAt])
   @@index([targetUserId, viewedAt])
+}
+
+// ══════════════════════════════════════════════════════
+// 협력업체 (설치 시공사) 관리
+// ══════════════════════════════════════════════════════
+model PartnerCompany {
+  id        String   @id @default(uuid())
+  teamId    String
+  name      String                          // 협력업체명
+  bizNo     String?                         // 사업자등록번호
+  contact   String?                         // 담당자명
+  phone     String?                         // 연락처
+  email     String?                         // 이메일
+  address   String?                         // 주소
+  notes     String?  @db.Text              // 메모
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  team    Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  members PartnerMember[]
+  sites   PartnerSiteAssign[]
+
+  @@index([teamId])
+}
+
+model PartnerMember {
+  id               String   @id @default(uuid())
+  partnerCompanyId String
+  userId           String
+  position         String?
+  createdAt        DateTime @default(now())
+
+  company PartnerCompany @relation(fields: [partnerCompanyId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerCompanyId, userId])
+  @@index([partnerCompanyId])
+  @@index([userId])
+}
+
+model PartnerSiteAssign {
+  id               String   @id @default(uuid())
+  partnerCompanyId String
+  siteId           String
+  createdAt        DateTime @default(now())
+
+  company PartnerCompany @relation(fields: [partnerCompanyId], references: [id], onDelete: Cascade)
+  site    Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerCompanyId, siteId])
+  @@index([partnerCompanyId])
+  @@index([siteId])
 }

@@ -7,6 +7,7 @@ import {
   UserCircleIcon,
   UserPlusIcon,
   ChartBarIcon,
+  WrenchScrewdriverIcon,
 } from '@heroicons/react/24/outline';
 import { useTranslation } from 'next-i18next';
 import NavigationItems from './NavigationItems';
@@ -77,6 +78,7 @@ const MainNavigation = ({ activePathname, onNavigate }: NavigationProps) => {
   // 계정관리: ADMIN_HR 이상만
   if (isAdminHR) {
     menus.push({ name: '계정 관리', href: '/admin/users', icon: UsersIcon, active: active('/admin/users') });
+    menus.push({ name: '협력업체 관리', href: '/admin/partners', icon: WrenchScrewdriverIcon, active: active('/admin/partners') });
   }
 
   // 게스트 관리: MANAGER 이상

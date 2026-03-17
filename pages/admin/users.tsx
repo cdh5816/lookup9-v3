@@ -240,7 +240,11 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
               <tr>
                 <th className="px-4 py-3 text-left">이름</th>
                 <th className="px-4 py-3 text-left">아이디</th>
-                <th className="px-4 py-3 text-left hidden sm:table-cell">부서 · 직책</th>
+                {filter === 'partner' ? (
+                  <th className="px-4 py-3 text-left hidden sm:table-cell">소속 업체</th>
+                ) : (
+                  <th className="px-4 py-3 text-left hidden sm:table-cell">부서 · 직책</th>
+                )}
                 <th className="px-4 py-3 text-left">권한</th>
                 <th className="px-4 py-3 text-left hidden md:table-cell">배정 현장</th>
                 <th className="px-4 py-3 text-right">관리</th>
@@ -261,10 +265,23 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
                       {user.phone && <div className="text-xs text-gray-500 font-normal">{user.phone}</div>}
                     </td>
                     <td className="px-4 py-3 text-gray-400 font-mono text-xs">{user.username || user.email}</td>
-                    <td className="px-4 py-3 hidden sm:table-cell text-gray-300">
-                      {user.department || '-'}
-                      {user.position && <span className="text-gray-500 ml-1">· {user.position}</span>}
-                    </td>
+                    {filter === 'partner' ? (
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        {user.partnerCompanyName ? (
+                          <span className="inline-block rounded border border-purple-800/40 bg-purple-900/20 px-2 py-0.5 text-xs text-purple-300 font-medium">
+                            {user.partnerCompanyName}
+                          </span>
+                        ) : (
+                          <span className="text-gray-600 text-xs">업체 미지정</span>
+                        )}
+                        {user.position && <div className="text-[11px] text-gray-500 mt-0.5">{user.position}</div>}
+                      </td>
+                    ) : (
+                      <td className="px-4 py-3 hidden sm:table-cell text-gray-300">
+                        {user.department || '-'}
+                        {user.position && <span className="text-gray-500 ml-1">· {user.position}</span>}
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <span className={`inline-block rounded border px-2 py-0.5 text-[11px] font-bold ${ROLE_BADGE[role] || ROLE_BADGE.USER}`}>
                         {ROLE_LABEL[role] || role}
@@ -320,8 +337,8 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
             {filter === 'partner' && (
               <div className="mb-4 rounded-lg border border-blue-800/40 bg-blue-950/20 px-3 py-2.5">
                 <p className="text-xs text-blue-300">
-                  계정 생성 후 <strong>협력업체 탭</strong>에서 해당 업체에 등록하세요.
-                  업체에 현장을 배정하면 소속 계정이 자동으로 해당 현장에 접근합니다.
+                  계정 생성 후 <strong>협력업체 탭</strong>에서 소속 업체에 등록하세요.<br />
+                  현장 상세 → 시공업체 등록 시 소속 계정 전원이 해당 현장에 자동 배정됩니다.
                 </p>
               </div>
             )}

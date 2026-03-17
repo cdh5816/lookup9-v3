@@ -242,7 +242,53 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
     },
   });
 
-  return res.status(200).json({ data: site });
+  // installerName 저장 시 → 해당 PartnerCompany 찾아서 현장 자동 연동
+  let autoAssigned = 0;
+  if (installerName !== undefined) {
+    const team = await prisma.teamMember.findFirst({ where: { userId: session.user.id }, select: { teamId: true } });
+    const teamId = team?.teamId;
+    if (teamId && installerName) {
+      const partnerCompany = await prisma.partnerCompany.findFirst({
+        where: { name: installerName, teamId },
+        include: { members: { select: { userId: true } } },
+      });
+      if (partnerCompany) {
+        // PartnerSiteAssign 연결
+        await prisma.partnerSiteAssign.upsert({
+          where: { partnerCompanyId_siteId: { partnerCompanyId: partnerCompany.id, siteId: id } },
+          create: { partnerCompanyId: partnerCompany.id, siteId: id },
+          update: {},
+        });
+        // 소속 계정 전원 SiteAssignment 자동 생성
+        const memberIds = partnerCompany.members.map((m: any) => m.userId);
+        if (memberIds.length > 0) {
+          await prisma.siteAssignment.createMany({
+            data: memberIds.map((userId: string) => ({ siteId: id, userId, assignedRole: 'PARTNER' })),
+            skipDuplicates: true,
+          });
+          autoAssigned = memberIds.length;
+        }
+      }
+    } else if (teamId && !installerName) {
+      // installerName 비워서 저장 → 기존 업체 배정 해제
+      const prevSite = await prisma.site.findUnique({ where: { id }, select: { installerName: true } });
+      if (prevSite?.installerName) {
+        const prevCompany = await prisma.partnerCompany.findFirst({
+          where: { name: prevSite.installerName, teamId },
+          include: { members: { select: { userId: true } } },
+        });
+        if (prevCompany) {
+          await prisma.partnerSiteAssign.deleteMany({ where: { partnerCompanyId: prevCompany.id, siteId: id } });
+          const memberIds = prevCompany.members.map((m: any) => m.userId);
+          if (memberIds.length > 0) {
+            await prisma.siteAssignment.deleteMany({ where: { siteId: id, userId: { in: memberIds } } });
+          }
+        }
+      }
+    }
+  }
+
+  return res.status(200).json({ data: { ...site, autoAssigned } });
 };
 
 const handleDELETE = async (id: string, res: NextApiResponse) => {

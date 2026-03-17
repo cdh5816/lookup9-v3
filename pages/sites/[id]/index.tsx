@@ -1200,7 +1200,7 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
                     >
                       <p className="text-sm font-semibold text-white">{co.name}</p>
                       <p className="text-[11px] text-gray-400">
-                        {co.contact && `담당: ${co.contact}`}{co.contact && co.phone && ' · '}{co.phone && co.phone}
+                        {co.contact && `대표자: ${co.contact}`}{co.contact && co.phone && ' · '}{co.phone && co.phone}
                       </p>
                     </button>
                   ))}
@@ -1213,7 +1213,7 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
               )}
             </div>
             <div>
-              <label className="block text-[10px] text-gray-500 mb-1">담당자</label>
+              <label className="block text-[10px] text-gray-500 mb-1">대표자</label>
               <input className="input input-bordered input-sm w-full"
                 value={form.installerContact}
                 onChange={e => setForm({ ...form, installerContact: e.target.value })} />
@@ -1226,7 +1226,7 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
             </div>
           </div>
           <p className="text-[10px] text-gray-600">
-            ※ 등록된 협력업체를 선택하면 담당자·연락처가 자동으로 채워지고, 소속 계정이 이 현장에 자동 배정됩니다.
+            ※ 등록된 협력업체를 선택하면 대표자·연락처가 자동으로 채워지고, 소속 계정 전원이 이 현장에 자동 배정됩니다.
           </p>
           <div className="flex justify-end gap-2">
             <button className="btn btn-ghost btn-xs" onClick={() => { setEditing(false); setShowDropdown(false); }}>취소</button>
@@ -1243,7 +1243,7 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
             </div>
             {site.installerContact && (
               <div>
-                <p className="text-[10px] text-gray-600 mb-0.5">담당자</p>
+                <p className="text-[10px] text-gray-600 mb-0.5">대표자</p>
                 <p className="text-gray-300">{site.installerContact}</p>
               </div>
             )}

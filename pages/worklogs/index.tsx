@@ -4,6 +4,9 @@ import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useEffect, useCallback, useState } from 'react';
 import Head from 'next/head';
 import { MagnifyingGlassIcon, ArrowPathIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import useSWR from 'swr';
+import fetcher from '@/lib/fetcher';
+import { useRouter } from 'next/router';
 
 type SearchUser = {
   id: string;
@@ -23,6 +26,21 @@ type WorklogItem = {
 };
 
 const WorklogsPage = () => {
+  const router = useRouter();
+  const { data: profileData } = useSWR('/api/my/profile', fetcher);
+  const myRole = profileData?.data?.role || profileData?.data?.teamMembers?.[0]?.role || '';
+
+  // 업무일지: 내부 직원만 열람 가능
+  if (profileData && ['PARTNER', 'GUEST', 'VIEWER'].includes(myRole)) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <p className="text-lg font-semibold text-gray-300">접근 권한이 없습니다</p>
+        <p className="text-sm text-gray-500 mt-1">업무일지는 내부 직원만 열람할 수 있습니다.</p>
+        <button className="btn btn-ghost btn-sm mt-4" onClick={() => router.push('/dashboard')}>대시보드로</button>
+      </div>
+    );
+  }
+
   const [keyword, setKeyword] = useState('');
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [searchUsers, setSearchUsers] = useState<SearchUser[]>([]);

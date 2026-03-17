@@ -5,9 +5,8 @@ import {
   UsersIcon,
   ShieldCheckIcon,
   UserCircleIcon,
-  UserPlusIcon,
   ChartBarIcon,
-  WrenchScrewdriverIcon,
+  UserPlusIcon,
 } from '@heroicons/react/24/outline';
 import { useTranslation } from 'next-i18next';
 import NavigationItems from './NavigationItems';
@@ -48,7 +47,6 @@ const MainNavigation = ({ activePathname, onNavigate }: NavigationProps) => {
       <NavigationItems onNavigate={onNavigate} menus={[
         { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: exact('/dashboard') },
         { name: t('nav-sites'), href: '/sites', icon: BuildingOffice2Icon, active: active('/sites') },
-        { name: '게스트 관리', href: '/guests', icon: UserPlusIcon, active: active('/guests') },
         { name: t('my-page-title'), href: '/my', icon: UserCircleIcon, active: exact('/my') },
         { name: t('security'), href: '/settings/security', icon: ShieldCheckIcon, active: exact('/settings/security') },
       ]} />
@@ -78,10 +76,9 @@ const MainNavigation = ({ activePathname, onNavigate }: NavigationProps) => {
   // 계정관리: ADMIN_HR 이상만
   if (isAdminHR) {
     menus.push({ name: '계정 관리', href: '/admin/users', icon: UsersIcon, active: active('/admin/users') });
-    menus.push({ name: '협력업체 관리', href: '/admin/partners', icon: WrenchScrewdriverIcon, active: active('/admin/partners') });
   }
 
-  // 게스트 관리: MANAGER 이상
+  // 게스트 관리: MANAGER 이상 + PARTNER 포함 (메뉴에서 접근)
   if (isManager) {
     menus.push({ name: '게스트 관리', href: '/guests', icon: UserPlusIcon, active: active('/guests') });
   }

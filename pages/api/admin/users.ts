@@ -20,6 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const tm = await getTeamMemberByUserId(session.user.id);
   if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
 
+  // 계정관리 접근: MANAGER 이상 (MANAGER는 게스트/협력사만, ADMIN_HR는 전체)
   if (!hasMinRole(tm.role, 'MANAGER')) {
     return res.status(403).json({ error: { message: 'Forbidden' } });
   }
@@ -123,11 +124,12 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
     ? Array.from(new Set(siteIds.filter((id: unknown) => typeof id === 'string' && id.trim())))
     : [];
 
-  // 외부 계정(PARTNER/GUEST/VIEWER)은 현장 필수
-  if (isExternalRole(targetRole) && normalizedSiteIds.length === 0) {
+  // PARTNER는 협력업체 관리에서 현장 배정 → 현장 필수 아님
+  // GUEST/VIEWER만 현장 필수
+  if (['GUEST', 'VIEWER'].includes(targetRole) && normalizedSiteIds.length === 0) {
     return res
       .status(400)
-      .json({ error: { message: '외부 계정은 최소 1개 현장을 지정해야 합니다.' } });
+      .json({ error: { message: '게스트 계정은 최소 1개 현장을 지정해야 합니다.' } });
   }
 
   // 현장 회사 스코프 검증

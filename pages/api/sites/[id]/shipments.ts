@@ -6,10 +6,14 @@ import { verifySiteAccess } from '@/lib/team-helper';
 async function notifyShipmentUsers(siteId: string, senderId: string, title: string, content: string) {
   const [site, assignments] = await Promise.all([
     prisma.site.findUnique({ where: { id: siteId }, select: { teamId: true } }),
-    prisma.siteAssignment.findMany({ where: { siteId }, select: { userId: true } }),
+    prisma.siteAssignment.findMany({
+      where: { siteId },
+      select: { userId: true },
+    }),
   ]);
   if (!site?.teamId) return;
 
+  // 출하 알람: 관련 부서 내부 직원 + 현장 배정된 PARTNER(협력사)
   const deptUsers = await prisma.user.findMany({
     where: {
       teamMembers: { some: { teamId: site.teamId } },
@@ -19,8 +23,18 @@ async function notifyShipmentUsers(siteId: string, senderId: string, title: stri
     select: { id: true },
   });
 
+  // 현장에 배정된 협력사(PARTNER) 계정도 알람 대상
+  const partnerUsers = await prisma.user.findMany({
+    where: {
+      id: { in: assignments.map(a => a.userId) },
+      teamMembers: { some: { teamId: site.teamId, role: 'PARTNER' } },
+      NOT: { id: senderId },
+    },
+    select: { id: true },
+  });
+
   const userIds = Array.from(new Set(
-    [...assignments.map((a) => a.userId), ...deptUsers.map((u) => u.id)]
+    [...assignments.map((a) => a.userId), ...deptUsers.map((u) => u.id), ...partnerUsers.map((u) => u.id)]
       .filter((id) => id && id !== senderId)
   ));
   if (!userIds.length) return;

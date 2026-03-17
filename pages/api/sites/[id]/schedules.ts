@@ -16,10 +16,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       case 'POST': {
         const { title, type, startDate, endDate, assigneeId, notes } = req.body;
         if (!title || !startDate) return res.status(400).json({ error: { message: '제목과 시작일을 입력해주세요.' } });
+
+        // 요청자 정보
+        const requester = await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true, position: true, teamMembers: { select: { role: true } } } });
+        const requesterRole = requester?.teamMembers?.[0]?.role || 'USER';
+        const isExternal = ['PARTNER', 'GUEST', 'VIEWER'].includes(requesterRole);
+
         const schedule = await prisma.schedule.create({
           data: { siteId: id, title, type: type || '기타', startDate: new Date(startDate), endDate: endDate ? new Date(endDate) : null, assigneeId: assigneeId || null, notes: notes || null },
           include: { assignee: { select: { name: true, position: true } } },
         });
+
+        // 외부 계정(게스트/협력사)이 미팅 요청 시 → 내부 관리자에게 알람
+        if (isExternal) {
+          const site = await prisma.site.findUnique({ where: { id }, select: { teamId: true, name: true } });
+          if (site?.teamId) {
+            const managers = await prisma.user.findMany({
+              where: {
+                teamMembers: { some: { teamId: site.teamId, role: { in: ['SUPER_ADMIN','OWNER','ADMIN_HR','ADMIN','MANAGER'] } } },
+                NOT: { id: session.user.id },
+              },
+              select: { id: true },
+            });
+            const notifTitle = `미팅 요청: ${site.name}`;
+            const notifMsg = `${requester?.name || '외부 사용자'}님이 미팅을 요청했습니다. "${title}" (${new Date(startDate).toLocaleDateString('ko-KR')})`;
+            if (managers.length > 0) {
+              await prisma.notification.createMany({
+                data: managers.map(m => ({
+                  userId: m.id,
+                  type: 'MEETING_REQUEST',
+                  title: notifTitle,
+                  message: notifMsg,
+                  link: \`/sites/\${id}\`,
+                  siteId: id,
+                })),
+                skipDuplicates: true,
+              });
+            }
+          }
+        }
+
         return res.status(201).json({ data: schedule });
       }
       case 'PUT': {

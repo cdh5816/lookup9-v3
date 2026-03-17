@@ -7,9 +7,10 @@ async function notifyTargetUsers(siteId: string, senderId: string, title: string
   const site = await prisma.site.findUnique({ where: { id: siteId }, select: { teamId: true, name: true } });
   if (!site?.teamId) return;
 
+  // 내부 직원에게만 알람 (PARTNER/GUEST 제외)
   const users = await prisma.user.findMany({
     where: {
-      teamMembers: { some: { teamId: site.teamId } },
+      teamMembers: { some: { teamId: site.teamId, role: { notIn: ['PARTNER', 'GUEST', 'VIEWER'] } } },
       ...(targetDept ? { department: targetDept } : {}),
       NOT: { id: senderId },
     },

@@ -1,346 +1,728 @@
+/* eslint-disable i18next/no-literal-string */
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
-import { useTranslation } from 'next-i18next';
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import Head from 'next/head';
-import { Button } from 'react-daisyui';
-import { PlusIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import {
+  PlusIcon, TrashIcon, XMarkIcon, BuildingOffice2Icon,
+  UserPlusIcon, ChevronDownIcon, ChevronRightIcon,
+  PencilIcon, CheckIcon,
+} from '@heroicons/react/24/outline';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 
+// ── 타입 ──────────────────────────────────────────────
 interface SiteLite { id: string; name: string; status?: string; }
 interface UserData {
-  id: string; name: string; email: string; company: string | null;
-  department: string | null; position: string | null; phone: string | null;
-  createdAt: string;
+  id: string; name: string; username?: string; email: string;
+  company: string | null; department: string | null;
+  position: string | null; phone: string | null; createdAt: string;
   teamMembers: { role: string; team: { name: string } }[];
   siteAssignments?: { siteId: string; site: SiteLite }[];
 }
 
-const departments = ['경영진', '경영지원부', '영업부', '수주팀', '생산관리팀', '도장팀', '출하팀', '공사팀', '협력사'];
+const DEPTS = ['경영진', '경영지원부', '영업부', '수주팀', '생산관리팀', '도장팀', '출하팀', '공사팀'];
+const STATUS_LABEL: Record<string, string> = {
+  CONTRACT_ACTIVE: '진행중', COMPLETED: '준공완료', WARRANTY: '하자기간',
+  SALES_PIPELINE: '영업중', SALES_CONFIRMED: '수주확정',
+};
 
+const ROLE_BADGE: Record<string, string> = {
+  ADMIN_HR: 'bg-orange-900/40 text-orange-300 border-orange-800/40',
+  MANAGER:  'bg-blue-900/30 text-blue-300 border-blue-800/30',
+  USER:     'bg-gray-800/60 text-gray-300 border-gray-700/40',
+  PARTNER:  'bg-purple-900/30 text-purple-300 border-purple-800/30',
+  GUEST:    'bg-gray-800/40 text-gray-400 border-gray-700/30',
+  VIEWER:   'bg-gray-800/40 text-gray-500 border-gray-700/30',
+};
 const ROLE_LABEL: Record<string, string> = {
   ADMIN_HR: 'COMPANY_ADMIN', MANAGER: 'MANAGER', USER: 'USER',
   PARTNER: 'PARTNER', GUEST: 'GUEST', VIEWER: 'VIEWER',
 };
 
-// 기본 역할 목록 (ADMIN_HR 제외 - SUPER_ADMIN 전용으로 동적 추가)
-const BASE_ROLES = [
-  { value: 'MANAGER', label: 'MANAGER (내부 관리자)' },
-  { value: 'USER',    label: 'USER (내부 직원)' },
-  { value: 'PARTNER', label: 'PARTNER (협력사)' },
-  { value: 'GUEST',   label: 'GUEST (게스트)' },
-];
-
+// ══════════════════════════════════════════════════════
+// 메인 컴포넌트
+// ══════════════════════════════════════════════════════
 const AdminUsers = () => {
-  const { t } = useTranslation('common');
-  const [users, setUsers] = useState<UserData[]>([]);
-  const [sites, setSites] = useState<SiteLite[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [filter, setFilter] = useState<'all' | 'internal' | 'external'>('all');
-  const [meta, setMeta] = useState<{ actorRole: string; canDelete: boolean; canCreateAdmin: boolean }>({
-    actorRole: 'USER', canDelete: false, canCreateAdmin: false,
-  });
+  const [tab, setTab] = useState<'staff' | 'partner'>('staff');
 
-  // 현재 로그인 사용자 정보
+  // 현재 로그인 사용자
   const { data: profileData } = useSWR('/api/my/profile', fetcher);
-  const currentUserId = profileData?.data?.id;
-
-  const [form, setForm] = useState({
-    name: '', username: '', email: '', password: '',
-    company: '', department: '', position: '', phone: '',
-    role: 'USER', assignedSiteIds: [] as string[],
-  });
-
-  const fetchData = useCallback(async () => {
-    setLoading(true); setError('');
-    try {
-      const [usersRes, sitesRes] = await Promise.all([fetch('/api/admin/users'), fetch('/api/sites')]);
-      const usersJson = await usersRes.json();
-      const sitesJson = await sitesRes.json();
-      if (!usersRes.ok) throw new Error(usersJson?.error?.message || '계정 목록을 불러오지 못했습니다.');
-      setUsers(usersJson.data || []);
-      setSites(sitesRes.ok ? sitesJson.data || [] : []);
-      if (usersJson.meta) setMeta(usersJson.meta);
-    } catch (err: any) {
-      setError(err?.message || '데이터를 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  const visibleUsers = useMemo(() => {
-    return users.filter((user) => {
-      const role = user.teamMembers?.[0]?.role || 'USER';
-      if (filter === 'internal') return !['PARTNER', 'GUEST', 'VIEWER'].includes(role);
-      if (filter === 'external') return ['PARTNER', 'GUEST', 'VIEWER'].includes(role);
-      return true;
-    });
-  }, [filter, users]);
-
-  // SUPER_ADMIN만 ADMIN_HR 생성 옵션 표시
-  const availableRoles = useMemo(() => {
-    const roles = [...BASE_ROLES];
-    if (meta.canCreateAdmin) {
-      roles.unshift({ value: 'ADMIN_HR', label: 'COMPANY_ADMIN (회사 관리자)' });
-    }
-    return roles;
-  }, [meta.canCreateAdmin]);
-
-  const isExternalRole = ['PARTNER', 'GUEST', 'VIEWER'].includes(form.role);
-
-  const resetForm = () => {
-    setForm({ name: '', username: '', email: '', password: '', company: '', department: '', position: '', phone: '', role: 'USER', assignedSiteIds: [] });
-  };
-
-  const toggleAssignedSite = (siteId: string) => {
-    setForm(prev => ({
-      ...prev,
-      assignedSiteIds: prev.assignedSiteIds.includes(siteId)
-        ? prev.assignedSiteIds.filter(id => id !== siteId)
-        : [...prev.assignedSiteIds, siteId],
-    }));
-  };
-
-  const handleCreate = async () => {
-    setCreating(true); setError(''); setSuccess('');
-    try {
-      const res = await fetch('/api/admin/users', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error?.message || '계정 생성에 실패했습니다.');
-      setSuccess('계정이 생성되었습니다.');
-      setShowCreate(false); resetForm(); await fetchData();
-    } catch (err: any) {
-      setError(err?.message || '계정 생성에 실패했습니다.');
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleDelete = async (user: UserData) => {
-    // 자기 자신 삭제 방지
-    if (user.id === currentUserId) {
-      alert('자기 자신의 계정은 삭제할 수 없습니다.');
-      return;
-    }
-    if (!window.confirm(`${user.name} 계정을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
-    setError(''); setSuccess('');
-    try {
-      const res = await fetch('/api/admin/users', {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error?.message || '계정 삭제에 실패했습니다.');
-      setSuccess('계정이 삭제되었습니다.');
-      await fetchData();
-    } catch (err: any) {
-      setError(err?.message || '계정 삭제에 실패했습니다.');
-    }
-  };
+  const myRole = profileData?.data?.role || profileData?.data?.teamMembers?.[0]?.role || 'USER';
+  const isAdminHR = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN'].includes(myRole);
 
   return (
     <>
-      <Head><title>{t('admin-users-title')}</title></Head>
-      <div className="space-y-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-xl font-bold">계정관리</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              {meta.canCreateAdmin
-                ? 'COMPANY_ADMIN 계정을 포함한 모든 역할을 생성할 수 있습니다.'
-                : '내부 직원 및 게스트 계정을 관리합니다. 협력사 계정은 협력업체 관리에서 등록하세요.'}
-            </p>
-          </div>
-          <Button color="primary" className="gap-2" onClick={() => setShowCreate(true)}>
-            <PlusIcon className="h-4 w-4" /> 계정 생성
-          </Button>
+      <Head><title>계정 관리 | LOOKUP9</title></Head>
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-xl font-bold">계정 관리</h2>
+          <p className="text-sm text-gray-400 mt-0.5">
+            직원·게스트 계정과 협력업체를 통합 관리합니다.
+          </p>
         </div>
 
-        {error && (
-          <div className="rounded-xl border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm text-red-300">{error}</div>
-        )}
-        {success && (
-          <div className="rounded-xl border border-green-800/50 bg-green-950/30 px-4 py-3 text-sm text-green-300">{success}</div>
-        )}
-
-        {/* 필터 탭 */}
-        <div className="flex flex-wrap gap-2">
-          {(['all', 'internal', 'external'] as const).map(f => (
-            <button key={f} type="button"
-              className={`rounded-lg border px-4 py-1.5 text-sm transition ${filter === f ? 'border-blue-600 bg-blue-950/40 text-blue-300' : 'border-gray-800 text-gray-400 hover:border-gray-700'}`}
-              onClick={() => setFilter(f)}>
-              {f === 'all' ? '전체' : f === 'internal' ? '내부 직원' : '외부 (협력사/게스트)'}
-            </button>
-          ))}
-          <span className="ml-auto self-center text-xs text-gray-600">{visibleUsers.length}명</span>
+        {/* 탭 */}
+        <div className="flex gap-1 border-b border-gray-700/50">
+          <TabBtn active={tab === 'staff'} onClick={() => setTab('staff')}>직원 · 게스트</TabBtn>
+          {isAdminHR && (
+            <TabBtn active={tab === 'partner'} onClick={() => setTab('partner')}>협력업체</TabBtn>
+          )}
         </div>
 
-        {/* 사용자 테이블 */}
-        <div className="rounded-xl border border-gray-800 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-900/60 text-xs text-gray-400 uppercase tracking-wider">
-                <tr>
-                  <th className="px-4 py-3 text-left">이름</th>
-                  <th className="px-4 py-3 text-left">아이디</th>
-                  <th className="px-4 py-3 text-left">부서 / 직책</th>
-                  <th className="px-4 py-3 text-left">권한</th>
-                  <th className="px-4 py-3 text-left">지정 현장</th>
-                  <th className="px-4 py-3 text-right">관리</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td className="px-4 py-8 text-center text-gray-500" colSpan={6}>불러오는 중...</td></tr>
-                ) : visibleUsers.length === 0 ? (
-                  <tr><td className="px-4 py-8 text-center text-gray-500" colSpan={6}>데이터가 없습니다.</td></tr>
-                ) : (
-                  visibleUsers.map((user) => {
-                    const role = user.teamMembers?.[0]?.role || 'USER';
-                    const isSelf = user.id === currentUserId;
-                    const isCompanyAdmin = role === 'ADMIN_HR' || role === 'ADMIN';
-                    // 삭제 버튼: canDelete(ADMIN_HR 이상)이고, 자기 자신 아니고, COMPANY_ADMIN 아닌 경우
-                    const showDelete = meta.canDelete && !isSelf && !isCompanyAdmin;
-                    // SUPER_ADMIN은 COMPANY_ADMIN도 삭제 가능
-                    const showDeleteAdmin = meta.actorRole === 'SUPER_ADMIN' && !isSelf && isCompanyAdmin;
-
-                    return (
-                      <tr key={user.id} className="border-t border-gray-800 align-top hover:bg-gray-900/30 transition-colors">
-                        <td className="px-4 py-3 font-medium">
-                          {user.name}
-                          {isSelf && <span className="ml-1.5 text-[10px] text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded">나</span>}
-                        </td>
-                        <td className="px-4 py-3 text-gray-400">{(user as any).username || user.email}</td>
-                        <td className="px-4 py-3">
-                          <div>{user.department || '-'}</div>
-                          <div className="mt-0.5 text-xs text-gray-500">{user.position || '-'}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            isCompanyAdmin ? 'bg-orange-900/40 text-orange-300' :
-                            role === 'MANAGER' ? 'bg-blue-900/30 text-blue-300' :
-                            role === 'PARTNER' ? 'bg-purple-900/30 text-purple-300' :
-                            role === 'GUEST' ? 'bg-gray-800 text-gray-400' :
-                            'bg-gray-800/50 text-gray-300'
-                          }`}>
-                            {ROLE_LABEL[role] || role}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          {user.siteAssignments && user.siteAssignments.length > 0 ? (
-                            <div className="flex max-w-[280px] flex-wrap gap-1">
-                              {user.siteAssignments.map(item => (
-                                <span key={`${user.id}-${item.siteId}`} className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-300">
-                                  {item.site?.name || item.siteId}
-                                </span>
-                              ))}
-                            </div>
-                          ) : <span className="text-gray-600">-</span>}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {(showDelete || showDeleteAdmin) ? (
-                            <button type="button" onClick={() => handleDelete(user)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 px-2.5 py-1.5 text-xs text-red-300 hover:bg-red-500/10 transition-colors">
-                              <TrashIcon className="h-3.5 w-3.5" /> 삭제
-                            </button>
-                          ) : (
-                            <span className="text-xs text-gray-700">
-                              {isSelf ? '(본인)' : isCompanyAdmin ? '(보호됨)' : ''}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* 계정 생성 모달 */}
-        {showCreate && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-            <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-gray-800 bg-[#111] p-5 shadow-2xl">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-bold">계정 생성</h3>
-                <button type="button" onClick={() => setShowCreate(false)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-800">
-                  <XMarkIcon className="h-5 w-5" />
-                </button>
-              </div>
-
-              {error && <div className="mb-3 rounded-lg border border-red-800/50 bg-red-950/30 px-3 py-2 text-sm text-red-300">{error}</div>}
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="이름 *"><input className="input input-bordered w-full bg-[#1a1a1a]" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
-                <Field label="아이디 (로그인용) *"><input className="input input-bordered w-full bg-[#1a1a1a]" placeholder="영문/숫자 조합" value={form.username} onChange={e => setForm({ ...form, username: e.target.value.trim() })} /></Field>
-                <Field label="이메일 (선택)"><input className="input input-bordered w-full bg-[#1a1a1a]" placeholder="미입력 시 자동 생성" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
-                <Field label="비밀번호 *"><input type="password" className="input input-bordered w-full bg-[#1a1a1a]" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></Field>
-                <Field label="권한 *">
-                  <select className="select select-bordered w-full bg-[#1a1a1a]" value={form.role}
-                    onChange={e => setForm({ ...form, role: e.target.value, assignedSiteIds: [] })}>
-                    {availableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                  </select>
-                </Field>
-                <Field label="부서">
-                  <select className="select select-bordered w-full bg-[#1a1a1a]" value={form.department} onChange={e => setForm({ ...form, department: e.target.value })}>
-                    <option value="">-</option>
-                    {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </Field>
-                <Field label="직책"><input className="input input-bordered w-full bg-[#1a1a1a]" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} /></Field>
-                <Field label="연락처"><input className="input input-bordered w-full bg-[#1a1a1a]" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></Field>
-                <Field label="회사명"><input className="input input-bordered w-full bg-[#1a1a1a]" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} /></Field>
-              </div>
-
-              {form.role === 'PARTNER' && (
-                <div className="mt-4 md:col-span-2 rounded-xl border border-blue-900/40 bg-blue-950/20 px-4 py-3">
-                  <p className="text-sm font-semibold text-blue-300 mb-1">협력사 계정 안내</p>
-                  <p className="text-xs text-gray-400">
-                    계정 생성 후 <span className="text-white font-semibold">계정관리 → 협력업체 관리</span>에서 해당 업체에 이 계정을 등록하세요.<br/>
-                    업체가 현장에 배정되면 소속 계정이 자동으로 해당 현장에 접근할 수 있습니다.
-                  </p>
-                </div>
-              )}
-              {form.role === 'GUEST' && (
-                <div className="mt-4 md:col-span-2 rounded-xl border border-gray-700/40 bg-gray-800/20 px-4 py-3">
-                  <p className="text-xs text-gray-400">
-                    게스트 계정은 현장 상세에서 직접 배정하거나, 생성 후 현장의 <span className="text-white font-semibold">기본정보 탭 → 담당자 배정</span>에서 추가할 수 있습니다.
-                  </p>
-                </div>
-              )}
-
-              <div className="mt-6 flex justify-end gap-2">
-                <Button color="ghost" onClick={() => { setShowCreate(false); resetForm(); }}>취소</Button>
-                <Button color="primary" loading={creating} onClick={handleCreate}>생성</Button>
-              </div>
-            </div>
-          </div>
-        )}
+        {tab === 'staff'  && <StaffPanel myRole={myRole} isAdminHR={isAdminHR} />}
+        {tab === 'partner' && isAdminHR && <PartnerPanel />}
       </div>
     </>
   );
 };
 
-const Field = ({ label, children }: { label: string; children: ReactNode }) => (
-  <label className="form-control">
-    <span className="mb-1 text-sm text-gray-300">{label}</span>
+const TabBtn = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) => (
+  <button
+    onClick={onClick}
+    className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px ${
+      active ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-200'
+    }`}
+  >
     {children}
-  </label>
+  </button>
 );
 
-export default AdminUsers;
+// ══════════════════════════════════════════════════════
+// 직원 · 게스트 패널
+// ══════════════════════════════════════════════════════
+const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean }) => {
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [sites, setSites] = useState<SiteLite[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'internal' | 'guest' | 'partner'>('internal');
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [canCreateAdmin, setCanCreateAdmin] = useState(false);
+
+  const { data: profileData } = useSWR('/api/my/profile', fetcher);
+  const currentUserId = profileData?.data?.id;
+
+  // 권한: 내부직원 생성은 ADMIN_HR 이상, 게스트/협력사는 MANAGER 이상
+  const canCreateInternal = isAdminHR;
+  const canCreateExternal = ['SUPER_ADMIN','OWNER','ADMIN_HR','ADMIN','MANAGER'].includes(myRole);
+
+  const emptyForm = () => ({
+    name: '', username: '', email: '', password: '',
+    company: '', department: '', position: '', phone: '',
+    role: filter === 'internal' ? 'USER' : filter === 'partner' ? 'PARTNER' : 'GUEST',
+    assignedSiteIds: [] as string[],
+  });
+  const [form, setForm] = useState(emptyForm());
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const [uRes, sRes] = await Promise.all([fetch('/api/admin/users'), fetch('/api/sites')]);
+    const uJson = await uRes.json();
+    const sJson = await sRes.json();
+    setUsers(uJson.data || []);
+    setSites(sJson.ok !== false ? sJson.data || [] : []);
+    if (uJson.meta?.canCreateAdmin) setCanCreateAdmin(true);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // 필터링
+  const visibleUsers = useMemo(() => users.filter(u => {
+    const role = u.teamMembers?.[0]?.role || 'USER';
+    if (filter === 'internal') return !['PARTNER', 'GUEST', 'VIEWER'].includes(role);
+    if (filter === 'partner')  return role === 'PARTNER';
+    if (filter === 'guest')    return role === 'GUEST' || role === 'VIEWER';
+    return true;
+  }), [users, filter]);
+
+  const availableRoles = useMemo(() => {
+    if (filter === 'internal') {
+      const r = [
+        { value: 'USER',    label: 'USER - 내부 직원' },
+        { value: 'MANAGER', label: 'MANAGER - 관리자' },
+      ];
+      if (canCreateAdmin) r.unshift({ value: 'ADMIN_HR', label: 'COMPANY_ADMIN - 회사 관리자' });
+      return r;
+    }
+    if (filter === 'partner') return [{ value: 'PARTNER', label: 'PARTNER - 협력사 직원' }];
+    return [{ value: 'GUEST', label: 'GUEST - 게스트' }];
+  }, [filter, canCreateAdmin]);
+
+  const handleCreate = async () => {
+    if (!form.name || !form.username || !form.password) {
+      setError('이름, 아이디, 비밀번호는 필수입니다.'); return;
+    }
+    setCreating(true); setError(''); setSuccess('');
+    const res = await fetch('/api/admin/users', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    });
+    const json = await res.json();
+    if (!res.ok) { setError(json?.error?.message || '생성 실패'); }
+    else { setSuccess('계정이 생성되었습니다.'); setShowCreate(false); setForm(emptyForm()); fetchData(); }
+    setCreating(false);
+  };
+
+  const handleDelete = async (user: UserData) => {
+    if (user.id === currentUserId) { alert('자기 자신은 삭제할 수 없습니다.'); return; }
+    if (!confirm(`"${user.name}" 계정을 삭제하시겠습니까?`)) return;
+    const res = await fetch('/api/admin/users', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id }),
+    });
+    const json = await res.json();
+    if (!res.ok) setError(json?.error?.message || '삭제 실패');
+    else { setSuccess('삭제되었습니다.'); fetchData(); }
+  };
+
+  const canShowCreate = filter === 'internal' ? canCreateInternal : canCreateExternal;
+
+  return (
+    <div className="space-y-4">
+      {/* 알림 */}
+      {error && <Alert type="error" msg={error} onClose={() => setError('')} />}
+      {success && <Alert type="success" msg={success} onClose={() => setSuccess('')} />}
+
+      {/* 필터 + 생성 버튼 */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-1.5">
+          {(['internal', 'partner', 'guest'] as const).map(f => (
+            <button key={f} onClick={() => { setFilter(f); setShowCreate(false); }}
+              className={`rounded-lg border px-3.5 py-1.5 text-xs font-semibold transition ${
+                filter === f
+                  ? 'border-blue-600 bg-blue-950/40 text-blue-300'
+                  : 'border-gray-700 text-gray-400 hover:border-gray-600'
+              }`}>
+              {f === 'internal' ? '내부 직원' : f === 'partner' ? '협력사 직원' : '게스트'}
+              <span className="ml-1.5 text-[10px] opacity-60">
+                {users.filter(u => {
+                  const r = u.teamMembers?.[0]?.role || 'USER';
+                  if (f === 'internal') return !['PARTNER','GUEST','VIEWER'].includes(r);
+                  if (f === 'partner') return r === 'PARTNER';
+                  return r === 'GUEST' || r === 'VIEWER';
+                }).length}
+              </span>
+            </button>
+          ))}
+        </div>
+        {canShowCreate && (
+          <button
+            className="btn btn-primary btn-sm gap-1.5"
+            onClick={() => { setForm(emptyForm()); setShowCreate(true); setError(''); }}
+          >
+            <PlusIcon className="h-4 w-4" />
+            {filter === 'internal' ? '직원 추가' : filter === 'partner' ? '협력사 계정 추가' : '게스트 추가'}
+          </button>
+        )}
+      </div>
+
+      {/* 유저 목록 */}
+      <div className="rounded-xl border border-gray-700/50 overflow-hidden">
+        {loading ? (
+          <div className="py-10 text-center text-sm text-gray-500"><span className="loading loading-spinner loading-sm" /></div>
+        ) : visibleUsers.length === 0 ? (
+          <div className="py-10 text-center text-sm text-gray-500">등록된 계정이 없습니다.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-900/60 text-[11px] text-gray-400 uppercase tracking-wider">
+              <tr>
+                <th className="px-4 py-3 text-left">이름</th>
+                <th className="px-4 py-3 text-left">아이디</th>
+                <th className="px-4 py-3 text-left hidden sm:table-cell">부서 · 직책</th>
+                <th className="px-4 py-3 text-left">권한</th>
+                <th className="px-4 py-3 text-left hidden md:table-cell">배정 현장</th>
+                <th className="px-4 py-3 text-right">관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleUsers.map(user => {
+                const role = user.teamMembers?.[0]?.role || 'USER';
+                const isSelf = user.id === currentUserId;
+                const isProtected = ['ADMIN_HR','ADMIN','SUPER_ADMIN','OWNER'].includes(role);
+                const canDelete = isAdminHR && !isSelf && (!isProtected || myRole === 'SUPER_ADMIN');
+
+                return (
+                  <tr key={user.id} className="border-t border-gray-700/30 hover:bg-gray-800/20 transition-colors">
+                    <td className="px-4 py-3 font-semibold">
+                      {user.name}
+                      {isSelf && <span className="ml-1.5 text-[10px] bg-blue-900/40 text-blue-300 px-1.5 py-0.5 rounded">나</span>}
+                      {user.phone && <div className="text-xs text-gray-500 font-normal">{user.phone}</div>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-400 font-mono text-xs">{user.username || user.email}</td>
+                    <td className="px-4 py-3 hidden sm:table-cell text-gray-300">
+                      {user.department || '-'}
+                      {user.position && <span className="text-gray-500 ml-1">· {user.position}</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-block rounded border px-2 py-0.5 text-[11px] font-bold ${ROLE_BADGE[role] || ROLE_BADGE.USER}`}>
+                        {ROLE_LABEL[role] || role}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      {user.siteAssignments?.length ? (
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {user.siteAssignments.slice(0, 3).map(a => (
+                            <span key={a.siteId} className="rounded-full border border-gray-700 px-2 py-0.5 text-[10px] text-gray-300">
+                              {a.site?.name || a.siteId}
+                            </span>
+                          ))}
+                          {user.siteAssignments.length > 3 && (
+                            <span className="text-[10px] text-gray-500">+{user.siteAssignments.length - 3}</span>
+                          )}
+                        </div>
+                      ) : <span className="text-gray-600 text-xs">-</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {canDelete ? (
+                        <button onClick={() => handleDelete(user)}
+                          className="inline-flex items-center gap-1 rounded border border-red-500/30 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 transition">
+                          <TrashIcon className="h-3.5 w-3.5" />삭제
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-gray-700">{isSelf ? '(본인)' : isProtected ? '(보호됨)' : ''}</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* 계정 생성 모달 */}
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-700 bg-gray-900 p-5 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold">
+                {filter === 'internal' ? '직원 계정 생성' : filter === 'partner' ? '협력사 계정 생성' : '게스트 계정 생성'}
+              </h3>
+              <button onClick={() => setShowCreate(false)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-800">
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+            {error && <Alert type="error" msg={error} onClose={() => setError('')} />}
+
+            {/* 협력사 안내 */}
+            {filter === 'partner' && (
+              <div className="mb-4 rounded-lg border border-blue-800/40 bg-blue-950/20 px-3 py-2.5">
+                <p className="text-xs text-blue-300">
+                  계정 생성 후 <strong>협력업체 탭</strong>에서 해당 업체에 등록하세요.
+                  업체에 현장을 배정하면 소속 계정이 자동으로 해당 현장에 접근합니다.
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="이름 *" className="col-span-2">
+                <input className="input input-bordered w-full" value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })} />
+              </Field>
+              <Field label="아이디 *">
+                <input className="input input-bordered w-full" placeholder="영문/숫자"
+                  value={form.username} onChange={e => setForm({ ...form, username: e.target.value.trim() })} />
+              </Field>
+              <Field label="비밀번호 *">
+                <input type="password" className="input input-bordered w-full"
+                  value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+              </Field>
+
+              {/* 권한 선택 (내부직원만 선택 가능, 나머지는 고정) */}
+              <Field label="권한">
+                <select className="select select-bordered w-full" value={form.role}
+                  onChange={e => setForm({ ...form, role: e.target.value })}>
+                  {availableRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+              </Field>
+              <Field label="직책">
+                <input className="input input-bordered w-full" placeholder="예: 과장, 소장"
+                  value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} />
+              </Field>
+
+              {filter === 'internal' && (
+                <Field label="부서" className="col-span-2">
+                  <select className="select select-bordered w-full" value={form.department}
+                    onChange={e => setForm({ ...form, department: e.target.value })}>
+                    <option value="">-</option>
+                    {DEPTS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </Field>
+              )}
+
+              {filter === 'partner' && (
+                <Field label="회사명" className="col-span-2">
+                  <input className="input input-bordered w-full" placeholder="소속 협력업체명"
+                    value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} />
+                </Field>
+              )}
+
+              <Field label="연락처" className="col-span-2">
+                <input className="input input-bordered w-full" value={form.phone}
+                  onChange={e => setForm({ ...form, phone: e.target.value })} />
+              </Field>
+
+              <Field label="이메일 (선택)" className="col-span-2">
+                <input className="input input-bordered w-full" placeholder="미입력 시 자동 생성"
+                  value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              </Field>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowCreate(false)}>취소</button>
+              <button className="btn btn-primary btn-sm" onClick={handleCreate} disabled={creating}>
+                {creating ? <span className="loading loading-spinner loading-xs" /> : '생성'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════
+// 협력업체 패널
+// ══════════════════════════════════════════════════════
+const PartnerPanel = () => {
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [sites, setSites] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showSiteAssign, setShowSiteAssign] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  // 업체 생성
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState({ name: '', bizNo: '', contact: '', phone: '', email: '', address: '', notes: '' });
+  const [creating, setCreating] = useState(false);
+
+  // 업체 수정
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [saving, setSaving] = useState(false);
+
+  // 멤버 추가
+  const [showMember, setShowMember] = useState<string | null>(null);
+  const [mForm, setMForm] = useState({ name: '', username: '', password: '', position: '', phone: '' });
+  const [addingMember, setAddingMember] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch('/api/partner-companies');
+    if (res.ok) { const j = await res.json(); setCompanies(j.data || []); setSites(j.meta?.sites || []); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleCreate = async () => {
+    if (!form.name.trim()) { setError('업체명을 입력하세요.'); return; }
+    setCreating(true); setError('');
+    const res = await fetch('/api/partner-companies', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+    });
+    const j = await res.json();
+    if (!res.ok) setError(j?.error?.message || '생성 실패');
+    else { setSuccess('업체가 등록되었습니다.'); setShowCreate(false); setForm({ name: '', bizNo: '', contact: '', phone: '', email: '', address: '', notes: '' }); load(); }
+    setCreating(false);
+  };
+
+  const handleSave = async (id: string) => {
+    setSaving(true);
+    const res = await fetch('/api/partner-companies', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ companyId: id, ...editForm }),
+    });
+    if (res.ok) { setEditId(null); load(); } else { const j = await res.json(); setError(j?.error?.message || '수정 실패'); }
+    setSaving(false);
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`"${name}" 업체를 삭제하시겠습니까?`)) return;
+    const res = await fetch('/api/partner-companies', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ companyId: id }),
+    });
+    if (res.ok) { setSuccess('삭제되었습니다.'); load(); }
+    else { const j = await res.json(); setError(j?.error?.message || '삭제 실패'); }
+  };
+
+  const handleAddMember = async () => {
+    if (!mForm.name || !mForm.username || !mForm.password) { setError('이름, 아이디, 비밀번호 필수'); return; }
+    setAddingMember(true); setError('');
+    const res = await fetch('/api/partner-companies?action=add-member', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...mForm, companyId: showMember }),
+    });
+    const j = await res.json();
+    if (!res.ok) setError(j?.error?.message || '실패');
+    else { setSuccess('계정이 추가되었습니다.'); setShowMember(null); setMForm({ name: '', username: '', password: '', position: '', phone: '' }); load(); }
+    setAddingMember(false);
+  };
+
+  const handleRemoveMember = async (memberId: string, name: string) => {
+    if (!confirm(`"${name}"을 업체에서 제거할까요?`)) return;
+    await fetch('/api/partner-companies', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId }),
+    });
+    load();
+  };
+
+  const handleToggleSite = async (companyId: string, siteId: string, assigned: boolean) => {
+    await fetch('/api/partner-companies?action=assign', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId, siteId, remove: assigned }),
+    });
+    load();
+  };
+
+  return (
+    <div className="space-y-4">
+      {error && <Alert type="error" msg={error} onClose={() => setError('')} />}
+      {success && <Alert type="success" msg={success} onClose={() => setSuccess('')} />}
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-400">
+          업체 등록 후 현장을 배정하면 소속 계정이 해당 현장에 자동 접근합니다.
+        </p>
+        <button className="btn btn-primary btn-sm gap-1.5" onClick={() => { setShowCreate(true); setError(''); }}>
+          <PlusIcon className="h-4 w-4" />업체 등록
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="py-10 text-center"><span className="loading loading-spinner loading-sm" /></div>
+      ) : companies.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-700 py-14 text-center">
+          <BuildingOffice2Icon className="mx-auto h-8 w-8 text-gray-600 mb-2" />
+          <p className="text-sm text-gray-500">등록된 협력업체가 없습니다.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {companies.map(co => {
+            const expanded = expandedId === co.id;
+            const siteAssigned = co.sites?.map((s: any) => s.siteId) ?? [];
+            const isEditing = editId === co.id;
+
+            return (
+              <div key={co.id} className="rounded-xl border border-gray-700/50 bg-gray-900/50 overflow-hidden">
+                {/* 업체 헤더 */}
+                <div className="flex items-center gap-2.5 px-4 py-3">
+                  <button onClick={() => setExpandedId(expanded ? null : co.id)} className="text-gray-500 hover:text-white transition flex-shrink-0">
+                    {expanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+                  </button>
+                  <BuildingOffice2Icon className="h-4 w-4 text-blue-400 flex-shrink-0" />
+
+                  <div className="flex-1 min-w-0">
+                    {isEditing ? (
+                      <input className="input input-bordered input-sm w-full max-w-xs" value={editForm.name}
+                        onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-bold text-white">{co.name}</span>
+                        {co.bizNo && <span className="text-xs text-gray-500">{co.bizNo}</span>}
+                        <span className="text-xs text-gray-500">계정 {co.members?.length ?? 0}명</span>
+                        <span className="text-xs text-gray-500">현장 {siteAssigned.length}건</span>
+                        {co.sites?.slice(0,2).map((sa: any) => (
+                          <span key={sa.siteId} className="rounded-full border border-gray-700 bg-gray-800/60 px-2 py-0.5 text-[10px] text-gray-300">
+                            {sa.site?.name}
+                          </span>
+                        ))}
+                        {(co.sites?.length ?? 0) > 2 && <span className="text-[10px] text-gray-500">+{co.sites.length-2}</span>}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {isEditing ? (
+                      <>
+                        <button className="btn btn-ghost btn-xs text-green-400 gap-1" onClick={() => handleSave(co.id)} disabled={saving}>
+                          <CheckIcon className="h-3.5 w-3.5" />저장
+                        </button>
+                        <button className="btn btn-ghost btn-xs" onClick={() => setEditId(null)}>취소</button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="btn btn-ghost btn-xs text-blue-400" onClick={() => { setShowSiteAssign(showSiteAssign === co.id ? null : co.id); setExpandedId(co.id); }}>현장배정</button>
+                        <button className="btn btn-ghost btn-xs gap-1" onClick={() => { setShowMember(co.id); setMForm({ name:'',username:'',password:'',position:'',phone:'' }); setError(''); }}>
+                          <UserPlusIcon className="h-3.5 w-3.5" />계정추가
+                        </button>
+                        <button className="btn btn-ghost btn-xs" onClick={() => { setEditId(co.id); setEditForm({ name: co.name, bizNo: co.bizNo||'', contact: co.contact||'', phone: co.phone||'', email: co.email||'', address: co.address||'', notes: co.notes||'' }); }}>
+                          <PencilIcon className="h-3.5 w-3.5" />
+                        </button>
+                        <button className="btn btn-ghost btn-xs text-red-400" onClick={() => handleDelete(co.id, co.name)}>
+                          <TrashIcon className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* 현장 배정 패널 */}
+                {showSiteAssign === co.id && (
+                  <div className="border-t border-gray-700/50 bg-blue-950/10 px-4 py-3">
+                    <p className="text-xs font-bold text-blue-300 mb-2">현장 배정 — 체크하면 소속 계정 전체가 해당 현장에 접근</p>
+                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                      {sites.map((s: any) => {
+                        const assigned = siteAssigned.includes(s.id);
+                        return (
+                          <label key={s.id} className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 cursor-pointer transition ${assigned ? 'border-blue-700/50 bg-blue-950/20' : 'border-gray-700/40 hover:border-gray-600'}`}>
+                            <input type="checkbox" className="checkbox checkbox-sm checkbox-primary" checked={assigned}
+                              onChange={() => handleToggleSite(co.id, s.id, assigned)} />
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium truncate">{s.name}</p>
+                              <p className="text-[10px] text-gray-500">{STATUS_LABEL[s.status] || s.status}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <button className="btn btn-ghost btn-xs mt-2" onClick={() => setShowSiteAssign(null)}>닫기</button>
+                  </div>
+                )}
+
+                {/* 소속 계정 (펼침) */}
+                {expanded && (
+                  <div className="border-t border-gray-700/50 px-4 py-3">
+                    {isEditing && (
+                      <div className="mb-3 grid grid-cols-2 gap-2 rounded-lg border border-gray-700/40 bg-gray-800/30 p-3">
+                        {[['사업자번호','bizNo'],['담당자','contact'],['연락처','phone'],['이메일','email']].map(([lbl,key]) => (
+                          <Field key={key} label={lbl}>
+                            <input className="input input-bordered input-sm w-full" value={editForm[key]}
+                              onChange={e => setEditForm({ ...editForm, [key]: e.target.value })} />
+                          </Field>
+                        ))}
+                        <Field label="주소" className="col-span-2">
+                          <input className="input input-bordered input-sm w-full" value={editForm.address}
+                            onChange={e => setEditForm({ ...editForm, address: e.target.value })} />
+                        </Field>
+                      </div>
+                    )}
+
+                    {!isEditing && (co.contact || co.phone || co.email) && (
+                      <div className="mb-3 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-400">
+                        {co.contact && <span>담당자: <span className="text-gray-200">{co.contact}</span></span>}
+                        {co.phone && <span>연락처: <span className="text-gray-200">{co.phone}</span></span>}
+                        {co.email && <span>이메일: <span className="text-gray-200">{co.email}</span></span>}
+                      </div>
+                    )}
+
+                    <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">소속 계정 ({co.members?.length ?? 0}명)</p>
+                    {!co.members?.length ? (
+                      <p className="text-xs text-gray-500 py-2">등록된 계정이 없습니다. 우측 상단 [계정추가]를 눌러 추가하세요.</p>
+                    ) : (
+                      <div className="divide-y divide-gray-700/30">
+                        {co.members.map((m: any) => (
+                          <div key={m.id} className="flex items-center justify-between py-2">
+                            <div className="flex items-center gap-2.5">
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-900/40 text-blue-300 text-xs font-bold flex-shrink-0">
+                                {m.user?.name?.[0] || '?'}
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold">{m.user?.name}</p>
+                                <p className="text-xs text-gray-500">@{m.user?.username}{m.user?.position && ` · ${m.user.position}`}{m.user?.phone && ` · ${m.user.phone}`}</p>
+                              </div>
+                            </div>
+                            <button className="btn btn-ghost btn-xs text-red-400" onClick={() => handleRemoveMember(m.id, m.user?.name||'')}>
+                              <TrashIcon className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 업체 생성 모달 */}
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-900 p-5 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold">협력업체 등록</h3>
+              <button onClick={() => setShowCreate(false)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-800"><XMarkIcon className="h-5 w-5" /></button>
+            </div>
+            {error && <Alert type="error" msg={error} onClose={() => setError('')} />}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="업체명 *" className="col-span-2">
+                <input className="input input-bordered w-full" placeholder="예: (주)덕인설치" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+              </Field>
+              <Field label="사업자번호"><input className="input input-bordered w-full" value={form.bizNo} onChange={e => setForm({ ...form, bizNo: e.target.value })} /></Field>
+              <Field label="담당자명"><input className="input input-bordered w-full" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} /></Field>
+              <Field label="연락처"><input className="input input-bordered w-full" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></Field>
+              <Field label="이메일"><input className="input input-bordered w-full" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
+              <Field label="주소" className="col-span-2"><input className="input input-bordered w-full" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></Field>
+              <Field label="메모" className="col-span-2"><textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></Field>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowCreate(false)}>취소</button>
+              <button className="btn btn-primary btn-sm" onClick={handleCreate} disabled={creating}>
+                {creating ? <span className="loading loading-spinner loading-xs" /> : '등록'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 계정 추가 모달 */}
+      {showMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-gray-700 bg-gray-900 p-5 shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-base font-bold">협력사 계정 추가</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{companies.find(c => c.id === showMember)?.name} 소속</p>
+              </div>
+              <button onClick={() => setShowMember(null)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-800"><XMarkIcon className="h-5 w-5" /></button>
+            </div>
+            {error && <Alert type="error" msg={error} onClose={() => setError('')} />}
+            <div className="space-y-2.5">
+              <Field label="이름 *"><input className="input input-bordered w-full" value={mForm.name} onChange={e => setMForm({ ...mForm, name: e.target.value })} /></Field>
+              <Field label="아이디 *"><input className="input input-bordered w-full" placeholder="영문/숫자" value={mForm.username} onChange={e => setMForm({ ...mForm, username: e.target.value.trim() })} /></Field>
+              <Field label="비밀번호 *"><input type="password" className="input input-bordered w-full" value={mForm.password} onChange={e => setMForm({ ...mForm, password: e.target.value })} /></Field>
+              <Field label="직책"><input className="input input-bordered w-full" placeholder="예: 소장" value={mForm.position} onChange={e => setMForm({ ...mForm, position: e.target.value })} /></Field>
+              <Field label="연락처"><input className="input input-bordered w-full" value={mForm.phone} onChange={e => setMForm({ ...mForm, phone: e.target.value })} /></Field>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowMember(null)}>취소</button>
+              <button className="btn btn-primary btn-sm" onClick={handleAddMember} disabled={addingMember}>
+                {addingMember ? <span className="loading loading-spinner loading-xs" /> : '생성'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── 공통 컴포넌트 ──────────────────────────────────────
+const Field = ({ label, children, className }: { label: string; children: ReactNode; className?: string }) => (
+  <div className={className}>
+    <label className="block text-xs font-semibold text-gray-400 mb-1">{label}</label>
+    {children}
+  </div>
+);
+
+const Alert = ({ type, msg, onClose }: { type: 'error'|'success'; msg: string; onClose: () => void }) => (
+  <div className={`mb-3 flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm ${
+    type === 'error' ? 'border-red-800/50 bg-red-950/20 text-red-300' : 'border-green-800/50 bg-green-950/20 text-green-300'
+  }`}>
+    {msg}
+    <button onClick={onClose}><XMarkIcon className="h-4 w-4" /></button>
+  </div>
+);
 
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   return { props: { ...(await serverSideTranslations(context.locale ?? 'ko', ['common'])) } };
 }
+
+export default AdminUsers;

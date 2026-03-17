@@ -71,18 +71,23 @@ export function canDeleteUser(
  * - SUPER_ADMIN/OWNER 역할은 어떤 경우에도 생성 불가
  */
 export function canAssignRole(actorRole: string, targetRole: string): boolean {
-  // SUPER_ADMIN/OWNER는 절대 생성 불가 (UI/API 막음)
-  if (targetRole === 'SUPER_ADMIN') return false;
-  if (targetRole === 'OWNER') return false;
-  // ADMIN_HR 생성은 SUPER_ADMIN 전용
+  // SUPER_ADMIN/OWNER는 절대 생성 불가
+  if (targetRole === 'SUPER_ADMIN' || targetRole === 'OWNER') return false;
+  // ADMIN_HR/ADMIN 생성은 SUPER_ADMIN 전용
   if (targetRole === 'ADMIN_HR' || targetRole === 'ADMIN') {
     return actorRole === 'SUPER_ADMIN' || actorRole === 'OWNER';
   }
-  // 그 외: SUPER_ADMIN/OWNER는 모두 가능
+  // GUEST/PARTNER 생성: MANAGER 이상 가능
+  if (targetRole === 'GUEST' || targetRole === 'PARTNER' || targetRole === 'VIEWER') {
+    return ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER'].includes(actorRole);
+  }
+  // 내부 직원(USER/MEMBER) 생성: ADMIN_HR 이상만
+  if (targetRole === 'USER' || targetRole === 'MEMBER') {
+    return ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN'].includes(actorRole);
+  }
+  // 그 외 SUPER_ADMIN/OWNER는 모두 가능
   if (actorRole === 'SUPER_ADMIN' || actorRole === 'OWNER') return true;
-  // 자신보다 낮은 역할만 생성 가능
-  if (getRoleLevel(targetRole) >= getRoleLevel(actorRole)) return false;
-  return true;
+  return false;
 }
 
 export async function verifySiteAccess(userId: string, siteId: string) {

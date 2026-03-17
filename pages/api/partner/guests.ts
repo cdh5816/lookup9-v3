@@ -50,8 +50,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(201).json({ data: user });
       }
 
+      case 'DELETE': {
+        const { guestId } = req.body;
+        if (!guestId) return res.status(400).json({ error: { message: 'guestId required' } });
+
+        // 해당 팀의 GUEST인지 확인
+        const guestMember = await prisma.teamMember.findFirst({
+          where: { teamId: tm.teamId, userId: guestId, role: 'GUEST' },
+        });
+        if (!guestMember) return res.status(404).json({ error: { message: 'Guest not found' } });
+
+        await prisma.teamMember.deleteMany({ where: { teamId: tm.teamId, userId: guestId } });
+        return res.status(200).json({ data: { ok: true } });
+      }
+
       default:
-        res.setHeader('Allow', 'GET, POST');
+        res.setHeader('Allow', 'GET, POST, DELETE');
         return res.status(405).json({ error: { message: `Method ${req.method} Not Allowed` } });
     }
   } catch (error: any) {

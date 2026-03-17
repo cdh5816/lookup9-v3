@@ -331,7 +331,7 @@ const PartnerCompaniesPage = () => {
                           <Field label="사업자번호">
                             <input className="input input-bordered input-sm w-full" value={editForm.bizNo} onChange={e => setEditForm({ ...editForm, bizNo: e.target.value })} />
                           </Field>
-                          <Field label="담당자명">
+                          <Field label="대표자명">
                             <input className="input input-bordered input-sm w-full" value={editForm.contact} onChange={e => setEditForm({ ...editForm, contact: e.target.value })} />
                           </Field>
                           <Field label="연락처">
@@ -352,7 +352,7 @@ const PartnerCompaniesPage = () => {
                       {/* 기본 정보 (뷰) */}
                       {!isEditing && (company.contact || company.phone || company.email) && (
                         <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
-                          {company.contact && <span>담당자: <span className="text-gray-200">{company.contact}</span></span>}
+                          {company.contact && <span>대표자: <span className="text-gray-200">{company.contact}</span></span>}
                           {company.phone && <span>연락처: <span className="text-gray-200">{company.phone}</span></span>}
                           {company.email && <span>이메일: <span className="text-gray-200">{company.email}</span></span>}
                           {company.address && <span>주소: <span className="text-gray-200">{company.address}</span></span>}
@@ -427,7 +427,7 @@ const PartnerCompaniesPage = () => {
               <Field label="사업자등록번호">
                 <input className="input input-bordered w-full" placeholder="000-00-00000" value={form.bizNo} onChange={e => setForm({ ...form, bizNo: e.target.value })} />
               </Field>
-              <Field label="담당자명">
+              <Field label="대표자명">
                 <input className="input input-bordered w-full" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} />
               </Field>
               <Field label="연락처">

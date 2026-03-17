@@ -86,7 +86,7 @@ const CreateFromPdf = () => {
         });
         const json = await res.json();
 
-        if (!res.ok) throw new Error(json?.error?.message || '파싱 실패');
+        if (!res.ok) throw new Error(json?.error?.message || '스캔 실패');
 
         const data: ParsedData = json.data;
         setParsed(data);
@@ -94,7 +94,7 @@ const CreateFromPdf = () => {
         setForm({ ...data });
         setStep('preview');
       } catch (err: any) {
-        setParseError(err.message || '파싱 중 오류가 발생했습니다.');
+        setParseError(err.message || '스캔 중 오류가 발생했습니다.');
       } finally {
         setParsing(false);
       }
@@ -236,7 +236,7 @@ const CreateFromPdf = () => {
             <div className="rounded-lg border border-green-800/40 bg-green-950/20 px-4 py-3 flex items-start gap-3">
               <CheckCircleIcon className="h-5 w-5 text-green-400 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-green-300">파싱 완료</p>
+                <p className="text-sm font-semibold text-green-300">스캔 완료</p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   아래 내용을 확인하고 수정이 필요한 경우 직접 편집 후 현장을 생성하세요.
                   <span className="text-blue-400 ml-1">PDF는 서류 탭에 자동 저장됩니다.</span>
@@ -325,7 +325,7 @@ const CreateFromPdf = () => {
                       <option>조달청</option>
                     </select>
                     {form.inspectionAgency && (
-                      <p className="text-[10px] text-gray-500 mt-0.5">파싱: {form.inspectionAgency}</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">스캔값: {form.inspectionAgency}</p>
                     )}
                   </div>
                   <FieldRow label="검수기관" value={form.acceptanceAgency || ''}

@@ -138,79 +138,84 @@ const SiteDetail = () => {
       <div className="space-y-0">
 
         {/* ── 헤더 카드 ── */}
-        <div className={`rounded-xl border p-4 mb-3 ${openIssues.length > 0 ? 'border-red-800/50 bg-red-950/10' : 'border-gray-800 bg-gray-900/40'}`}>
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2 mb-1">
-                <span className={`h-2 w-2 rounded-full flex-shrink-0 ${STATUS_COLOR[site.status] || 'bg-gray-400'}`} />
-                <h2 className="text-lg font-bold tracking-tight">{site.name}</h2>
-                <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${STATUS_BADGE[site.status] || 'bg-gray-800 text-gray-400 border-gray-700'}`}>
-                  {STATUS_LABEL[site.status] ?? site.status}
-                </span>
-                <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
-                  {site.siteType || '납품설치도'}
-                </span>
-                {openIssues.length > 0 && (
-                  <span className="flex items-center gap-1 rounded-full bg-red-900/50 border border-red-800/40 px-2 py-0.5 text-xs font-semibold text-red-300">
-                    <ExclamationTriangleIcon className="h-3 w-3" />이슈 {openIssues.length}건
+        <div className={`rounded-2xl border mb-4 overflow-hidden ${openIssues.length > 0 ? 'border-red-700/40' : 'border-gray-700/50'}`}>
+
+          {/* 상단 컬러 스트라이프 */}
+          <div className={`h-1 w-full ${STATUS_COLOR[site.status] || 'bg-gray-600'}`} />
+
+          <div className="p-5 bg-gray-900/70">
+            {/* 현장명 + 상태 + 액션 */}
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                  <span className={`rounded-md border px-2.5 py-0.5 text-xs font-bold ${STATUS_BADGE[site.status] || 'bg-gray-800 text-gray-400 border-gray-700'}`}>
+                    {STATUS_LABEL[site.status] ?? site.status}
                   </span>
-                )}
+                  <span className="rounded-md border border-gray-600/60 bg-gray-800/60 px-2 py-0.5 text-xs text-gray-400">
+                    {site.siteType || '납품설치도'}
+                  </span>
+                  {openIssues.length > 0 && (
+                    <span className="flex items-center gap-1 rounded-md bg-red-900/60 border border-red-700/50 px-2 py-0.5 text-xs font-bold text-red-300">
+                      <ExclamationTriangleIcon className="h-3 w-3" />미결 이슈 {openIssues.length}건
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-xl font-extrabold tracking-tight text-white leading-tight">{site.name}</h2>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5">
+                  {site.client?.name && (
+                    <span className="text-sm font-semibold text-gray-300">{site.client.name}</span>
+                  )}
+                  {site.address && (
+                    <span className="text-sm text-gray-400">{site.address}</span>
+                  )}
+                  {site.contractNo && (
+                    <span className="font-mono text-xs text-gray-500 bg-gray-800/60 rounded px-1.5 py-0.5">{site.contractNo}</span>
+                  )}
+                  {site.installerName && (
+                    <span className="text-xs text-gray-400">🔧 {site.installerName}</span>
+                  )}
+                </div>
               </div>
-              <p className="text-sm text-gray-400 flex flex-wrap gap-2">
-                {site.client?.name && <span className="font-medium text-gray-300">{site.client.name}</span>}
-                {site.address && <span>{site.address}</span>}
-                {site.contractNo && <span className="text-gray-500 font-mono text-xs">{site.contractNo}</span>}
-              </p>
+              {canDelete && (
+                <button className="btn btn-ghost btn-xs text-red-400 hover:bg-red-950/30" onClick={handleDeleteSite}>삭제</button>
+              )}
             </div>
-            {canDelete && (
-              <button className="btn btn-ghost btn-xs text-red-400" onClick={handleDeleteSite}>삭제</button>
+
+            {/* 핵심 지표 (계약 이후) */}
+            {!isSaleStage && site.contractQuantity && (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 mt-1">
+                <MetricCard label="계약물량" value={`${fmtNum(site.contractQuantity)} m²`} />
+                <MetricCard label="계약금액" value={fmtMoney(site.contractAmount)} highlight />
+                <MetricCard
+                  label="공정률"
+                  value={`${progress.pct}%`}
+                  sub={`납품 ${fmtNum(progress.delivered)} / ${fmtNum(progress.contractQty)} m²`}
+                  progressPct={progress.pct}
+                />
+                <MetricCard
+                  label="납품기한"
+                  value={fmtDate(site.deliveryDeadline)}
+                  sub={dday ? (dday.overdue ? `D+${Math.abs(dday.diff)}일 초과` : `D-${dday.diff}일`) : undefined}
+                  subColor={dday?.overdue ? 'text-red-400 font-bold' : dday?.urgent ? 'text-orange-400 font-bold' : 'text-gray-400'}
+                />
+                <MetricCard
+                  label="하자만료"
+                  value={site.completionDate ? fmtDate(new Date(new Date(site.completionDate).setFullYear(new Date(site.completionDate).getFullYear() + (site.warrantyPeriod ?? 2)))) : '-'}
+                  sub={site.completionDate ? `준공 ${fmtDate(site.completionDate)}` : '준공일 미등록'}
+                />
+              </div>
             )}
           </div>
-
-          {/* 핵심 지표 (계약 이후) */}
-          {!isSaleStage && site.contractQuantity && (
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-              <MetricCard label="계약물량" value={`${fmtNum(site.contractQuantity)} m²`} />
-              <MetricCard label="계약금액" value={fmtMoney(site.contractAmount)} highlight />
-              <MetricCard
-                label="공정률"
-                value={`${progress.pct}%`}
-                sub={`${fmtNum(progress.delivered)} / ${fmtNum(progress.contractQty)} m²`}
-                progressPct={progress.pct}
-              />
-              <MetricCard
-                label="납품기한"
-                value={fmtDate(site.deliveryDeadline)}
-                sub={dday ? (dday.overdue ? `D+${Math.abs(dday.diff)}일 초과` : `D-${dday.diff}일`) : undefined}
-                subColor={dday?.overdue ? 'text-red-400' : dday?.urgent ? 'text-orange-400' : 'text-gray-500'}
-              />
-              <MetricCard
-                label="하자만료"
-                value={site.completionDate ? fmtDate(new Date(new Date(site.completionDate).setFullYear(new Date(site.completionDate).getFullYear() + (site.warrantyPeriod ?? 2)))) : '-'}
-                sub={site.completionDate ? `준공 ${fmtDate(site.completionDate)}` : undefined}
-              />
-            </div>
-          )}
-
-          {/* 공정률 바 */}
-          {!isSaleStage && site.contractQuantity && (
-            <div className="mt-3">
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
-                <div className={`h-full rounded-full transition-all duration-500 ${progress.pct >= 100 ? 'bg-blue-500' : 'bg-green-500'}`}
-                  style={{ width: `${progress.pct}%` }} />
-              </div>
-            </div>
-          )}
         </div>
 
         {/* ── 탭 바 ── */}
-        <div className="border-b border-gray-800">
+        <div className="border-b border-gray-700/60 mb-1">
           <div className="flex overflow-x-auto">
             {tabs.map((tab) => {
               const badge = tab.badge ? tab.badge(site) : 0;
               return (
                 <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                  className={`relative flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors
+                  className={`relative flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors
                     ${activeKey === tab.key ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-200'}`}>
                   {tab.label}
                   {badge > 0 && (
@@ -241,16 +246,16 @@ const SiteDetail = () => {
 const MetricCard = ({ label, value, sub, subColor, highlight, progressPct }: {
   label: string; value: string; sub?: string; subColor?: string; highlight?: boolean; progressPct?: number;
 }) => (
-  <div className="rounded-lg border border-gray-800 bg-black/30 px-3 py-2.5">
-    <p className="text-[10px] text-gray-500 mb-1">{label}</p>
-    <p className={`text-sm font-semibold ${highlight ? 'text-blue-300' : 'text-white'}`}>{value}</p>
+  <div className={`rounded-lg border px-3 py-2.5 ${highlight ? 'border-blue-800/60 bg-blue-950/30' : 'border-gray-700/60 bg-gray-900/60'}`}>
+    <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wide">{label}</p>
+    <p className={`text-sm font-bold leading-tight ${highlight ? 'text-blue-300' : 'text-white'}`}>{value}</p>
     {progressPct !== undefined && (
-      <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-gray-800">
-        <div className={`h-full rounded-full ${progressPct >= 100 ? 'bg-blue-500' : progressPct >= 60 ? 'bg-green-500' : 'bg-blue-500'}`}
+      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-700">
+        <div className={`h-full rounded-full transition-all ${progressPct >= 100 ? 'bg-blue-500' : progressPct >= 70 ? 'bg-green-500' : progressPct >= 30 ? 'bg-yellow-500' : 'bg-orange-500'}`}
           style={{ width: `${progressPct}%` }} />
       </div>
     )}
-    {sub && <p className={`text-[10px] mt-0.5 ${subColor || 'text-gray-500'}`}>{sub}</p>}
+    {sub && <p className={`text-[10px] mt-0.5 font-medium ${subColor || 'text-gray-400'}`}>{sub}</p>}
   </div>
 );
 
@@ -258,9 +263,9 @@ const MetricCard = ({ label, value, sub, subColor, highlight, progressPct }: {
 const SectionCard = ({ title, children, accent, action }: {
   title: string; children: React.ReactNode; accent?: string; action?: React.ReactNode;
 }) => (
-  <div className={`rounded-xl border bg-gray-900/40 p-4 space-y-3 ${accent === 'blue' ? 'border-blue-900/40' : 'border-gray-800'}`}>
-    <div className="flex items-center justify-between">
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{title}</p>
+  <div className={`rounded-xl border p-5 space-y-4 ${accent === 'blue' ? 'border-blue-800/50 bg-blue-950/10' : 'border-gray-700/50 bg-gray-900/50'}`}>
+    <div className="flex items-center justify-between border-b border-gray-700/40 pb-2.5">
+      <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">{title}</p>
       {action}
     </div>
     {children}
@@ -272,9 +277,9 @@ const InfoRow = ({ label, value, mono, highlight }: {
   label: string; value?: string | null; mono?: boolean; highlight?: boolean;
 }) => (
   <div>
-    <p className="text-[11px] text-gray-500 mb-0.5">{label}</p>
-    <p className={`text-sm ${mono ? 'font-mono text-xs tracking-tight' : ''} ${highlight ? 'text-blue-300 font-semibold' : 'text-gray-200'}`}>
-      {value || '-'}
+    <p className="text-[10px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wide">{label}</p>
+    <p className={`text-sm leading-snug ${mono ? 'font-mono text-xs tracking-tight' : ''} ${highlight ? 'text-blue-300 font-bold' : 'text-gray-100'}`}>
+      {value || <span className="text-gray-600">-</span>}
     </p>
   </div>
 );
@@ -468,24 +473,31 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
         ) : null}
       >
         {editSection !== 'inspection' ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <InfoRow label="검사기관 유형" value={site.inspectionAgency || '미정'} />
-            {site.inspectionAgency === '전문검사기관' && (
-              <InfoRow label="검사기관명" value={site.inspectionBody} />
-            )}
-            <InfoRow label="검수기관" value={site.acceptanceAgency} />
-            <InfoRow label="수요기관 담당부서" value={site.clientDept} />
-            <InfoRow label="수요기관 담당자" value={site.clientManager} />
-            <InfoRow label="담당자 전화" value={site.clientManagerPhone} />
-            <div>
-              <p className="text-[11px] text-gray-500 mb-0.5">검사 완료</p>
-              <div className="flex items-center gap-1.5">
-                <span className={`badge badge-xs ${site.inspectionDone ? 'badge-success' : 'badge-ghost'}`}>
-                  {site.inspectionDone ? '완료' : '미완료'}
-                </span>
-                {site.inspectionDone && site.inspectionDoneAt && (
-                  <span className="text-xs text-gray-500">{fmtDate(site.inspectionDoneAt)}</span>
-                )}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <InfoRow label="검사기관 유형" value={site.inspectionAgencyType || site.inspectionAgency || '미정'} />
+              {(site.inspectionAgencyType === '전문검사기관' || site.inspectionAgency === '전문검사기관') && (
+                <InfoRow label="검사기관명" value={site.inspectionBody} />
+              )}
+              <InfoRow label="검수기관" value={site.acceptanceAgency} />
+              <div>
+                <p className="text-[10px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wide">검사 완료</p>
+                <div className="flex items-center gap-1.5">
+                  <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-bold ${site.inspectionDone ? 'bg-green-900/40 text-green-300 border border-green-700/50' : 'bg-gray-800 text-gray-500 border border-gray-700'}`}>
+                    {site.inspectionDone ? '✓ 완료' : '미완료'}
+                  </span>
+                  {site.inspectionDone && site.inspectionDoneAt && (
+                    <span className="text-xs text-gray-400">{fmtDate(site.inspectionDoneAt)}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-gray-700/40 pt-3">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">수요기관 담당자</p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <InfoRow label="담당부서" value={site.clientDept} />
+                <InfoRow label="담당자명" value={site.clientManager} />
+                <InfoRow label="연락처" value={site.clientManagerPhone} />
               </div>
             </div>
           </div>
@@ -548,9 +560,9 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
         )}
       </SectionCard>
 
-      {/* 시공 협력사 */}
+      {/* 시공 협력사 (설치업체) */}
       <SectionCard
-        title="시공 협력사"
+        title="시공 협력사 (설치업체)"
         action={canManage && editSection !== 'installer' ? (
           <button className="btn btn-ghost btn-xs gap-1" onClick={() => startEdit('installer')}>
             <PencilIcon className="h-3 w-3" />수정
@@ -559,32 +571,59 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
       >
         {editSection !== 'installer' ? (
           site.installerName ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <InfoRow label="협력사명" value={site.installerName} />
-              <InfoRow label="담당자" value={site.installerContact} />
-              <InfoRow label="연락처" value={site.installerPhone} />
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <InfoRow label="협력사명" value={site.installerName} />
+                <InfoRow label="현장 담당자" value={site.installerContact} />
+                <InfoRow label="연락처" value={site.installerPhone} />
+              </div>
+              <div className="rounded-lg border border-blue-800/30 bg-blue-950/20 px-3 py-2 mt-1">
+                <p className="text-[11px] text-blue-300">
+                  💡 이 협력사로 등록된 PARTNER 계정은 이 현장에 자동 접근됩니다.
+                </p>
+              </div>
             </div>
           ) : (
-            <p className="text-sm text-gray-500">등록된 협력사 정보가 없습니다.</p>
+            <div className="flex flex-col items-center justify-center py-4 gap-2">
+              <p className="text-sm text-gray-500">등록된 협력사 정보가 없습니다.</p>
+              <p className="text-xs text-gray-600">설치업체 정보를 등록하면 해당 협력사 계정이 현장에 접근할 수 있습니다.</p>
+            </div>
           )
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div>
-              <label className="block text-[11px] text-gray-400 mb-1">협력사명</label>
-              <input type="text" className="input input-bordered input-sm w-full"
-                value={form.installerName} onChange={e => setForm({ ...form, installerName: e.target.value })} />
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1 font-semibold">협력사명 <span className="text-gray-600">(설치업체)</span></label>
+                <input type="text" className="input input-bordered input-sm w-full"
+                  placeholder="예: (주)덕인설치"
+                  value={form.installerName} onChange={e => setForm({ ...form, installerName: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1 font-semibold">현장 담당자</label>
+                <input type="text" className="input input-bordered input-sm w-full"
+                  placeholder="예: 홍길동 소장"
+                  value={form.installerContact} onChange={e => setForm({ ...form, installerContact: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1 font-semibold">연락처</label>
+                <input type="text" className="input input-bordered input-sm w-full"
+                  placeholder="010-0000-0000"
+                  value={form.installerPhone} onChange={e => setForm({ ...form, installerPhone: e.target.value })} />
+              </div>
             </div>
-            <div>
-              <label className="block text-[11px] text-gray-400 mb-1">담당자</label>
-              <input type="text" className="input input-bordered input-sm w-full"
-                value={form.installerContact} onChange={e => setForm({ ...form, installerContact: e.target.value })} />
+            <div className="rounded-lg border border-gray-700/50 bg-gray-800/40 px-3 py-2">
+              <p className="text-[11px] text-gray-400">
+                ℹ️ 계정 관리 메뉴에서 생성한 <span className="text-blue-300 font-semibold">PARTNER 계정의 company명</span>이 여기 협력사명과 일치하면 해당 계정이 이 현장을 볼 수 있습니다.
+              </p>
             </div>
-            <div>
-              <label className="block text-[11px] text-gray-400 mb-1">연락처</label>
-              <input type="text" className="input input-bordered input-sm w-full"
-                value={form.installerPhone} onChange={e => setForm({ ...form, installerPhone: e.target.value })} />
+            <div className="flex justify-end border-t border-gray-700/40 pt-3">
+              <div className="flex gap-2">
+                <button className="btn btn-ghost btn-sm" onClick={() => setEditSection(null)}>취소</button>
+                <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+                  {saving ? <span className="loading loading-spinner loading-xs" /> : '저장'}
+                </button>
+              </div>
             </div>
-            <div className="col-span-full"><SaveCancelBar /></div>
           </div>
         )}
       </SectionCard>

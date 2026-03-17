@@ -364,8 +364,10 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
 
               {filter === 'partner' && (
                 <Field label="회사명" className="col-span-2">
-                  <input className="input input-bordered w-full" placeholder="소속 협력업체명"
-                    value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} />
+                  <CompanySearchInput
+                    value={form.company}
+                    onChange={v => setForm({ ...form, company: v })}
+                  />
                 </Field>
               )}
 
@@ -422,8 +424,18 @@ const PartnerPanel = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/partner-companies');
-    if (res.ok) { const j = await res.json(); setCompanies(j.data || []); setSites(j.meta?.sites || []); }
+    try {
+      const res = await fetch('/api/partner-companies');
+      const j = await res.json();
+      if (res.ok) {
+        setCompanies(j.data || []);
+        setSites(j.meta?.sites || []);
+      } else {
+        setError(j?.error?.message || '목록을 불러오지 못했습니다.');
+      }
+    } catch {
+      setError('서버 연결 오류');
+    }
     setLoading(false);
   }, []);
 
@@ -728,6 +740,56 @@ const Alert = ({ type, msg, onClose }: { type: 'error'|'success'; msg: string; o
     <button onClick={onClose}><XMarkIcon className="h-4 w-4" /></button>
   </div>
 );
+
+// ── 협력업체명 검색 입력 컴포넌트 ──────────────────────
+const CompanySearchInput = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/partner-companies')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(j => setCompanies(j.data || []));
+  }, []);
+
+  const filtered = value.trim()
+    ? companies.filter(c => c.name.includes(value))
+    : companies;
+
+  return (
+    <div className="relative">
+      <input
+        className="input input-bordered w-full"
+        placeholder="업체명 검색 또는 직접 입력"
+        value={value}
+        onChange={e => { onChange(e.target.value); setShow(true); }}
+        onFocus={() => setShow(true)}
+        onBlur={() => setTimeout(() => setShow(false), 150)}
+        autoComplete="off"
+      />
+      {show && filtered.length > 0 && (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-700 bg-gray-900 shadow-2xl">
+          {filtered.map((co: any) => (
+            <button
+              key={co.id}
+              type="button"
+              className="w-full text-left px-3 py-2.5 hover:bg-gray-800 transition-colors border-b border-gray-700/40 last:border-0"
+              onMouseDown={() => { onChange(co.name); setShow(false); }}
+            >
+              <p className="text-sm font-semibold text-white">{co.name}</p>
+              {co.contact && <p className="text-[11px] text-gray-400">담당: {co.contact}{co.phone ? ` · ${co.phone}` : ''}</p>}
+            </button>
+          ))}
+        </div>
+      )}
+      {show && value.trim() && filtered.length === 0 && (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-xs text-gray-500 shadow-2xl">
+          등록된 업체 없음 — 직접 입력됩니다
+        </div>
+      )}
+    </div>
+  );
+};
 
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   return { props: { ...(await serverSideTranslations(context.locale ?? 'ko', ['common'])) } };

@@ -306,9 +306,15 @@ model Site {
   inspectionDoneAt  DateTime?                    // 검사 완료일
 
   // ── 영업 정보 (SALES_PIPELINE 단계) ──
-  salesStage        String?                      // 접촉중 | 제안 | 협의중 | 수주확정 | 실패
-  salesNote         String?  @db.Text            // 영업 활동 메모
+  salesStage        String?                      // 영업접촉 | 제안 | 협의중 | 수주확정 | 실패
+  salesNote         String?  @db.Text            // 비고 / 영업활동 메모
   estimatedAmount   Decimal? @db.Decimal(15, 0)  // 예상 계약금액
+  designOffice      String?                      // 설계사무소
+  salesPm           String?                      // 담당 PM
+  materialSpec      String?                      // 자재규모 및 사양
+  sectorType        String?                      // 구분: 관(공공) | 민(민간)
+  salesOwner        String?                      // 영업담당자
+  clientContact     String?                      // 발주처 담당자 (전화/이메일 등)
 
   // ── 수요기관 담당자 ──
   clientDept        String?                      // 담당부서 (예: 인구정책과)
@@ -820,7 +826,7 @@ model PartnerSiteAssign {
   id               String   @id @default(uuid())
   partnerCompanyId String
   siteId           String
-  createdAt        DateTime? @default(now())
+  createdAt        DateTime @default(now())
 
   company PartnerCompany @relation(fields: [partnerCompanyId], references: [id], onDelete: Cascade)
   site    Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)

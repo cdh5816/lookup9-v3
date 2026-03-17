@@ -73,43 +73,8 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     ];
   }
 
-  // PARTNER: SiteAssignment(직접배정) OR PartnerSiteAssign(업체배정) 둘 다 체크
   if (['PARTNER', 'GUEST', 'VIEWER'].includes(tm.role)) {
-    if (tm.role === 'PARTNER') {
-      // 내 userId가 속한 PartnerMember → PartnerSiteAssign 의 siteId 목록 조회
-      const partnerMember = await prisma.partnerMember.findFirst({
-        where: { userId: tm.userId },
-        select: { partnerCompanyId: true },
-      });
-
-      let partnerSiteIds: string[] = [];
-      if (partnerMember) {
-        const assigns = await prisma.partnerSiteAssign.findMany({
-          where: { partnerCompanyId: partnerMember.partnerCompanyId },
-          select: { siteId: true },
-        });
-        partnerSiteIds = assigns.map((a) => a.siteId);
-      }
-
-      // SiteAssignment 직접 배정된 siteId 목록
-      const directAssigns = await prisma.siteAssignment.findMany({
-        where: { userId: tm.userId },
-        select: { siteId: true },
-      });
-      const directSiteIds = directAssigns.map((a) => a.siteId);
-
-      // 합집합
-      const allSiteIds = Array.from(new Set([...partnerSiteIds, ...directSiteIds]));
-
-      if (allSiteIds.length === 0) {
-        return res.status(200).json({ data: [] });
-      }
-
-      where.id = { in: allSiteIds };
-    } else {
-      // GUEST, VIEWER: 기존 방식 (SiteAssignment만)
-      where.assignments = { some: { userId: tm.userId } };
-    }
+    where.assignments = { some: { userId: tm.userId } };
   }
 
   const sites = await prisma.site.findMany({
@@ -136,6 +101,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
   const {
     name, address, clientId, clientName, status, description,
     siteType, salesStage, estimatedAmount, salesNote,
+    designOffice, salesPm, materialSpec, sectorType, salesOwner, clientContact,
     clientDept, clientManager, clientManagerPhone,
     contractNo, procurementNo, contractDate, contractAmount,
     contractQuantity, quantity, unitPrice, specification, productName,
@@ -167,6 +133,12 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
         salesStage: salesStage || null,
         estimatedAmount: estimatedAmount ? Number(String(estimatedAmount).replace(/,/g, '')) : null,
         salesNote: salesNote || null,
+        designOffice: designOffice || null,
+        salesPm: salesPm || null,
+        materialSpec: materialSpec || null,
+        sectorType: sectorType || null,
+        salesOwner: salesOwner || null,
+        clientContact: clientContact || null,
         description: description || null,
         clientDept: clientDept || null,
         clientManager: clientManager || null,

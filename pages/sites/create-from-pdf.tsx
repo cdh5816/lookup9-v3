@@ -10,6 +10,17 @@ import {
 } from '@heroicons/react/24/outline';
 
 // ── 파싱 결과 타입 ──────────────────────────────────
+interface ProductItem {
+  seq: string;
+  productName: string;
+  spec: string;
+  unit: string;
+  unitPrice?: number;
+  contractQuantity?: number;
+  amount?: number;
+  deliveryDeadline?: string;
+}
+
 interface ParsedData {
   contractNo?: string;
   procurementNo?: string;
@@ -27,6 +38,7 @@ interface ParsedData {
   inspectionAgencyType?: string;
   inspectionBody?: string;
   acceptanceAgency?: string;
+  productItems?: ProductItem[];
 }
 
 const fmtNum = (v: any) => {
@@ -276,6 +288,54 @@ const CreateFromPdf = () => {
                     onChange={v => setForm({ ...form, unitPrice: v ? Number(v) : undefined })} />
                 </div>
               </div>
+
+              {/* 복수 품목 테이블 (productItems가 있을 때만 표시) */}
+              {form.productItems && form.productItems.length > 1 && (
+                <div>
+                  <p className="text-xs text-gray-400 font-semibold mb-2 uppercase tracking-wider">
+                    품목 상세 <span className="text-blue-400 font-normal normal-case ml-1">({form.productItems.length}건 · 계약물량은 합산값)</span>
+                  </p>
+                  <div className="overflow-x-auto rounded-lg border border-gray-800">
+                    <table className="table table-xs w-full text-xs">
+                      <thead className="bg-gray-900/60">
+                        <tr>
+                          <th className="w-8 text-gray-500">순</th>
+                          <th className="text-gray-500">품명</th>
+                          <th className="text-gray-500">규격</th>
+                          <th className="text-right text-gray-500">단가</th>
+                          <th className="text-right text-gray-500">물량</th>
+                          <th className="text-right text-gray-500">금액</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {form.productItems.map((item: any) => (
+                          <tr key={item.seq} className="border-t border-gray-800/60">
+                            <td className="text-gray-600 text-center">{item.seq}</td>
+                            <td className="text-gray-300">{item.productName || '-'}</td>
+                            <td className="text-gray-500 max-w-[180px] truncate" title={item.spec}>{item.spec || '-'}</td>
+                            <td className="text-right tabular-nums text-gray-400">{item.unitPrice ? Number(item.unitPrice).toLocaleString() : '-'}</td>
+                            <td className="text-right tabular-nums font-semibold text-blue-300">
+                              {item.contractQuantity ? Number(item.contractQuantity).toLocaleString() : '-'} {item.unit}
+                            </td>
+                            <td className="text-right tabular-nums text-gray-400">
+                              {item.amount ? Number(item.amount).toLocaleString() : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="border-t border-gray-700 bg-gray-900/40 font-semibold">
+                          <td colSpan={4} className="text-right text-gray-500 text-[10px]">합계</td>
+                          <td className="text-right tabular-nums text-blue-300">
+                            {form.productItems.reduce((s: number, i: any) => s + Number(i.contractQuantity || 0), 0).toLocaleString()} ㎡
+                          </td>
+                          <td className="text-right tabular-nums text-gray-400">
+                            {form.productItems.reduce((s: number, i: any) => s + Number(i.amount || 0), 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* 계약금액 강조 + 직접 수정 가능 */}
               <div className="rounded-lg border border-blue-900/40 bg-blue-950/20 px-3 py-2.5 space-y-2">

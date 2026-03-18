@@ -1808,6 +1808,57 @@ const PdfParseModal = ({ siteId, siteName, isOverwrite, convertToActive, onClose
                 </div>
               </div>
 
+              {/* 복수 품목 상세 */}
+              {form.productItems && form.productItems.length > 1 && (
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">
+                    품목 상세 ({form.productItems.length}건)
+                  </p>
+                  <div className="overflow-x-auto rounded-lg border border-gray-800 text-xs">
+                    <table className="table table-xs w-full">
+                      <thead className="bg-gray-900/60 text-gray-500">
+                        <tr>
+                          <th className="w-6">순</th>
+                          <th>품명 / 규격</th>
+                          <th className="text-right">단가</th>
+                          <th className="text-right text-blue-400">물량(㎡)</th>
+                          <th className="text-right">금액</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {form.productItems.map((item: any) => (
+                          <tr key={item.seq} className="border-t border-gray-800/60">
+                            <td className="text-gray-600 text-center">{item.seq}</td>
+                            <td>
+                              <p className="text-gray-300">{item.productName}</p>
+                              <p className="text-gray-600 text-[10px] break-all">{item.spec}</p>
+                            </td>
+                            <td className="text-right tabular-nums text-gray-400">
+                              {item.unitPrice ? Number(item.unitPrice).toLocaleString() : '-'}
+                            </td>
+                            <td className="text-right tabular-nums font-bold text-blue-300">
+                              {item.contractQuantity ? Number(item.contractQuantity).toLocaleString() : '-'}
+                            </td>
+                            <td className="text-right tabular-nums text-gray-400">
+                              {item.amount ? Number(item.amount).toLocaleString() : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="border-t border-gray-700 bg-gray-900/40 font-semibold">
+                          <td colSpan={3} className="text-right text-gray-600 text-[10px]">합계</td>
+                          <td className="text-right tabular-nums text-blue-300">
+                            {form.productItems.reduce((s: number, i: any) => s + Number(i.contractQuantity || 0), 0).toLocaleString()}
+                          </td>
+                          <td className="text-right tabular-nums text-gray-400">
+                            {form.productItems.reduce((s: number, i: any) => s + Number(i.amount || 0), 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               {/* 납품기한 직접 수정 (자주 바뀌는 필드) */}
               <div className="grid grid-cols-2 gap-2">
                 <div>

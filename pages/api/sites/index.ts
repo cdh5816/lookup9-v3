@@ -44,8 +44,12 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'FAILED'] };
   } else if (status && status !== 'all') {
     where.status = normalizeStatus(status as string);
+  } else if (includeCompleted === 'true') {
+    // 완료/하자 포함 전체 (FAILED 제외)
+    where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] };
   } else {
-    where.status = { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] };
+    // 기본: 영업중+수주확정+진행중 (활성 현장 전부)
+    where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] };
   }
 
   if (search) {

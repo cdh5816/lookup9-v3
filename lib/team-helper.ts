@@ -81,6 +81,10 @@ export function canAssignRole(actorRole: string, targetRole: string): boolean {
   if (targetRole === 'GUEST' || targetRole === 'PARTNER' || targetRole === 'VIEWER') {
     return ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER'].includes(actorRole);
   }
+  // MANAGER 생성: ADMIN_HR 이상만
+  if (targetRole === 'MANAGER') {
+    return ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN'].includes(actorRole);
+  }
   // 내부 직원(USER/MEMBER) 생성: ADMIN_HR 이상만
   if (targetRole === 'USER' || targetRole === 'MEMBER') {
     return ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN'].includes(actorRole);

@@ -240,11 +240,7 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
               <tr>
                 <th className="px-4 py-3 text-left">이름</th>
                 <th className="px-4 py-3 text-left">아이디</th>
-                {filter === 'partner' ? (
-                  <th className="px-4 py-3 text-left hidden sm:table-cell">소속 업체</th>
-                ) : (
-                  <th className="px-4 py-3 text-left hidden sm:table-cell">부서 · 직책</th>
-                )}
+                <th className="px-4 py-3 text-left hidden sm:table-cell">부서 · 직책</th>
                 <th className="px-4 py-3 text-left">권한</th>
                 <th className="px-4 py-3 text-left hidden md:table-cell">배정 현장</th>
                 <th className="px-4 py-3 text-right">관리</th>
@@ -265,23 +261,10 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
                       {user.phone && <div className="text-xs text-gray-500 font-normal">{user.phone}</div>}
                     </td>
                     <td className="px-4 py-3 text-gray-400 font-mono text-xs">{user.username || user.email}</td>
-                    {filter === 'partner' ? (
-                      <td className="px-4 py-3 hidden sm:table-cell">
-                        {(user as any).partnerCompanyName ? (
-                          <span className="inline-block rounded border border-purple-800/40 bg-purple-900/20 px-2 py-0.5 text-xs text-purple-300 font-medium">
-                            {(user as any).partnerCompanyName}
-                          </span>
-                        ) : (
-                          <span className="text-yellow-600 text-xs">⚠ 업체 미지정 — 협력업체 탭에서 소속 업체에 등록하세요</span>
-                        )}
-                        {user.position && <div className="text-[11px] text-gray-500 mt-0.5">{user.position}</div>}
-                      </td>
-                    ) : (
-                      <td className="px-4 py-3 hidden sm:table-cell text-gray-300">
-                        {user.department || '-'}
-                        {user.position && <span className="text-gray-500 ml-1">· {user.position}</span>}
-                      </td>
-                    )}
+                    <td className="px-4 py-3 hidden sm:table-cell text-gray-300">
+                      {user.department || '-'}
+                      {user.position && <span className="text-gray-500 ml-1">· {user.position}</span>}
+                    </td>
                     <td className="px-4 py-3">
                       <span className={`inline-block rounded border px-2 py-0.5 text-[11px] font-bold ${ROLE_BADGE[role] || ROLE_BADGE.USER}`}>
                         {ROLE_LABEL[role] || role}
@@ -337,9 +320,8 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
             {filter === 'partner' && (
               <div className="mb-4 rounded-lg border border-blue-800/40 bg-blue-950/20 px-3 py-2.5">
                 <p className="text-xs text-blue-300">
-                  아래 <strong>회사명</strong>에 협력업체명을 입력하면 자동으로 소속 업체에 연결됩니다.<br />
-                  등록되지 않은 업체명이면 새 업체로 자동 생성됩니다.<br />
-                  현장 배정은 <strong>현장 상세 → 시공업체 등록</strong>으로 처리됩니다.
+                  계정 생성 후 <strong>협력업체 탭</strong>에서 해당 업체에 등록하세요.
+                  업체에 현장을 배정하면 소속 계정이 자동으로 해당 현장에 접근합니다.
                 </p>
               </div>
             )}
@@ -421,6 +403,7 @@ const PartnerPanel = () => {
   const [sites, setSites] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showSiteAssign, setShowSiteAssign] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -524,7 +507,7 @@ const PartnerPanel = () => {
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-400">
-          현장 상세 → 시공업체 등록 시 소속 계정 전원이 해당 현장에 자동 배정됩니다.
+          업체 등록 후 현장을 배정하면 소속 계정이 해당 현장에 자동 접근합니다.
         </p>
         <button className="btn btn-primary btn-sm gap-1.5" onClick={() => { setShowCreate(true); setError(''); }}>
           <PlusIcon className="h-4 w-4" />업체 등록
@@ -584,6 +567,7 @@ const PartnerPanel = () => {
                       </>
                     ) : (
                       <>
+                        <button className="btn btn-ghost btn-xs text-blue-400" onClick={() => { setShowSiteAssign(showSiteAssign === co.id ? null : co.id); setExpandedId(co.id); }}>현장배정</button>
                         <button className="btn btn-ghost btn-xs gap-1" onClick={() => { setShowMember(co.id); setMForm({ name:'',username:'',password:'',position:'',phone:'' }); setError(''); }}>
                           <UserPlusIcon className="h-3.5 w-3.5" />계정추가
                         </button>
@@ -598,7 +582,28 @@ const PartnerPanel = () => {
                   </div>
                 </div>
 
-                {/* 현장 배정은 현장 상세 → 시공업체 등록으로 처리 */}
+                {/* 현장 배정 패널 */}
+                {showSiteAssign === co.id && (
+                  <div className="border-t border-gray-700/50 bg-blue-950/10 px-4 py-3">
+                    <p className="text-xs font-bold text-blue-300 mb-2">현장 배정 — 체크하면 소속 계정 전체가 해당 현장에 접근</p>
+                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                      {sites.map((s: any) => {
+                        const assigned = siteAssigned.includes(s.id);
+                        return (
+                          <label key={s.id} className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 cursor-pointer transition ${assigned ? 'border-blue-700/50 bg-blue-950/20' : 'border-gray-700/40 hover:border-gray-600'}`}>
+                            <input type="checkbox" className="checkbox checkbox-sm checkbox-primary" checked={assigned}
+                              onChange={() => handleToggleSite(co.id, s.id, assigned)} />
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium truncate">{s.name}</p>
+                              <p className="text-[10px] text-gray-500">{STATUS_LABEL[s.status] || s.status}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <button className="btn btn-ghost btn-xs mt-2" onClick={() => setShowSiteAssign(null)}>닫기</button>
+                  </div>
+                )}
 
                 {/* 소속 계정 (펼침) */}
                 {expanded && (
@@ -625,40 +630,6 @@ const PartnerPanel = () => {
                         {co.email && <span>이메일: <span className="text-gray-200">{co.email}</span></span>}
                       </div>
                     )}
-
-                    {/* 배정된 현장 목록 (읽기 전용 — 변경은 현장 상세에서) */}
-                    <div className="mb-4">
-                      <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">
-                        배정된 현장 ({co.sites?.length ?? 0}건)
-                      </p>
-                      {!co.sites?.length ? (
-                        <p className="text-xs text-gray-600 py-1">
-                          배정된 현장이 없습니다.
-                          <span className="ml-1 text-gray-700">현장 상세 → 시공업체 등록으로 배정하세요.</span>
-                        </p>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                          {co.sites.map((sa: any) => (
-                            <span
-                              key={sa.siteId}
-                              className="inline-flex items-center gap-1 rounded-full border border-blue-800/40 bg-blue-950/20 px-2.5 py-1 text-[11px] text-blue-300"
-                            >
-                              <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
-                                sa.site?.status === 'CONTRACT_ACTIVE' ? 'bg-green-400' :
-                                sa.site?.status === 'COMPLETED' ? 'bg-blue-400' :
-                                sa.site?.status === 'WARRANTY' ? 'bg-purple-400' : 'bg-gray-500'
-                              }`} />
-                              {sa.site?.name || sa.siteId}
-                              <span className="text-[10px] text-gray-500">
-                                {sa.site?.status === 'CONTRACT_ACTIVE' ? '진행중' :
-                                 sa.site?.status === 'COMPLETED' ? '준공완료' :
-                                 sa.site?.status === 'WARRANTY' ? '하자기간' : ''}
-                              </span>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
 
                     <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">소속 계정 ({co.members?.length ?? 0}명)</p>
                     {!co.members?.length ? (

@@ -175,7 +175,7 @@ function ProductionOrderTable({
       }),
     });
     setForm({ quantity: '', orderDate: '', supplyDate: '', notes: '' });
-    setShowForm(false); setSubmitting(false); onMutate();
+    setShowForm(false); setSubmitting(false); onMutate(); onSiteMutate();
   };
 
   const handleEdit = async (orderId: string) => {
@@ -189,7 +189,7 @@ function ProductionOrderTable({
         notes: editForm.notes || null,
       }),
     });
-    setEditId(null); onMutate();
+    setEditId(null); onMutate(); onSiteMutate();
   };
 
   const handleDelete = async (orderId: string) => {
@@ -198,7 +198,7 @@ function ProductionOrderTable({
       method: 'DELETE', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId }),
     });
-    onMutate();
+    onMutate(); onSiteMutate();
   };
 
   const startEdit = (o: any) => {

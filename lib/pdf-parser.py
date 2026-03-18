@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys, json, re, subprocess, unicodedata, traceback
 
 def install(pkg):
@@ -9,36 +10,51 @@ except ImportError:
     install("pdfplumber")
     import pdfplumber
 
-def N(s):
-    if not s: return ""
-    s = unicodedata.normalize("NFKC", str(s))
-    return re.sub(r"[\s\u3000]+", " ", s).strip()
 
-def num(s):
+# ── 유틸 ──────────────────────────────────────────────────────────────────────
+
+def N(s):
+    """NFKC 정규화 + 연속공백 → 단일공백"""
+    if not s: return ""
+    return re.sub(r"[\s\u3000]+", " ", unicodedata.normalize("NFKC", str(s))).strip()
+
+def strip_sp(s):
+    """공백 완전 제거 (패턴매칭용)"""
+    return re.sub(r"\s+", "", N(s))
+
+def to_int(s):
     if not s: return None
-    v = re.sub(r"[^\d.]", "", N(str(s)))
-    return v if v else None
+    v = re.sub(r"[^\d]", "", str(s))
+    return int(v) if v else None
+
+def to_float(s):
+    if not s: return None
+    v = re.sub(r"[^\d.]", "", str(s))
+    try: return float(v)
+    except: return None
 
 def parse_date(s):
     if not s: return None
-    ns = [x for x in re.findall(r"\d+", str(s)) if len(x) >= 2]
-    if len(ns) >= 3 and len(ns[0]) == 4:
-        return f"{ns[0]}-{ns[1].zfill(2)}-{ns[2].zfill(2)}"
+    nums = [x for x in re.findall(r"\d+", str(s)) if len(x) >= 2]
+    if len(nums) >= 3 and len(nums[0]) == 4:
+        return f"{nums[0]}-{nums[1].zfill(2)}-{nums[2].zfill(2)}"
     return None
 
-def get_texts(pdf):
-    results = []
-    for page in pdf.pages:
+
+# ── PDF 원문/테이블 추출 ───────────────────────────────────────────────────────
+
+def extract(pdf_path):
+    with pdfplumber.open(pdf_path) as pdf:
+        page = pdf.pages[0]
+        
+        # 텍스트: 여러 tolerance 시도해서 가장 긴 것 선택
         best = ""
-        for xt, yt in [(2,2),(4,4),(6,6),(3,5),(8,8)]:
+        for xt, yt in [(4,4),(2,2),(6,6),(3,5)]:
             t = page.extract_text(x_tolerance=xt, y_tolerance=yt) or ""
             if len(t) > len(best): best = t
-        results.append(N(best))
-    return results
-
-def get_tables(pdf):
-    tbls = []
-    for page in pdf.pages:
+        
+        # 테이블: 선 기반 우선
+        tables = []
         for cfg in [
             {"vertical_strategy":"lines","horizontal_strategy":"lines","snap_tolerance":4,"join_tolerance":4},
             {"vertical_strategy":"lines","horizontal_strategy":"lines","snap_tolerance":8,"join_tolerance":8},
@@ -46,320 +62,331 @@ def get_tables(pdf):
         ]:
             try:
                 t = page.extract_tables(cfg) or []
-                if t: tbls.extend(t); break
+                if t: tables = t; break
             except: pass
-    return tbls
+    
+    lines = [N(l) for l in best.split("\n") if N(l)]
+    return lines, tables
 
-def find_col(row, *keywords):
-    for ci, cell in enumerate(row or []):
-        cs = N(str(cell)) if cell else ""
-        if any(k in cs for k in keywords): return ci
+
+# ── 필드별 파서 ───────────────────────────────────────────────────────────────
+
+def get_name(lines):
+    """
+    사업명.
+    PDF 텍스트 줄 예:
+      "사 업 명 : 평택교육지원청청사이전사업직접구매자재(금속제패널)구매"
+      "사 업 명 : [면목유수지문화체육복합센터건립-금속제패널]"
+      "사 업 명 : *퇴계동국민체육센터건립공사(건축)관급자재(알루미늄내진패널)"
+    → "사 업 명 :" 뒤 텍스트를 공백 제거 없이 그대로 반환
+      (조달청 PDF는 이미 한 줄에 전체 사업명이 들어있음)
+    """
+    for line in lines:
+        m = re.search(r"사\s*업\s*명\s*[:\uff1a]\s*(.+)", line)
+        if m:
+            v = m.group(1).strip()
+            # 뒤에 붙은 순번헤더 잡음 제거
+            for sw in ["순 번", "순번", "옵션대", "납 품 기 한"]:
+                idx = v.find(sw)
+                if idx > 5: v = v[:idx].strip()
+            if len(v) > 4:
+                return v
     return None
 
-def parse(pdf_path):
+def get_client(lines):
+    """
+    수요기관.
+    PDF 텍스트 줄 예:
+      "수 요 기 관:경기도교육청경기도평택교육지원청 계 약 자 :덕인금속주식회사"
+      "수 요 기 관:서울특별시중랑구 계 약 자 :덕인금속주식회사"
+    → "수 요 기 관:" 와 "계 약 자" 사이만 추출
+    """
+    for line in lines:
+        # "수 요 기 관:" 뒤 ~ "계 약 자" 앞
+        m = re.search(r"수\s*요\s*기\s*관\s*[:\uff1a]([^:\n]+?)(?=계\s*약\s*자|$)", line)
+        if m:
+            v = strip_sp(m.group(1))
+            # 전화번호 붙은 경우 제거 (031-xxx 패턴)
+            v = re.sub(r"\d{2,3}-\d+.*$", "", v).strip()
+            if 2 <= len(v) <= 50:
+                return v
+    return None
+
+def get_req_no(lines):
+    """납품요구번호: R25TB01244526-00 또는 2324463746-01"""
+    for line in lines:
+        m = re.search(r"납\s*품\s*요\s*구\s*번\s*호\s*[:\uff1a]\s*([A-Z0-9][A-Z0-9\-]{5,25})", line)
+        if m: return m.group(1).strip()
+    return None
+
+def get_req_date(lines):
+    """납품요구일자"""
+    for line in lines:
+        m = re.search(r"납\s*품\s*요\s*구\s*일\s*자\s*[:\uff1a]\s*(\d{4}[./]\d{1,2}[./]\d{1,2})", line)
+        if m: return parse_date(m.group(1))
+    return None
+
+def get_contract_no(lines):
+    """계약번호: 계약번호 제002370053-10호"""
+    full = " ".join(lines)
+    m = re.search(r"계\s*약\s*번\s*호\s*제?\s*([\d]{6,}(?:-[\d]+)*)\s*호", full)
+    if m: return m.group(1).strip()
+    return None
+
+def get_warranty(lines):
+    """하자담보기간"""
+    full = " ".join(lines)
+    m = re.search(r"하\s*자\s*담\s*보\s*(?:책임)?\s*기\s*간\s*[:\uff1a비고]?\s*(\d+)\s*년", full)
+    return int(m.group(1)) if m else 2
+
+def get_amounts(tables):
+    """
+    합계금액 테이블 (Table[1]).
+    구조: 헤더행=[품대계, 수수료, 합계금액, 분할납품, 검사, 검수]
+          데이터행=[719218040, 3557540, 722775580, 가능, 검사기관명, 검수기관명]
+    """
     result = {}
-    with pdfplumber.open(pdf_path) as pdf:
-        texts = get_texts(pdf)
-        tables = get_tables(pdf)
-
-    full = " ".join(texts)
-    page1 = texts[0] if texts else ""
-
-    def SA(pat, src=None, flags=re.IGNORECASE):
-        return re.search(pat, src if src is not None else full, flags)
-
-    # 납품요구번호
-    for pat in [
-        r"납\s*품\s*요\s*구\s*번\s*호\s*[:\uff1a]?\s*([A-Z0-9][A-Z0-9\-]{6,28})",
-        r"(R\d{2}[A-Z]{2}\d{7,14}(?:-\d{1,3})?)",
-    ]:
-        m = SA(pat)
-        if m: result["contractNo"] = m.group(1).strip(); break
-
-    # 납품요구일자
-    for pat in [
-        r"납\s*품\s*요\s*구\s*일\s*자\s*[:\uff1a]?\s*(\d{4}[./년-]\s*\d{1,2}[./월-]\s*\d{1,2})",
-        r"요\s*구\s*일\s*자\s*[:\uff1a]?\s*(\d{4}[./-]\d{1,2}[./-]\d{1,2})",
-    ]:
-        m = SA(pat)
-        if m: result["contractDate"] = parse_date(m.group(1)); break
-
-    # 계약번호
-    m = SA(r"계\s*약\s*번\s*호\s*제?\s*([0-9]{6,}(?:-[0-9]+)*)\s*호")
-    if m: result["procurementNo"] = m.group(1).strip()
-
-    # 수요기관
-    m = SA(r"수\s*요\s*기\s*관\s*[:\uff1a]\s*([가-힣]{2,30}(?:교육청|시청|군청|구청|청|원|처|부|서|공단|공사|재단)?)")
-    if m:
-        v = re.sub(r"\s+", "", m.group(1))
-        if 2 <= len(v) <= 30: result["clientName"] = v
-
-    # 사업명 - 테이블 우선
-    name_found = False
-    for table in tables[:5]:
-        if not table: continue
-        for row in table:
-            if not row: continue
-            for ci, cell in enumerate(row):
-                cs = N(str(cell)) if cell else ""
-                if re.search(r"^사\s*업\s*명$", cs.strip()):
-                    for nc in row[ci+1:]:
-                        nv = N(str(nc)) if nc else ""
-                        if nv and len(nv) > 5:
-                            result["name"] = nv[:150]
-                            name_found = True
-                            break
-                if name_found: break
-            if name_found: break
-        if name_found: break
-
-    # 사업명 - 텍스트 패턴 (구매/공사 등 핵심 키워드로 끝나는 부분까지만)
-    if not name_found:
-        m = SA(r"사\s*업\s*명\s*[:\uff1a]\s*([\(（]?[가-힣A-Za-z0-9()\s\-_/·,]+?(?:구매|공사|납품|시설|설치|사업|시설물))(?=\s)")
-        if m:
-            v = N(m.group(1)).strip()
-            if 5 < len(v) < 150:
-                result["name"] = v[:150]
-                name_found = True
-
-    # 사업명 - 공사/구매 포함 긴 문장 fallback
-    if not name_found:
-        candidates = []
-        for pat in [
-            r"([\(（][가-힣]+[\)）][가-힣A-Za-z0-9()\s\-]{5,100}(?:공사|구매|납품|설치|구축|사업|시설))",
-            r"([가-힣A-Za-z0-9()\s]{5,80}(?:신축공사|리모델링|직접구매|자재구매|구매자재)[가-힣A-Za-z0-9()\s]{0,50})",
-        ]:
-            for m2 in re.finditer(pat, page1, re.IGNORECASE):
-                v = N(m2.group(1)).strip()
-                if any(x in v for x in ["납품요구번호","계약번호","수요기관","단가","수량","조달청"]): continue
-                if 8 < len(v) < 150: candidates.append(v)
-        if candidates:
-            result["name"] = sorted(candidates, key=len, reverse=True)[0][:150]
-
-    # 사업명 후처리 - 테이블 헤더 잡음 제거
-    if result.get("name"):
-        n = result["name"]
-        for stop_word in ["순 번", "순번", "옵션대", "납 품 기 한", "단 가 수 량", "물품 분류", " 순 "]:
-            idx2 = n.find(stop_word)
-            if idx2 > 5: n = n[:idx2].strip()
-        result["name"] = n.strip()
-
-    # 품명
-    for pat in [
-        r"(?:외벽패널|내벽패널|지붕패널|금속제\s*패널|알루미늄\s*복합\s*패널|칼라\s*강판|샌드위치\s*패널)",
-    ]:
-        m = SA(pat)
-        if m: result["productName"] = N(m.group(0))[:80]; break
-
-    # 하자담보기간
-    m = SA(r"하\s*자\s*담\s*보\s*(?:책임)?\s*기\s*간\s*[:\uff1a비고]?\s*(\d+)\s*년")
-    result["warrantyPeriod"] = int(m.group(1)) if m else 2
-
-    # 계약금액 - 여러 패턴 순서대로 시도
-    amount_patterns = [
-        r"품\s*대\s*계?\s*(\d{1,3}(?:,\d{3})+)",
-        r"합\s*계\s*금\s*액\s*(\d{1,3}(?:,\d{3})+)",
-        r"납\s*품\s*금\s*액\s*(\d{1,3}(?:,\d{3})+)",
-        r"계\s*약\s*금\s*액\s*(\d{1,3}(?:,\d{3})+)",
-        r"총\s*금\s*액\s*(\d{1,3}(?:,\d{3})+)",
-        r"공\s*급\s*가\s*액\s*(\d{1,3}(?:,\d{3})+)",
-        r"물\s*품\s*대\s*금\s*(\d{1,3}(?:,\d{3})+)",
-    ]
-    for pat in amount_patterns:
-        m = SA(pat)
-        if m:
-            v = int(m.group(1).replace(",",""))
-            if v >= 100000:
-                result["contractAmount"] = v
-                break
-
-    # 테이블 합계행에서 금액 추출 (텍스트 패턴 모두 실패 시)
-    if not result.get("contractAmount"):
-        for table in tables:
-            if not table or len(table) < 2: continue
-            for row in table:
-                if not row: continue
-                row_text = " ".join(N(str(c)) for c in row if c)
-                if any(k in row_text for k in ["합 계","합계","품대계","총 계","총계","소 계","소계"]):
-                    for cell in reversed(row):
-                        cs = N(str(cell)) if cell else ""
-                        digits = re.sub(r"[^\d]","",cs)
-                        if len(digits) >= 6:
-                            try:
-                                v = int(digits)
-                                if v >= 100000:
-                                    result["contractAmount"] = v
-                                    break
-                            except: pass
-                    if result.get("contractAmount"): break
-            if result.get("contractAmount"): break
-
-    # 검사/검수기관 - 테이블 열 위치
-    insp_found = False
     for table in tables:
         if not table or len(table) < 2: continue
-        insp_ci = None; accept_ci = None
-        for row in table[:8]:
-            if not row: continue
-            for ci, cell in enumerate(row):
-                cs = N(str(cell)) if cell else ""
-                if re.search(r"^검\s*사$", cs.strip()) and insp_ci is None: insp_ci = ci
-                if re.search(r"^검\s*수$", cs.strip()) and accept_ci is None: accept_ci = ci
-            if insp_ci is not None or accept_ci is not None: break
-        if insp_ci is not None or accept_ci is not None:
-            for row in table[1:]:
-                if not row: continue
-                if insp_ci is not None and insp_ci < len(row) and row[insp_ci]:
-                    v = N(str(row[insp_ci])).strip()
-                    if v and len(v) > 2 and v not in ("검사","N","Y"):
-                        result["inspectionAgency"] = v[:50]; insp_found = True
-                if accept_ci is not None and accept_ci < len(row) and row[accept_ci]:
-                    v = N(str(row[accept_ci])).strip()
-                    if v and len(v) > 2 and v not in ("검수","N","Y"):
-                        result["acceptanceAgency"] = v[:50]
-                if insp_found: break
+        h = " ".join(str(c) for c in (table[0] or []) if c)
+        if "품 대 계" not in h and "합 계 금 액" not in h: continue
+        
+        row = table[1]
+        if not row: continue
+        cells = [N(str(c)) if c else "" for c in row]
+        
+        # 품대계
+        v = to_int(cells[0]) if len(cells) > 0 else None
+        if v and v > 10000: result["contractAmount"] = v
+        # 합계금액(수수료포함)
+        v = to_int(cells[2]) if len(cells) > 2 else None
+        if v and v > 10000: result["totalAmount"] = v
+        # 검사기관
+        if len(cells) > 4 and cells[4] and len(cells[4].replace("\n","").strip()) > 1:
+            result["inspectionAgency"] = cells[4].replace("\n", "").strip()
+        # 검수기관
+        if len(cells) > 5 and cells[5] and len(cells[5].replace("\n","").strip()) > 1:
+            result["acceptanceAgency"] = cells[5].replace("\n", "").strip()
+        break
+    return result
 
-    # 검사기관 - 텍스트 패턴 ("가능 A A B B" → 검사=A+B, 검수=A+B)
-    if not insp_found:
-        m = re.search(r"가\s*능\s+(.*?)(?=\s*사\s*업\s*명|\s*순\s*번|$)", full)
-        if m:
-            tokens = m.group(1).strip().split()
-            n = len(tokens)
-            if n == 4 and tokens[0] == tokens[1] and tokens[2] == tokens[3]:
-                # "A A B B" 패턴: A+B가 한 기관 (검사=검수)
-                result["inspectionAgency"] = f"{tokens[0]} {tokens[2]}"[:50]
-                result["acceptanceAgency"] = f"{tokens[1]} {tokens[3]}"[:50]
-            elif n >= 2:
-                half = n // 2
-                result["inspectionAgency"] = " ".join(tokens[:half])[:50]
-                result["acceptanceAgency"] = " ".join(tokens[half:])[:50]
-
-    if result.get("inspectionAgency"):
-        ag = result["inspectionAgency"]
-        if "조달청" in ag: result["inspectionAgencyType"] = "조달청"
-        elif any(k in ag for k in ["한국","KCL","KTR","시험원","연구원","전문"]):
-            result["inspectionAgencyType"] = "전문검사기관"
-            result["inspectionBody"] = ag
-        else: result["inspectionAgencyType"] = "수요기관 자체"
-
-    # 테이블: 단가/수량/납기
-    COL_MAP = {
-        "seq": ["순번","순 번"],
-        "unit_price": ["단 가","단가","금 액","금액"],
-        "quantity": ["수 량","수량","QTY","물량"],
-        "deadline": ["납품기한","납기","납품일","기한"],
-        "spec": ["규격","규 격","사양"],
-        "product": ["품명","물품명","품 명"],
-        "unit": ["단위"],
-    }
+def get_items(tables):
+    """
+    품목 테이블 파싱 (Table[2]).
+    
+    19개 PDF 분석 결과 완전히 동일한 구조:
+      행0: 헤더  [순번, 옵션대상품목번호, 물품분류번호, 물품식별번호, 품명, 단위, 단가, 수량, 납품기한, 검사면제여부, 중기간경쟁물품여부]
+      행1: 서브  [∅, ∅, ∅, ∅, 규격, ∅, 금액, 납품장소, 인도조건, ∅, ∅]
+      행2: 데이터A(메인행) [1, ∅, 30151802, 24384971, 외벽패널, ㎡, 220800, 1892, 2026/05/10, N, Y]
+      행3: 데이터B(규격행) [∅, ∅, ∅, ∅, 금속제패널,덕인금속,MS-A03-01..., ∅, 417753600, 수요기관지정장소, 현장설치도, ∅, ∅]
+      행4: 데이터A(2번째 품목, 있는 경우)
+      행5: 데이터B(2번째 규격)
+      ...
+    
+    메인행 판별: cells[0]이 숫자
+    규격행 판별: cells[0]이 비어있고 cells[4]에 스펙 문자열
+    """
     items = []
+    
     for table in tables:
-        if not table or len(table) < 2: continue
-        hdri = -1; cmap = {}
-        for ri, row in enumerate(table[:8]):
-            if not row: continue
-            rs = " ".join(N(str(c)) for c in row if c)
-            if any(k in rs for k in ["단가","수량","단 가","수 량","납품기한","품명"]):
-                hdri = ri
-                for key, variants in COL_MAP.items():
-                    ci2 = find_col(row, *variants)
-                    if ci2 is not None: cmap[key] = ci2
-                break
-        if hdri < 0: continue
-        current_item = {}
-        for row in table[hdri+1:]:
-            if not row or not any(row): continue
-            c2 = [N(str(x)) if x else "" for x in row]
-            seq_val = c2[cmap["seq"]] if "seq" in cmap and cmap["seq"] < len(c2) else c2[0] if c2 else ""
-            is_item = bool(seq_val and re.match(r"^\d+$", seq_val.strip()))
-            if is_item:
-                if current_item: items.append(current_item)
-                current_item = {"seq": seq_val.strip()}
-                if "product" in cmap and cmap["product"] < len(c2) and c2[cmap["product"]]:
-                    current_item["productName"] = c2[cmap["product"]][:80]
-                for ci3 in ([cmap["unit_price"]] if "unit_price" in cmap else [6,5,7,8]):
-                    if ci3 < len(c2) and c2[ci3]:
-                        n = num(c2[ci3])
-                        if n:
-                            try: current_item["unitPrice"] = int(float(n)); break
-                            except: pass
-                for ci3 in ([cmap["quantity"]] if "quantity" in cmap else [7,6,8,5]):
-                    if ci3 < len(c2) and c2[ci3]:
-                        n = num(c2[ci3])
-                        if n:
-                            try: current_item["contractQuantity"] = float(n); break
-                            except: pass
-                dl = ""
-                if "deadline" in cmap and cmap["deadline"] < len(c2): dl = c2[cmap["deadline"]]
-                if not dl:
-                    for cv in c2:
-                        if re.search(r"\d{4}[./-]\d{1,2}[./-]\d{1,2}", cv): dl = cv; break
-                if dl:
-                    d = parse_date(dl)
-                    if d: current_item["deliveryDeadline"] = d
-                row_text = " ".join(c2)
-                if "설치도" in row_text: current_item["siteType"] = "납품설치도"
-                elif "하차도" in row_text: current_item["siteType"] = "납품하차도"
-            elif current_item:
-                for v2 in c2:
-                    if v2 and len(v2) > 5 and not current_item.get("specification"):
-                        if any(ch in v2 for ch in ["T","mm","AL","SUS","KS","초내후","분체","평판","덕인","MS-"]):
-                            current_item["specification"] = v2[:200]; break
-        if current_item: items.append(current_item)
+        if not table or len(table) < 3: continue
+        h = " ".join(str(c) for c in (table[0] or []) if c)
+        if "단 가" not in h or "수 량" not in h: continue
+        
+        current = None
+        
+        for row in table[2:]:  # 헤더(행0), 서브헤더(행1) 스킵
+            if not row or not any(c for c in row): continue
+            cells = [N(str(c)) if c else "" for c in row]
+            
+            seq = cells[0].strip()
+            is_main = bool(seq and re.match(r"^\d+$", seq))
+            
+            if is_main:
+                if current: items.append(current)
+                
+                current = {
+                    "seq":              seq,
+                    "productName":      cells[4].strip()   if len(cells) > 4 else "",
+                    "spec":             "",   # 다음 규격행에서 채움
+                    "unit":             cells[5].strip()   if len(cells) > 5 else "",
+                    "unitPrice":        to_float(cells[6]) if len(cells) > 6 else None,
+                    "contractQuantity": to_float(cells[7]) if len(cells) > 7 else None,
+                    "amount":           None,
+                    "deliveryDeadline": parse_date(cells[8]) if len(cells) > 8 else None,
+                    "siteType":         None,
+                }
+                
+                # 납품기한이 col8에 없으면 행 전체에서 날짜 찾기
+                if not current["deliveryDeadline"]:
+                    for c in cells:
+                        d = parse_date(c)
+                        if d: current["deliveryDeadline"] = d; break
+            
+            elif current is not None:
+                # 규격행: col4=규격문자열, col6=금액, col8=인도조건
+                spec_raw = cells[4].strip() if len(cells) > 4 else ""
+                if spec_raw:
+                    current["spec"] = spec_raw
+                
+                amt = to_int(cells[6]) if len(cells) > 6 else None
+                if amt and amt > 1000:
+                    current["amount"] = amt
+                
+                cond = cells[8].strip() if len(cells) > 8 else ""
+                if "설치도" in cond:
+                    current["siteType"] = "납품설치도"
+                elif "하차도" in cond:
+                    current["siteType"] = "납품하차도"
+        
+        if current: items.append(current)
+        
+        if items: break  # 품목 테이블 찾았으면 중단
+    
+    return items
 
-    if items:
-        first = items[0]
-        for k in ("unitPrice","contractQuantity","deliveryDeadline","siteType","productName","specification"):
-            if first.get(k) and not result.get(k): result[k] = first[k]
-        if len(items) > 1: result["productItems"] = items
-
-    result.setdefault("siteType", "납품설치도")
-
-    # 납품기한 보완
-    if not result.get("deliveryDeadline"):
-        m = SA(r"납\s*품\s*기\s*한\s*[:\uff1a]?\s*(\d{4}[./-]\d{1,2}[./-]\d{1,2})")
-        if m:
-            d = parse_date(m.group(1))
-            if d: result["deliveryDeadline"] = d
-
-    # 수량 보완
-    if not result.get("contractQuantity"):
-        m = SA(r"수\s*량\s*합\s*계\s*[:\uff1a]?\s*([\d,]+)")
-        if m:
-            n = num(m.group(1))
-            if n:
-                try: result["contractQuantity"] = float(n)
-                except: pass
-
-    # 규격 보완
-    if not result.get("specification"):
-        m = SA(r"((?:MS|AL|SUS|ACP)[-\s]?[A-Za-z0-9\-./×xTt\s,]+(?:mm|t|T|초내후성|분체|평판)[A-Za-z가-힣0-9\s,./×-]{0,80})")
-        if m: result["specification"] = N(m.group(1))[:200]
-
-    # 실수요부서 담당자
-    m2 = re.search(
-        r"실수요부서\s*담당자[,，\s]*전화번호\s*[:\uff1a]?\s*([^\d]+?)\s*(0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{4})",
+def get_manager(lines):
+    """
+    실수요부서 담당자.
+    패턴: "-실수요부서담당자,전화번호:인구정책과김지혜041-950-4344"
+          "-실수요부서담당자,전화번호:경기도평택교육지원청교육시설과양지인주무관(031-650-1283)"
+    """
+    full = " ".join(lines)
+    m = re.search(
+        r"실수요부서\s*담당자[,，\s]*전화번호\s*[:\uff1a]?\s*([^0-9\n]+?)\s*(0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{4})",
         full
     )
-    if m2:
-        raw = m2.group(1).strip()
-        result["clientManagerPhone"] = re.sub(r"\s","",m2.group(2).strip())
-        nm = re.search(r"^(.+?(?:과|팀|부|실|센터|원|처))\s*([가-힣]{2,5})$", raw)
-        if nm: result["clientDept"] = nm.group(1).strip(); result["clientManager"] = nm.group(2).strip()
-        else: result["clientManager"] = raw.strip()
+    if not m: return {}
+    
+    raw = m.group(1).strip()
+    phone = re.sub(r"\s", "", m.group(2).strip())
+    
+    # 괄호 이후 제거 ("양지인 주무관(" → "양지인 주무관")
+    raw = re.sub(r"[\(（].*$", "", raw).strip()
+    
+    result = {"clientManagerPhone": phone}
+    
+    # 부서명 + 담당자명 분리
+    # 패턴: "인구정책과김지혜" → dept=인구정책과, mgr=김지혜
+    # 패턴: "경기도평택교육지원청교육시설과양지인주무관" → dept=...시설과, mgr=양지인
+    nm = re.search(
+        r"^(.+?(?:과|팀|부|실|센터|원|처))\s*([가-힣]{2,5})\s*(?:주무관|담당관|담당|계장|팀장|과장|주임|사무관)?\s*$",
+        raw
+    )
+    if nm:
+        result["clientDept"]    = nm.group(1).strip()
+        result["clientManager"] = nm.group(2).strip()
+    else:
+        result["clientManager"] = raw.strip()
+    
+    return result
 
+
+# ── 메인 파서 ─────────────────────────────────────────────────────────────────
+
+def parse(pdf_path):
+    lines, tables = extract(pdf_path)
+    full = " ".join(lines)
+    
+    result = {}
+    
+    # 기본 필드
+    result["contractNo"]    = get_req_no(lines)
+    result["contractDate"]  = get_req_date(lines)
+    result["procurementNo"] = get_contract_no(lines)
+    result["clientName"]    = get_client(lines)
+    result["name"]          = get_name(lines)
+    result["warrantyPeriod"]= get_warranty(lines)
+    
+    # 금액/검사기관 (테이블)
+    amounts = get_amounts(tables)
+    result.update(amounts)
+    
+    # 품목 (테이블)
+    items = get_items(tables)
+    
+    if items:
+        first = items[0]
+        # 대표값: 첫 번째 품목 기준
+        result["productName"]  = first.get("productName") or ""
+        result["specification"]= first.get("spec") or ""
+        result["unitPrice"]    = first.get("unitPrice")
+        result["deliveryDeadline"] = first.get("deliveryDeadline")
+        result["siteType"]     = first.get("siteType") or "납품설치도"
+        
+        if len(items) == 1:
+            result["contractQuantity"] = first.get("contractQuantity")
+        else:
+            # 복수 품목: 수량 합산, 상세는 productItems에
+            result["contractQuantity"] = sum(
+                (it.get("contractQuantity") or 0) for it in items
+            )
+            result["productItems"] = [
+                {
+                    "seq":              it.get("seq"),
+                    "productName":      it.get("productName", ""),
+                    "spec":             it.get("spec", ""),
+                    "unit":             it.get("unit", ""),
+                    "unitPrice":        it.get("unitPrice"),
+                    "contractQuantity": it.get("contractQuantity"),
+                    "amount":           it.get("amount"),
+                    "deliveryDeadline": it.get("deliveryDeadline"),
+                }
+                for it in items
+            ]
+    
+    # 수량 보완 (테이블 파싱 실패 시 텍스트에서)
+    if not result.get("contractQuantity"):
+        m = re.search(r"수\s*량\s*합\s*계\s*[:\uff1a]?\s*([\d,]+)", full)
+        if m:
+            v = to_float(m.group(1))
+            if v: result["contractQuantity"] = v
+    
+    # 납품기한 보완
+    if not result.get("deliveryDeadline"):
+        m = re.search(r"납\s*품\s*기\s*한\s*[:\uff1a]?\s*(\d{4}[./]\d{1,2}[./]\d{1,2})", full)
+        if m:
+            result["deliveryDeadline"] = parse_date(m.group(1))
+    
+    # 규격 보완
+    if not result.get("specification"):
+        m = re.search(
+            r"((?:MS|AL|SUS|ACP)[-\s]?[A-Za-z0-9\-./×xTt\s,]+(?:mm|초내후성|분체|평판)[A-Za-z가-힣0-9\s,./×-]{0,60})",
+            full
+        )
+        if m: result["specification"] = N(m.group(1))[:200]
+    
+    # 검사기관 유형 분류
+    ag = result.get("inspectionAgency", "")
+    if ag:
+        if "조달청" in ag:
+            result["inspectionAgencyType"] = "조달청"
+        elif any(k in ag for k in ["한국","KCL","KTR","시험원","연구원"]):
+            result["inspectionAgencyType"] = "전문검사기관"
+            result["inspectionBody"] = ag
+        else:
+            result["inspectionAgencyType"] = "수요기관 자체"
+    
+    # 담당자
+    mgr = get_manager(lines)
+    result.update(mgr)
+    
+    # 사업명 최종 fallback
     if not result.get("name"):
         parts = []
         if result.get("clientName"): parts.append(result["clientName"])
         if result.get("productName"): parts.append(result["productName"])
         if parts: result["name"] = " ".join(parts) + " 납품"
+    
+    result.setdefault("siteType", "납품설치도")
+    
+    # None 값 제거
+    return {k: v for k, v in result.items() if v is not None and v != "" and v != 0}
 
-    return result
 
 if __name__ == "__main__":
     try:
-        r = parse(sys.argv[1])
-        print(json.dumps(r, ensure_ascii=False))
+        print(json.dumps(parse(sys.argv[1]), ensure_ascii=False))
     except Exception as e:
         print(json.dumps({"error": str(e), "trace": traceback.format_exc()}, ensure_ascii=False), file=sys.stderr)
         sys.exit(1)

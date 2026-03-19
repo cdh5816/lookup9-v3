@@ -54,9 +54,13 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
 
   if (search) {
     where.OR = [
-      { name: { contains: search as string, mode: 'insensitive' } },
-      { address: { contains: search as string, mode: 'insensitive' } },
-      { client: { name: { contains: search as string, mode: 'insensitive' } } },
+      { name:          { contains: search as string, mode: 'insensitive' } },
+      { address:       { contains: search as string, mode: 'insensitive' } },
+      { client:        { name: { contains: search as string, mode: 'insensitive' } } },
+      { salesOwner:    { contains: search as string, mode: 'insensitive' } },
+      { salesPm:       { contains: search as string, mode: 'insensitive' } },
+      { createdBy:     { name: { contains: search as string, mode: 'insensitive' } } },
+      { clientManager: { contains: search as string, mode: 'insensitive' } },
     ];
   }
 

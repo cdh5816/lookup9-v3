@@ -342,6 +342,7 @@ const SiteCard = ({ site, dimmed = false }: { site: any; dimmed?: boolean }) => 
   const subParts = [
     site.client?.name,
     site.specification || site.productName,
+    site.salesOwner || site.salesPm || site.createdBy?.name,
   ].filter(Boolean);
 
   return (

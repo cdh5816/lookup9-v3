@@ -6,7 +6,7 @@ import Head from 'next/head';
 import {
   PlusIcon, TrashIcon, XMarkIcon, BuildingOffice2Icon,
   UserPlusIcon, ChevronDownIcon, ChevronRightIcon,
-  PencilIcon, CheckIcon,
+  PencilIcon, CheckIcon, LinkIcon,
 } from '@heroicons/react/24/outline';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
@@ -19,6 +19,7 @@ interface UserData {
   position: string | null; phone: string | null; createdAt: string;
   teamMembers: { role: string; team: { name: string } }[];
   siteAssignments?: { siteId: string; site: SiteLite }[];
+  partnerCompany?: { id: string; name: string } | null;
 }
 
 const DEPTS = ['경영진', '경영지원부', '영업부', '수주팀', '생산관리팀', '도장팀', '출하팀', '공사팀'];
@@ -64,7 +65,6 @@ const AdminUsers = () => {
           </p>
         </div>
 
-        {/* 탭 */}
         {profileLoading ? (
           <div className="py-10 text-center"><span className="loading loading-spinner loading-sm text-gray-500" /></div>
         ) : !isAdminHR && !canAccessPartner ? (
@@ -113,10 +113,12 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
   const [success, setSuccess] = useState('');
   const [canCreateAdmin, setCanCreateAdmin] = useState(false);
 
+  // 협력사별 필터 (partner 뷰 전용)
+  const [partnerCompanyFilter, setPartnerCompanyFilter] = useState<string>('all');
+
   const { data: profileData } = useSWR('/api/my/profile', fetcher);
   const currentUserId = profileData?.data?.id;
 
-  // 권한: 내부직원 생성은 ADMIN_HR 이상
   const canCreateInternal = isAdminHR;
   const canCreateExternal = ['SUPER_ADMIN','OWNER','ADMIN_HR','ADMIN','MANAGER'].includes(myRole);
 
@@ -141,13 +143,37 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // 필터링
+  // 파트너 유저들 + 회사 목록 추출
+  const partnerUsers = useMemo(() => users.filter(u => {
+    const role = u.teamMembers?.[0]?.role || 'USER';
+    return role === 'PARTNER';
+  }), [users]);
+
+  const partnerCompanies = useMemo(() => {
+    const seen = new Set<string>();
+    const list: { id: string; name: string }[] = [];
+    partnerUsers.forEach(u => {
+      if (u.partnerCompany && !seen.has(u.partnerCompany.id)) {
+        seen.add(u.partnerCompany.id);
+        list.push(u.partnerCompany);
+      }
+    });
+    return list;
+  }, [partnerUsers]);
+
   const visibleUsers = useMemo(() => users.filter(u => {
     const role = u.teamMembers?.[0]?.role || 'USER';
     if (filter === 'internal') return !['PARTNER', 'GUEST', 'VIEWER'].includes(role);
-    if (filter === 'partner')  return role === 'PARTNER';
+    if (filter === 'partner') {
+      if (role !== 'PARTNER') return false;
+      if (partnerCompanyFilter !== 'all') {
+        if (partnerCompanyFilter === 'unlinked') return !u.partnerCompany;
+        return u.partnerCompany?.id === partnerCompanyFilter;
+      }
+      return true;
+    }
     return true;
-  }), [users, filter]);
+  }), [users, filter, partnerCompanyFilter]);
 
   const availableRoles = useMemo(() => {
     if (filter === 'internal') {
@@ -192,15 +218,14 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
 
   return (
     <div className="space-y-4">
-      {/* 알림 */}
       {error && <Alert type="error" msg={error} onClose={() => setError('')} />}
       {success && <Alert type="success" msg={success} onClose={() => setSuccess('')} />}
 
       {/* 필터 + 생성 버튼 */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 flex-wrap">
           {(['internal', 'partner'] as const).map(f => (
-            <button key={f} onClick={() => { setFilter(f); setShowCreate(false); }}
+            <button key={f} onClick={() => { setFilter(f); setShowCreate(false); setPartnerCompanyFilter('all'); }}
               className={`rounded-lg border px-3.5 py-1.5 text-xs font-semibold transition ${
                 filter === f
                   ? 'border-blue-600 bg-blue-950/40 text-blue-300'
@@ -216,6 +241,21 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
               </span>
             </button>
           ))}
+
+          {/* 협력사별 필터 (partner 뷰에서만) */}
+          {filter === 'partner' && (
+            <select
+              className="select select-bordered select-xs text-xs text-gray-300"
+              value={partnerCompanyFilter}
+              onChange={e => setPartnerCompanyFilter(e.target.value)}
+            >
+              <option value="all">전체 협력사</option>
+              <option value="unlinked">미소속 계정</option>
+              {partnerCompanies.map(co => (
+                <option key={co.id} value={co.id}>{co.name}</option>
+              ))}
+            </select>
+          )}
         </div>
         {canShowCreate && (
           <button
@@ -240,7 +280,11 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
               <tr>
                 <th className="px-4 py-3 text-left">이름</th>
                 <th className="px-4 py-3 text-left">아이디</th>
-                <th className="px-4 py-3 text-left hidden sm:table-cell">부서 · 직책</th>
+                {filter === 'internal' ? (
+                  <th className="px-4 py-3 text-left hidden sm:table-cell">부서 · 직책</th>
+                ) : (
+                  <th className="px-4 py-3 text-left hidden sm:table-cell">소속 협력사</th>
+                )}
                 <th className="px-4 py-3 text-left">권한</th>
                 <th className="px-4 py-3 text-left hidden md:table-cell">배정 현장</th>
                 <th className="px-4 py-3 text-right">관리</th>
@@ -261,10 +305,22 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
                       {user.phone && <div className="text-xs text-gray-500 font-normal">{user.phone}</div>}
                     </td>
                     <td className="px-4 py-3 text-gray-400 font-mono text-xs">{user.username || user.email}</td>
-                    <td className="px-4 py-3 hidden sm:table-cell text-gray-300">
-                      {user.department || '-'}
-                      {user.position && <span className="text-gray-500 ml-1">· {user.position}</span>}
-                    </td>
+                    {filter === 'internal' ? (
+                      <td className="px-4 py-3 hidden sm:table-cell text-gray-300">
+                        {user.department || '-'}
+                        {user.position && <span className="text-gray-500 ml-1">· {user.position}</span>}
+                      </td>
+                    ) : (
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        {user.partnerCompany ? (
+                          <span className="text-xs text-purple-300 bg-purple-900/20 border border-purple-800/40 rounded px-2 py-0.5">
+                            {user.partnerCompany.name}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-600 italic">미소속</span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <span className={`inline-block rounded border px-2 py-0.5 text-[11px] font-bold ${ROLE_BADGE[role] || ROLE_BADGE.USER}`}>
                         {ROLE_LABEL[role] || role}
@@ -316,12 +372,11 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
             </div>
             {error && <Alert type="error" msg={error} onClose={() => setError('')} />}
 
-            {/* 협력사 안내 */}
             {filter === 'partner' && (
               <div className="mb-4 rounded-lg border border-blue-800/40 bg-blue-950/20 px-3 py-2.5">
                 <p className="text-xs text-blue-300">
-                  계정 생성 후 <strong>협력업체 탭</strong>에서 해당 업체에 등록하세요.
-                  업체에 현장을 배정하면 소속 계정이 자동으로 해당 현장에 접근합니다.
+                  계정 생성 후 <strong>협력업체 탭</strong>에서 해당 업체에 등록하거나,
+                  아래 <strong>소속 협력사</strong>를 선택하면 바로 연결됩니다.
                 </p>
               </div>
             )}
@@ -340,7 +395,6 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
                   value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
               </Field>
 
-              {/* 권한 선택 (내부직원만 선택 가능, 나머지는 고정) */}
               <Field label="권한">
                 <select className="select select-bordered w-full" value={form.role}
                   onChange={e => setForm({ ...form, role: e.target.value })}>
@@ -363,7 +417,7 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
               )}
 
               {filter === 'partner' && (
-                <Field label="회사명" className="col-span-2">
+                <Field label="소속 협력사 (선택)" className="col-span-2">
                   <CompanySearchInput
                     value={form.company}
                     onChange={v => setForm({ ...form, company: v })}
@@ -417,10 +471,15 @@ const PartnerPanel = () => {
   const [editForm, setEditForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
 
-  // 멤버 추가
+  // 직접 계정 추가 (신규 생성)
   const [showMember, setShowMember] = useState<string | null>(null);
   const [mForm, setMForm] = useState({ name: '', username: '', password: '', position: '', phone: '' });
   const [addingMember, setAddingMember] = useState(false);
+
+  // 기존 계정 연결
+  const [showLink, setShowLink] = useState<string | null>(null);
+  const [unlinkedUsers, setUnlinkedUsers] = useState<any[]>([]);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -440,6 +499,12 @@ const PartnerPanel = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadUnlinked = async () => {
+    const res = await fetch('/api/partner-companies?unlinked=true');
+    const j = await res.json();
+    setUnlinkedUsers(j.data || []);
+  };
 
   const handleCreate = async () => {
     if (!form.name.trim()) { setError('업체명을 입력하세요.'); return; }
@@ -482,6 +547,19 @@ const PartnerPanel = () => {
     if (!res.ok) setError(j?.error?.message || '실패');
     else { setSuccess('계정이 추가되었습니다.'); setShowMember(null); setMForm({ name: '', username: '', password: '', position: '', phone: '' }); load(); }
     setAddingMember(false);
+  };
+
+  const handleLinkExisting = async (userId: string) => {
+    if (!showLink) return;
+    setLinkingId(userId);
+    const res = await fetch('/api/partner-companies?action=link-existing', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId: showLink, userId }),
+    });
+    const j = await res.json();
+    if (!res.ok) setError(j?.error?.message || '연결 실패');
+    else { setSuccess('계정이 연결되었습니다.'); setShowLink(null); setUnlinkedUsers([]); load(); }
+    setLinkingId(null);
   };
 
   const handleRemoveMember = async (memberId: string, name: string) => {
@@ -568,8 +646,11 @@ const PartnerPanel = () => {
                     ) : (
                       <>
                         <button className="btn btn-ghost btn-xs text-blue-400" onClick={() => { setShowSiteAssign(showSiteAssign === co.id ? null : co.id); setExpandedId(co.id); }}>현장배정</button>
+                        <button className="btn btn-ghost btn-xs gap-1 text-purple-300" onClick={() => { setShowLink(co.id); loadUnlinked(); setError(''); }}>
+                          <LinkIcon className="h-3.5 w-3.5" />계정연결
+                        </button>
                         <button className="btn btn-ghost btn-xs gap-1" onClick={() => { setShowMember(co.id); setMForm({ name:'',username:'',password:'',position:'',phone:'' }); setError(''); }}>
-                          <UserPlusIcon className="h-3.5 w-3.5" />계정추가
+                          <UserPlusIcon className="h-3.5 w-3.5" />신규생성
                         </button>
                         <button className="btn btn-ghost btn-xs" onClick={() => { setEditId(co.id); setEditForm({ name: co.name, bizNo: co.bizNo||'', contact: co.contact||'', phone: co.phone||'', email: co.email||'', address: co.address||'', notes: co.notes||'' }); }}>
                           <PencilIcon className="h-3.5 w-3.5" />
@@ -633,7 +714,7 @@ const PartnerPanel = () => {
 
                     <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">소속 계정 ({co.members?.length ?? 0}명)</p>
                     {!co.members?.length ? (
-                      <p className="text-xs text-gray-500 py-2">등록된 계정이 없습니다. 우측 상단 [계정추가]를 눌러 추가하세요.</p>
+                      <p className="text-xs text-gray-500 py-2">등록된 계정이 없습니다. [계정연결] 또는 [신규생성]을 사용하세요.</p>
                     ) : (
                       <div className="divide-y divide-gray-700/30">
                         {co.members.map((m: any) => (
@@ -692,13 +773,13 @@ const PartnerPanel = () => {
         </div>
       )}
 
-      {/* 계정 추가 모달 */}
+      {/* 신규 계정 생성 모달 */}
       {showMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
           <div className="w-full max-w-sm rounded-2xl border border-gray-700 bg-gray-900 p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="text-base font-bold">협력사 계정 추가</h3>
+                <h3 className="text-base font-bold">협력사 계정 생성</h3>
                 <p className="text-xs text-gray-400 mt-0.5">{companies.find(c => c.id === showMember)?.name} 소속</p>
               </div>
               <button onClick={() => setShowMember(null)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-800"><XMarkIcon className="h-5 w-5" /></button>
@@ -716,6 +797,52 @@ const PartnerPanel = () => {
               <button className="btn btn-primary btn-sm" onClick={handleAddMember} disabled={addingMember}>
                 {addingMember ? <span className="loading loading-spinner loading-xs" /> : '생성'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 기존 계정 연결 모달 */}
+      {showLink && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-900 p-5 shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-base font-bold">기존 계정 연결</h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {companies.find(c => c.id === showLink)?.name} — 미소속 PARTNER 계정 선택
+                </p>
+              </div>
+              <button onClick={() => { setShowLink(null); setUnlinkedUsers([]); }} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-800">
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+            {error && <Alert type="error" msg={error} onClose={() => setError('')} />}
+            {unlinkedUsers.length === 0 ? (
+              <div className="py-8 text-center text-sm text-gray-500">
+                미소속 PARTNER 계정이 없습니다.
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                {unlinkedUsers.map(u => (
+                  <div key={u.id} className="flex items-center justify-between rounded-lg border border-gray-700/50 bg-gray-800/30 px-3 py-2.5">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{u.name}</p>
+                      <p className="text-xs text-gray-400">@{u.username}{u.position && ` · ${u.position}`}{u.phone && ` · ${u.phone}`}</p>
+                    </div>
+                    <button
+                      className="btn btn-primary btn-xs"
+                      onClick={() => handleLinkExisting(u.id)}
+                      disabled={linkingId === u.id}
+                    >
+                      {linkingId === u.id ? <span className="loading loading-spinner loading-xs" /> : '연결'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-4 flex justify-end">
+              <button className="btn btn-ghost btn-sm" onClick={() => { setShowLink(null); setUnlinkedUsers([]); }}>닫기</button>
             </div>
           </div>
         </div>
@@ -760,7 +887,7 @@ const CompanySearchInput = ({ value, onChange }: { value: string; onChange: (v: 
     <div className="relative">
       <input
         className="input input-bordered w-full"
-        placeholder="업체명 검색 또는 직접 입력"
+        placeholder={companies.length > 0 ? `${companies.length}개 업체 — 검색 또는 직접 입력` : '직접 입력 (협력업체 탭에서 선택 가능)'}
         value={value}
         onChange={e => { onChange(e.target.value); setShow(true); }}
         onFocus={() => setShow(true)}

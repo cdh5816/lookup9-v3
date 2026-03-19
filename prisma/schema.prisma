@@ -294,6 +294,7 @@ model Site {
   unitPrice         Decimal? @db.Decimal(15, 0)  // 단가
   specification     String?                      // 규격/사양
   productName       String?                      // 품명 (예: 알루미늄 복합패널)
+  productItems      Json?                        // 복수 품목 목록 (PDF 파싱, [{seq,productName,spec,unit,unitPrice,contractQuantity,amount}])
   deliveryDeadline  DateTime?                    // 납품기한
   warrantyPeriod    Int?     @default(2)         // 하자담보기간 (년)
   completionDate    DateTime?                    // 준공일

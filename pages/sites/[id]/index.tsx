@@ -292,7 +292,14 @@ function SiteHeader({ site, canDelete, onDelete, onTabChange }: any) {
 // ══════════════════════════════════════════════════════
 // 개요 탭
 // ══════════════════════════════════════════════════════
-const siteStatuses = ['영업중', '대기', '계약완료', '진행중', '부분완료', '완료', '보류'];
+const siteStatuses = [
+  { value: 'SALES_PIPELINE', label: '영업중' },
+  { value: 'SALES_CONFIRMED', label: '수주확정' },
+  { value: 'CONTRACT_ACTIVE', label: '진행중' },
+  { value: 'COMPLETED', label: '준공완료' },
+  { value: 'WARRANTY', label: '하자기간' },
+  { value: 'FAILED', label: '영업실패' },
+];
 const siteTypes = ['납품설치도', '납품하차도'];
 
 function OverviewTab({ site, siteId, canManage, onMutate }: any) {
@@ -397,7 +404,7 @@ function OverviewTab({ site, siteId, canManage, onMutate }: any) {
                 <label className="block text-[10px] text-gray-500 mb-1">현장 상태</label>
                 <select className="select select-bordered select-sm w-full" value={form.status}
                   onChange={e => setForm({ ...form, status: e.target.value })}>
-                  {siteStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                  {siteStatuses.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </div>
               <div>
@@ -431,23 +438,75 @@ function OverviewTab({ site, siteId, canManage, onMutate }: any) {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-            {[
-              { label: '계약금액', value: <span className="text-green-400 font-bold">{fmtMoney(site.contractAmount)}</span> },
-              { label: '납품기한', value: site.deliveryDeadline ? fmtDate(site.deliveryDeadline) : '-' },
-              { label: '계약물량', value: site.contractQuantity ? `${fmtNum(site.contractQuantity)} ㎡` : '-' },
-              { label: '단가', value: site.unitPrice ? `${fmtNum(site.unitPrice)}원/㎡` : '-' },
-              { label: '품명', value: site.productName || contract?.productName || '-' },
-              { label: '규격/사양', value: site.specification || contract?.specification || '-' },
-              { label: '납품요구번호', value: site.contractNo || '-' },
-              { label: '하자기간', value: site.warrantyPeriod ? `${site.warrantyPeriod}년` : '-' },
-            ].map(({ label, value }) => (
-              <div key={label}>
-                <p className="text-[10px] text-gray-600 mb-0.5">{label}</p>
-                <p className="text-gray-200 font-medium truncate">{value as any}</p>
-              </div>
-            ))}
-            <div className="col-span-2 flex gap-4 pt-2 border-t border-gray-800/60">
+          <div className="space-y-3">
+            {/* 핵심 계약 정보 2열 그리드 */}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+              {[
+                { label: '계약금액', value: <span className="text-green-400 font-bold">{fmtMoney(site.contractAmount)}</span> },
+                { label: '납품기한', value: site.deliveryDeadline ? fmtDate(site.deliveryDeadline) : '-' },
+                { label: '계약물량 (합계)', value: site.contractQuantity ? `${fmtNum(site.contractQuantity)} ㎡` : '-' },
+                { label: '납품요구번호', value: site.contractNo || '-' },
+                { label: '하자기간', value: site.warrantyPeriod ? `${site.warrantyPeriod}년` : '-' },
+                { label: '검사기관', value: site.inspectionAgency || '-' },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <p className="text-[10px] text-gray-600 mb-0.5">{label}</p>
+                  <p className="text-gray-200 font-medium truncate">{value as any}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* 품목 상세 테이블 — 복수 품목이 있을 때 */}
+            {(() => {
+              const items: any[] = Array.isArray(site.productItems) && site.productItems.length > 0
+                ? site.productItems
+                : (site.productName || site.specification)
+                  ? [{ seq: '1', productName: site.productName, spec: site.specification, unit: '㎡', unitPrice: site.unitPrice, contractQuantity: site.contractQuantity, amount: site.contractAmount }]
+                  : [];
+              if (items.length === 0) return null;
+              return (
+                <div className="rounded-lg overflow-hidden border border-gray-700/60">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-800/60 text-[10px] text-gray-400 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-2.5 py-2 text-left w-8">순</th>
+                        <th className="px-2.5 py-2 text-left">품명</th>
+                        <th className="px-2.5 py-2 text-left hidden sm:table-cell">규격/사양</th>
+                        <th className="px-2.5 py-2 text-right">단가</th>
+                        <th className="px-2.5 py-2 text-right">물량(㎡)</th>
+                        <th className="px-2.5 py-2 text-right hidden sm:table-cell">금액</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item: any, idx: number) => (
+                        <tr key={idx} className="border-t border-gray-700/30 hover:bg-gray-800/20">
+                          <td className="px-2.5 py-2 text-gray-500">{item.seq || idx + 1}</td>
+                          <td className="px-2.5 py-2 font-medium text-gray-200">{item.productName || '-'}</td>
+                          <td className="px-2.5 py-2 text-gray-400 hidden sm:table-cell max-w-xs truncate">{item.spec || '-'}</td>
+                          <td className="px-2.5 py-2 text-right text-gray-300">{item.unitPrice ? `${Number(item.unitPrice).toLocaleString()}` : '-'}</td>
+                          <td className="px-2.5 py-2 text-right text-blue-300 font-semibold">{item.contractQuantity ? Number(item.contractQuantity).toLocaleString() : '-'}</td>
+                          <td className="px-2.5 py-2 text-right text-green-400 hidden sm:table-cell">{item.amount ? `${Number(item.amount).toLocaleString()}` : '-'}</td>
+                        </tr>
+                      ))}
+                      {items.length > 1 && (
+                        <tr className="border-t border-gray-600/50 bg-gray-800/40 font-semibold">
+                          <td className="px-2.5 py-2 text-gray-500 text-[10px]" colSpan={4}>합계</td>
+                          <td className="px-2.5 py-2 text-right text-blue-200">
+                            {items.reduce((s: number, i: any) => s + Number(i.contractQuantity || 0), 0).toLocaleString()} ㎡
+                          </td>
+                          <td className="px-2.5 py-2 text-right text-green-300 hidden sm:table-cell">
+                            {items.reduce((s: number, i: any) => s + Number(i.amount || 0), 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+
+            {/* 착수/준공계 */}
+            <div className="flex gap-4 pt-1 border-t border-gray-800/60">
               <div className={`flex items-center gap-1.5 text-xs ${site.startDocsDone ? 'text-green-400' : 'text-gray-600'}`}>
                 <div className={`w-2.5 h-2.5 rounded-full ${site.startDocsDone ? 'bg-green-500' : 'bg-gray-700'}`} />
                 착수계 제출

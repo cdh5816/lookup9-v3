@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { notifySiteMembers } from '@/lib/notification-helper';
 import { verifySiteAccess, hasMinRole } from '@/lib/team-helper';
+import { normalizeStatus } from '@/pages/api/sites/index';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);
@@ -140,6 +141,7 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
 
   const changeLogs: any[] = [];
   const reason = changeReason || statusReason || null;
+  const normalizedStatus = status ? normalizeStatus(status) : undefined;
 
   // 상태 변경 이력
   if (status && currentSite && currentSite.status !== status) {
@@ -224,7 +226,7 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
       ...(name !== undefined && { name }),
       ...(address !== undefined && { address }),
       ...(clientId !== undefined && { clientId: clientId || null }),
-      ...(status !== undefined && { status }),
+      ...(status !== undefined && { status: normalizedStatus }),
       ...(description !== undefined && { description }),
       ...(siteType !== undefined && { siteType }),
       ...(salesStage !== undefined && { salesStage }),

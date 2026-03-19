@@ -12,15 +12,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const tm = await getTeamMemberByUserId(session.user.id);
   if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
 
-  // GET은 팀 소속이면 누구나 (현장 상세 시공업체 검색용)
-  // POST/PUT/DELETE는 MANAGER 이상만
   if (req.method !== 'GET' && !hasMinRole(tm.role, 'MANAGER')) {
     return res.status(403).json({ error: { message: 'Forbidden' } });
   }
 
   try {
     switch (req.method) {
-      case 'GET': return await handleGET(tm, res);
+      case 'GET': return await handleGET(tm, req, res);
       case 'POST': return await handlePOST(req, res, session, tm);
       case 'PUT': return await handlePUT(req, res, tm);
       case 'DELETE': return await handleDELETE(req, res, tm);
@@ -32,8 +30,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-// 협력사 목록 조회
-const handleGET = async (tm: any, res: NextApiResponse) => {
+// 협력사 목록 조회 (+ unlinked 파트너 목록 옵션)
+const handleGET = async (tm: any, req: NextApiRequest, res: NextApiResponse) => {
+  const { unlinked } = req.query;
+
+  // 협력사에 소속되지 않은 PARTNER 계정 목록 반환 (기존 계정 연결용)
+  if (unlinked === 'true') {
+    const linkedUserIds = (await prisma.partnerMember.findMany({
+      where: { partnerCompany: { teamId: tm.teamId } },
+      select: { userId: true },
+    })).map((m) => m.userId);
+
+    const partnerMembers = await prisma.teamMember.findMany({
+      where: {
+        teamId: tm.teamId,
+        role: 'PARTNER',
+        ...(linkedUserIds.length > 0 ? { userId: { notIn: linkedUserIds } } : {}),
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, username: true, position: true, phone: true, company: true },
+        },
+      },
+    });
+
+    return res.status(200).json({
+      data: partnerMembers.map((m) => ({ ...m.user })),
+    });
+  }
+
   const companies = await prisma.partnerCompany.findMany({
     where: { teamId: tm.teamId },
     include: {
@@ -53,7 +78,6 @@ const handleGET = async (tm: any, res: NextApiResponse) => {
     orderBy: { createdAt: 'desc' },
   });
 
-  // 전체 현장 목록 (배정용)
   const sites = await prisma.site.findMany({
     where: { teamId: tm.teamId, status: { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] } },
     select: { id: true, name: true, status: true },
@@ -63,22 +87,19 @@ const handleGET = async (tm: any, res: NextApiResponse) => {
   return res.status(200).json({ data: companies, meta: { sites } });
 };
 
-// 협력사 회사 생성 (+ 직원 계정 생성 + 현장 배정)
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: any, tm: any) => {
   const { action } = req.query;
 
-  // 현장 배정 추가/제거
+  // 현장 배정
   if (action === 'assign') {
     const { companyId, siteId, remove } = req.body;
     if (!companyId || !siteId) return res.status(400).json({ error: { message: 'companyId, siteId required' } });
 
-    // 회사 소속 확인
     const company = await prisma.partnerCompany.findFirst({ where: { id: companyId, teamId: tm.teamId } });
     if (!company) return res.status(404).json({ error: { message: 'Company not found' } });
 
     if (remove) {
       await prisma.partnerSiteAssign.deleteMany({ where: { partnerCompanyId: companyId, siteId } });
-      // 해당 회사 직원들의 현장 배정도 제거
       const memberIds = (await prisma.partnerMember.findMany({ where: { partnerCompanyId: companyId }, select: { userId: true } })).map(m => m.userId);
       if (memberIds.length > 0) {
         await prisma.siteAssignment.deleteMany({ where: { siteId, userId: { in: memberIds } } });
@@ -89,7 +110,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
         create: { partnerCompanyId: companyId, siteId },
         update: {},
       });
-      // 해당 회사 직원들 현장 자동 배정
       const memberIds = (await prisma.partnerMember.findMany({ where: { partnerCompanyId: companyId }, select: { userId: true } })).map(m => m.userId);
       if (memberIds.length > 0) {
         await prisma.siteAssignment.createMany({
@@ -101,7 +121,37 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
     return res.status(200).json({ data: { ok: true } });
   }
 
-  // 직원 계정 추가
+  // 기존 PARTNER 계정 → 협력사 연결
+  if (action === 'link-existing') {
+    const { companyId, userId } = req.body;
+    if (!companyId || !userId) return res.status(400).json({ error: { message: 'companyId, userId required' } });
+
+    const company = await prisma.partnerCompany.findFirst({ where: { id: companyId, teamId: tm.teamId } });
+    if (!company) return res.status(404).json({ error: { message: 'Company not found' } });
+
+    // 이미 다른 회사에 소속된 경우 제거 후 재소속
+    await prisma.partnerMember.deleteMany({ where: { userId } });
+
+    await prisma.partnerMember.create({
+      data: { partnerCompanyId: companyId, userId },
+    });
+
+    // 회사에 배정된 현장들에도 자동 배정
+    const assigns = await prisma.partnerSiteAssign.findMany({
+      where: { partnerCompanyId: companyId },
+      select: { siteId: true },
+    });
+    if (assigns.length > 0) {
+      await prisma.siteAssignment.createMany({
+        data: assigns.map(a => ({ siteId: a.siteId, userId, assignedRole: 'PARTNER' })),
+        skipDuplicates: true,
+      });
+    }
+
+    return res.status(200).json({ data: { ok: true } });
+  }
+
+  // 직원 계정 추가 (신규 생성)
   if (action === 'add-member') {
     const { companyId, name, username, password, position, phone } = req.body;
     if (!companyId || !name || !username || !password) {
@@ -127,7 +177,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
       await tx.teamMember.create({ data: { teamId: tm.teamId, userId: user.id, role: 'PARTNER' } });
       await tx.partnerMember.create({ data: { partnerCompanyId: companyId, userId: user.id, position: position || null } });
 
-      // 이미 배정된 현장들에 자동 배정
       const assigns = await tx.partnerSiteAssign.findMany({ where: { partnerCompanyId: companyId }, select: { siteId: true } });
       if (assigns.length > 0) {
         await tx.siteAssignment.createMany({
@@ -149,7 +198,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
     const created = await tx.partnerCompany.create({
       data: { name, bizNo: bizNo || null, contact: contact || null, phone: phone || null, email: email || null, address: address || null, notes: notes || null, teamId: tm.teamId },
     });
-    // 현장 배정
     if (Array.isArray(siteIds) && siteIds.length > 0) {
       await tx.partnerSiteAssign.createMany({
         data: siteIds.map((siteId: string) => ({ partnerCompanyId: created.id, siteId })),
@@ -162,7 +210,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
   return res.status(201).json({ data: company });
 };
 
-// 협력사 회사 정보 수정
 const handlePUT = async (req: NextApiRequest, res: NextApiResponse, tm: any) => {
   const { companyId, name, bizNo, contact, phone, email, address, notes } = req.body;
   if (!companyId) return res.status(400).json({ error: { message: 'companyId required' } });
@@ -178,12 +225,10 @@ const handlePUT = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
   return res.status(200).json({ data: updated });
 };
 
-// 협력사 삭제 또는 직원 제거
 const handleDELETE = async (req: NextApiRequest, res: NextApiResponse, tm: any) => {
   const { companyId, memberId } = req.body;
 
   if (memberId) {
-    // 직원 제거
     const member = await prisma.partnerMember.findUnique({ where: { id: memberId } });
     if (!member) return res.status(404).json({ error: { message: 'Member not found' } });
     await prisma.partnerMember.delete({ where: { id: memberId } });

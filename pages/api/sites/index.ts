@@ -45,10 +45,10 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
   } else if (status && status !== 'all') {
     where.status = normalizeStatus(status as string);
   } else if (includeCompleted === 'true') {
-    // 완료/하자 포함 전체 (FAILED 제외)
-    where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] };
+    // 전체 (FAILED 포함 — 프론트에서 별도 섹션으로 표시)
+    where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY', 'FAILED'] };
   } else {
-    // 기본: 영업중+수주확정+진행중 (활성 현장 전부)
+    // 기본: 활성 현장 전체 (FAILED 제외)
     where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] };
   }
 
@@ -64,7 +64,6 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
     ];
   }
 
-  // ── PARTNER: PartnerSiteAssign(업체배정) OR SiteAssignment(직접배정) 합집합 ──
   if (tm.role === 'PARTNER') {
     const partnerMember = await prisma.partnerMember.findFirst({
       where: { userId: tm.userId },
@@ -117,6 +116,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
     contractNo, procurementNo, contractDate, contractAmount,
     contractQuantity, quantity, unitPrice, specification, productName,
     deliveryDeadline, warrantyPeriod, inspectionAgency, inspectionBody, acceptanceAgency,
+    productItems,
   } = req.body;
 
   if (!name) return res.status(400).json({ error: { message: 'Name is required' } });
@@ -153,6 +153,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
         warrantyPeriod: warrantyPeriod ? Number(warrantyPeriod) : 2,
         inspectionAgency: inspectionAgency || null, inspectionBody: inspectionBody || null,
         acceptanceAgency: acceptanceAgency || null,
+        productItems: (Array.isArray(productItems) && productItems.length > 0) ? productItems : undefined,
         createdById: session.user.id,
       },
     });

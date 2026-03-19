@@ -20,7 +20,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const tm = await getTeamMemberByUserId(session.user.id);
   if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
 
-  // 계정관리 접근: MANAGER 이상 (MANAGER는 게스트/협력사만, ADMIN_HR는 전체)
   if (!hasMinRole(tm.role, 'MANAGER')) {
     return res.status(403).json({ error: { message: 'Forbidden' } });
   }
@@ -64,6 +63,12 @@ const handleGET = async (teamId: string, actorRole: string, actorUserId: string,
                 site: { select: { id: true, name: true, status: true } },
               },
             },
+            // 협력사 소속 정보
+            partnerMemberships: {
+              include: {
+                partnerCompany: { select: { id: true, name: true } },
+              },
+            },
           },
         },
       },
@@ -76,7 +81,6 @@ const handleGET = async (teamId: string, actorRole: string, actorUserId: string,
     }),
   ]);
 
-  // SUPER_ADMIN/OWNER 계정은 항상 비노출
   const users = members
     .filter((m) => !['SUPER_ADMIN', 'OWNER'].includes(m.role))
     .map((m) => ({
@@ -84,6 +88,8 @@ const handleGET = async (teamId: string, actorRole: string, actorUserId: string,
       role: m.role,
       teamMembers: [{ role: m.role, team: { name: (m as any).team?.name || teamId } }],
       assignedSites: (m.user.siteAssignments || []).map((a) => a.site),
+      // 협력사 소속 업체명 (PARTNER 전용)
+      partnerCompany: m.user.partnerMemberships?.[0]?.partnerCompany || null,
     }));
 
   return res.status(200).json({
@@ -91,9 +97,7 @@ const handleGET = async (teamId: string, actorRole: string, actorUserId: string,
     meta: {
       sites,
       actorRole,
-      // 삭제 가능 여부: ADMIN_HR 또는 SUPER_ADMIN만
       canDelete: isCompanyAdminRole(actorRole) || isSystemRole(actorRole),
-      // ADMIN_HR 생성 가능 여부: SUPER_ADMIN 전용
       canCreateAdmin: isSystemRole(actorRole),
     },
   });
@@ -105,13 +109,10 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
     return res.status(400).json({ error: { message: '이름, 아이디, 비밀번호는 필수입니다.' } });
   }
 
-  // username 중복 체크
   const existingUsername = await prisma.user.findUnique({ where: { username } });
   if (existingUsername) return res.status(400).json({ error: { message: '이미 사용 중인 아이디입니다.' } });
 
-  // 내부 이메일 생성
   const finalEmail = email && email.trim() ? email.trim() : `${username}@internal.lookup9`;
-
   const targetRole = role || 'USER';
 
   if (!canAssignRole(actorTm.role, targetRole)) {
@@ -125,23 +126,16 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
     ? Array.from(new Set(siteIds.filter((id: unknown) => typeof id === 'string' && id.trim())))
     : [];
 
-  // PARTNER는 협력업체 관리에서 현장 배정 → 현장 필수 아님
-  // GUEST/VIEWER만 현장 필수
   if (['GUEST', 'VIEWER'].includes(targetRole) && normalizedSiteIds.length === 0) {
-    return res
-      .status(400)
-      .json({ error: { message: '게스트 계정은 최소 1개 현장을 지정해야 합니다.' } });
+    return res.status(400).json({ error: { message: '게스트 계정은 최소 1개 현장을 지정해야 합니다.' } });
   }
 
-  // 현장 회사 스코프 검증
   if (normalizedSiteIds.length > 0) {
     const siteCount = await prisma.site.count({
       where: { teamId: actorTm.teamId, id: { in: normalizedSiteIds } },
     });
     if (siteCount !== normalizedSiteIds.length) {
-      return res
-        .status(400)
-        .json({ error: { message: '선택한 현장 중 다른 회사 현장이 포함되어 있습니다.' } });
+      return res.status(400).json({ error: { message: '선택한 현장 중 다른 회사 현장이 포함되어 있습니다.' } });
     }
   }
 

@@ -59,7 +59,7 @@ const HIDDEN_BY_ROLE: Record<string, string[]> = {
 // ── 메인 ──────────────────────────────────────────────
 export default function SiteDetail() {
   const router = useRouter();
-  const { id } = router.query;
+  const { id, print: printMode } = router.query;
   const [activeTab, setActiveTab] = useState('overview');
 
   const { data, mutate } = useSWR(id ? `/api/sites/${id}` : null, fetcher, { refreshInterval: 30000 });
@@ -98,6 +98,11 @@ export default function SiteDetail() {
       <span className="loading loading-spinner loading-lg text-gray-400" />
     </div>
   );
+
+  // ── 보고서 인쇄 모드 ──
+  if (printMode === '1') {
+    return <SiteReportPrint site={site} />;
+  }
 
   return (
     <>
@@ -191,9 +196,23 @@ function SiteHeader({ site, canDelete, onDelete, onTabChange }: any) {
             {[site.client?.name, site.address].filter(Boolean).join(' · ') || ''}
           </p>
         </div>
-        {canDelete && (
-          <button className="btn btn-error btn-xs opacity-60 hover:opacity-100" onClick={onDelete}>삭제</button>
-        )}
+        <div className="flex items-center gap-2">
+          <button
+            className="btn btn-ghost btn-xs gap-1 border border-gray-700 text-gray-400 hover:text-white"
+            onClick={() => {
+              const printUrl = `/sites/${site.id}?print=1`;
+              window.open(printUrl, '_blank');
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            보고서
+          </button>
+          {canDelete && (
+            <button className="btn btn-error btn-xs opacity-60 hover:opacity-100" onClick={onDelete}>삭제</button>
+          )}
+        </div>
       </div>
 
       {/* 핵심 지표 4칸 */}
@@ -992,21 +1011,38 @@ const TYPE_COLOR: Record<string, string> = {
 
 function TimelineTab({ siteId, canManage }: any) {
   const { data, mutate } = useSWR(`/api/sites/${siteId}/comments`, fetcher);
-  const items = (data?.data || []).slice().reverse(); // 최신이 위에
+  const items = (data?.data || []).slice().sort((a: any, b: any) => {
+    // 업무일지 날짜 기준 정렬 (최신이 위)
+    try {
+      const aDate = JSON.parse(a.content)._date || a.createdAt;
+      const bDate = JSON.parse(b.content)._date || b.createdAt;
+      return new Date(bDate).getTime() - new Date(aDate).getTime();
+    } catch { return 0; }
+  });
   const [form, setForm] = useState({ type: '일반메모', date: new Date().toISOString().split('T')[0], content: '' });
   const [sub, setSub] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     if (!form.content.trim()) return;
     setSub(true);
-    // 타임라인 항목을 댓글 API로 저장 (content에 JSON 메타 포함)
     const payload = JSON.stringify({ _type: form.type, _date: form.date, _text: form.content });
-    await fetch('/api/comments', {
+    await fetch(`/api/sites/${siteId}/comments`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ siteId, content: payload }),
+      body: JSON.stringify({ content: payload }),
     });
     setForm({ type: '일반메모', date: new Date().toISOString().split('T')[0], content: '' });
     setSub(false); mutate();
+  };
+
+  const handleDelete = async (commentId: string) => {
+    if (!confirm('이 기록을 삭제하시겠습니까?')) return;
+    setDeletingId(commentId);
+    await fetch(`/api/sites/${siteId}/comments`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commentId }),
+    });
+    setDeletingId(null); mutate();
   };
 
   // 타임라인 항목 파싱
@@ -1065,7 +1101,6 @@ function TimelineTab({ siteId, canManage }: any) {
               const dotColor = TYPE_COLOR[type] || 'bg-gray-600';
               return (
                 <div key={c.id} className="relative">
-                  {/* 점 */}
                   <div className={`absolute -left-[26px] top-2.5 w-3 h-3 rounded-full border-2 border-gray-950 ${dotColor}`} />
                   <div className="rounded-xl border border-gray-800 bg-black/20 p-3 hover:border-gray-700 transition-colors">
                     <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -1074,12 +1109,23 @@ function TimelineTab({ siteId, canManage }: any) {
                           {type}
                         </span>
                         <span className="text-xs text-gray-500">
-                          {date ? new Date(date).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }) : ''}
+                          {date ? new Date(date + 'T00:00:00').toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) : ''}
                         </span>
                       </div>
-                      <span className="text-[11px] text-gray-600 shrink-0">
-                        {c.author?.position ? `${c.author.position} ` : ''}{c.author?.name}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] text-gray-600">
+                          {c.author?.position ? `${c.author.position} ` : ''}{c.author?.name}
+                        </span>
+                        {canManage && (
+                          <button
+                            onClick={() => handleDelete(c.id)}
+                            disabled={deletingId === c.id}
+                            className="text-gray-700 hover:text-red-400 transition-colors"
+                          >
+                            <TrashIcon className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{text}</p>
                   </div>
@@ -1318,6 +1364,224 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
         )
       )}
     </div>
+  );
+}
+
+
+// ══════════════════════════════════════════════════════
+// 보고서 인쇄 컴포넌트
+// ══════════════════════════════════════════════════════
+function SiteReportPrint({ site }: { site: any }) {
+  const { data: commentsData } = useSWR(`/api/sites/${site.id}/comments`, fetcher);
+  const comments = (commentsData?.data || []).slice().sort((a: any, b: any) => {
+    try {
+      const aDate = JSON.parse(a.content)._date || a.createdAt;
+      const bDate = JSON.parse(b.content)._date || b.createdAt;
+      return new Date(aDate).getTime() - new Date(bDate).getTime();
+    } catch { return 0; }
+  });
+
+  const parseItem = (c: any) => {
+    try {
+      const p = JSON.parse(c.content);
+      if (p._type) return { type: p._type, date: p._date, text: p._text };
+    } catch {}
+    return { type: '일반메모', date: c.createdAt?.split('T')[0], text: c.content };
+  };
+
+  const shippedQty = (site.shipments || []).reduce((s: number, r: any) => s + Number(r.quantity ?? 0), 0);
+  const progressRate = site.contractQuantity > 0
+    ? Math.min(100, Math.round((shippedQty / Number(site.contractQuantity)) * 100)) : 0;
+
+  const items: any[] = Array.isArray(site.productItems) && site.productItems.length > 0
+    ? site.productItems
+    : (site.productName || site.specification)
+      ? [{ seq: '1', productName: site.productName, spec: site.specification, unit: '㎡', unitPrice: site.unitPrice, contractQuantity: site.contractQuantity, amount: site.contractAmount }]
+      : [];
+
+  return (
+    <>
+      <style>{`
+        @media print {
+          body { margin: 0; }
+          .no-print { display: none !important; }
+          .page-break { page-break-before: always; }
+        }
+        body { font-family: 'Pretendard', 'Noto Sans KR', sans-serif; background: white; color: #111; }
+        .report-wrap { max-width: 800px; margin: 0 auto; padding: 40px 32px; }
+        .report-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+        .report-sub { font-size: 13px; color: #666; margin-bottom: 24px; }
+        .section-title { font-size: 13px; font-weight: 700; color: #1B3FAE; border-bottom: 2px solid #1B3FAE; padding-bottom: 6px; margin: 24px 0 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 32px; }
+        .info-item label { font-size: 10px; color: #888; display: block; margin-bottom: 2px; }
+        .info-item p { font-size: 13px; font-weight: 500; }
+        .progress-bar-bg { background: #e5e7eb; border-radius: 4px; height: 10px; margin: 8px 0 4px; }
+        .progress-bar-fill { background: #1B3FAE; border-radius: 4px; height: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th { background: #f3f4f6; padding: 7px 10px; text-align: left; font-size: 11px; color: #555; border: 1px solid #e5e7eb; }
+        td { padding: 7px 10px; border: 1px solid #e5e7eb; vertical-align: top; }
+        .tl-type { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: #1B3FAE; color: white; }
+        .tl-date { font-size: 11px; color: #888; }
+        .tl-text { font-size: 13px; color: #222; white-space: pre-wrap; }
+        .print-btn { position: fixed; top: 20px; right: 20px; padding: 10px 20px; background: #1B3FAE; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+        .print-btn:hover { background: #1530a0; }
+        .stat-row { display: flex; gap: 16px; margin-bottom: 12px; }
+        .stat-box { flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; text-align: center; }
+        .stat-box .val { font-size: 20px; font-weight: 700; color: #1B3FAE; }
+        .stat-box .lbl { font-size: 11px; color: #888; margin-top: 2px; }
+        .generated { text-align: right; font-size: 11px; color: #aaa; margin-top: 40px; border-top: 1px solid #eee; padding-top: 12px; }
+      `}</style>
+
+      <button className="print-btn no-print" onClick={() => window.print()}>
+        🖨 인쇄 / PDF 저장
+      </button>
+
+      <div className="report-wrap">
+        {/* 제목 */}
+        <div className="report-title">{site.name}</div>
+        <div className="report-sub">
+          {site.client?.name && <span>{site.client.name}</span>}
+          {site.address && <span> · {site.address}</span>}
+          &nbsp;·&nbsp; 보고서 생성일: {new Date().toLocaleDateString('ko-KR')}
+        </div>
+
+        {/* 공사 진행 현황 */}
+        <div className="section-title">공사 진행 현황</div>
+        <div className="stat-row">
+          <div className="stat-box">
+            <div className="val" style={{ color: '#16a34a' }}>
+              {site.contractAmount ? `${(Number(site.contractAmount) / 100000000).toFixed(2)}억` : '-'}
+            </div>
+            <div className="lbl">계약금액</div>
+          </div>
+          <div className="stat-box">
+            <div className="val">{site.contractQuantity ? `${Number(site.contractQuantity).toLocaleString()} ㎡` : '-'}</div>
+            <div className="lbl">계약물량</div>
+          </div>
+          <div className="stat-box">
+            <div className="val">{shippedQty > 0 ? `${shippedQty.toLocaleString()} ㎡` : '-'}</div>
+            <div className="lbl">출하물량</div>
+          </div>
+          <div className="stat-box">
+            <div className="val" style={{ color: progressRate >= 100 ? '#2563eb' : progressRate >= 50 ? '#16a34a' : '#d97706' }}>
+              {progressRate}%
+            </div>
+            <div className="lbl">출하 공정률</div>
+          </div>
+        </div>
+        <div className="progress-bar-bg">
+          <div className="progress-bar-fill" style={{ width: `${progressRate}%` }} />
+        </div>
+        <div style={{ fontSize: 11, color: '#888', textAlign: 'right' }}>
+          {progressRate}% 출하 완료 ({shippedQty.toLocaleString()} / {Number(site.contractQuantity || 0).toLocaleString()} ㎡)
+        </div>
+
+        {/* 계약 정보 */}
+        <div className="section-title">계약 정보</div>
+        <div className="info-grid">
+          {[
+            { label: '납품요구번호', value: site.contractNo || '-' },
+            { label: '납품기한', value: site.deliveryDeadline ? fmtDate(site.deliveryDeadline) : '-' },
+            { label: '단가', value: site.unitPrice ? `${Number(site.unitPrice).toLocaleString()}원/㎡` : '-' },
+            { label: '하자담보기간', value: site.warrantyPeriod ? `${site.warrantyPeriod}년` : '-' },
+            { label: '검사기관', value: site.inspectionAgency || '-' },
+            { label: '현장 유형', value: site.siteType || '-' },
+          ].map(({ label, value }) => (
+            <div key={label} className="info-item">
+              <label>{label}</label>
+              <p>{value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* 품목 */}
+        {items.length > 0 && (
+          <>
+            <div className="section-title">납품 품목</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>순</th><th>품명</th><th>규격/사양</th><th style={{textAlign:'right'}}>단가</th>
+                  <th style={{textAlign:'right'}}>물량(㎡)</th><th style={{textAlign:'right'}}>금액</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item: any, idx: number) => (
+                  <tr key={idx}>
+                    <td>{item.seq || idx + 1}</td>
+                    <td>{item.productName || '-'}</td>
+                    <td style={{fontSize:11, color:'#555'}}>{item.spec || '-'}</td>
+                    <td style={{textAlign:'right'}}>{item.unitPrice ? Number(item.unitPrice).toLocaleString() : '-'}</td>
+                    <td style={{textAlign:'right', fontWeight:600}}>{item.contractQuantity ? Number(item.contractQuantity).toLocaleString() : '-'}</td>
+                    <td style={{textAlign:'right'}}>{item.amount ? Number(item.amount).toLocaleString() : '-'}</td>
+                  </tr>
+                ))}
+                {items.length > 1 && (
+                  <tr style={{background:'#f9fafb', fontWeight:700}}>
+                    <td colSpan={4} style={{textAlign:'right', color:'#555'}}>합계</td>
+                    <td style={{textAlign:'right'}}>
+                      {items.reduce((s: number, i: any) => s + Number(i.contractQuantity || 0), 0).toLocaleString()} ㎡
+                    </td>
+                    <td style={{textAlign:'right', color:'#16a34a'}}>
+                      {items.reduce((s: number, i: any) => s + Number(i.amount || 0), 0).toLocaleString()}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </>
+        )}
+
+        {/* 수요기관 */}
+        {(site.client?.name || site.clientManager) && (
+          <>
+            <div className="section-title">발주처 / 담당자</div>
+            <div className="info-grid">
+              <div className="info-item"><label>수요기관</label><p>{site.client?.name || '-'}</p></div>
+              <div className="info-item"><label>담당부서</label><p>{site.clientDept || '-'}</p></div>
+              <div className="info-item"><label>담당자</label><p>{site.clientManager || '-'}</p></div>
+              <div className="info-item"><label>연락처</label><p>{site.clientManagerPhone || '-'}</p></div>
+            </div>
+          </>
+        )}
+
+        {/* 업무일지 */}
+        <div className="section-title">업무일지</div>
+        {comments.length === 0 ? (
+          <p style={{ fontSize: 13, color: '#aaa' }}>등록된 업무일지가 없습니다.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th style={{width:70}}>날짜</th>
+                <th style={{width:80}}>유형</th>
+                <th>내용</th>
+                <th style={{width:70}}>작성자</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comments.map((c: any) => {
+                const { type, date, text } = parseItem(c);
+                return (
+                  <tr key={c.id}>
+                    <td className="tl-date">{date ? new Date(date + 'T00:00:00').toLocaleDateString('ko-KR') : '-'}</td>
+                    <td><span className="tl-type">{type}</span></td>
+                    <td className="tl-text">{text}</td>
+                    <td style={{fontSize:11, color:'#888'}}>
+                      {c.author?.position ? `${c.author.position} ` : ''}{c.author?.name || '-'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+
+        <div className="generated">
+          LOOKUP9 · {site.name} · 보고서 생성: {new Date().toLocaleString('ko-KR')}
+        </div>
+      </div>
+    </>
   );
 }
 

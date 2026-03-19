@@ -53,7 +53,8 @@ const HIDDEN_BY_SITE_TYPE: Record<string, string[]> = {
 };
 const HIDDEN_BY_ROLE: Record<string, string[]> = {
   PARTNER: ['settlement'],
-  GUEST: ['production', 'painting', 'shipping', 'settlement', 'requests'],
+  GUEST: ['production', 'painting', 'shipping', 'settlement', 'requests', 'timeline'],
+  VIEWER: ['production', 'painting', 'shipping', 'settlement', 'requests', 'timeline'],
 };
 
 // ── 메인 ──────────────────────────────────────────────

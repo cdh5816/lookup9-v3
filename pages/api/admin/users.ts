@@ -59,7 +59,8 @@ const handleGET = async (teamId: string, actorRole: string, actorUserId: string,
             createdAt: true,
             siteAssignments: {
               where: { site: { teamId } },
-              include: {
+              select: {
+                siteId: true,
                 site: { select: { id: true, name: true, status: true } },
               },
             },

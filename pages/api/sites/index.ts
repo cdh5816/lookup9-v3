@@ -41,13 +41,13 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
   const where: any = { teamId: tm.teamId };
 
   if (salesOnly === 'true') {
-    where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'FAILED'] };
+    where.status = { in: ['SALES_PIPELINE', 'FAILED'] }; // 수주확정은 현장관리 투입전으로
   } else if (status && status !== 'all') {
     where.status = normalizeStatus(status as string);
   } else if (includeCompleted === 'true') {
     if (excludeSales === 'true') {
-      // 현장관리: 영업 상태 제외, 계약 이후 현장만
-      where.status = { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY', 'FAILED'] };
+      // 현장관리: SALES_PIPELINE만 제외, 수주확정은 투입전으로 현장관리에 포함
+      where.status = { in: ['SALES_CONFIRMED', 'CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY', 'FAILED'] };
     } else {
       // 전체 (FAILED 포함)
       where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY', 'FAILED'] };

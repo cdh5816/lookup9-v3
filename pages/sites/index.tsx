@@ -15,7 +15,7 @@ import {
 // ── 상태 정의 ──────────────────────────────────────────────
 const STATUS_META: Record<string, { label: string; dot: string; badge: string; group: 'active' | 'sales' | 'done' }> = {
   SALES_PIPELINE:  { label: '영업중',   dot: 'bg-orange-400', badge: 'text-orange-300 bg-orange-900/25 border-orange-800/40', group: 'sales' },
-  SALES_CONFIRMED: { label: '수주확정', dot: 'bg-yellow-400', badge: 'text-yellow-300 bg-yellow-900/25 border-yellow-800/40', group: 'sales' },
+  SALES_CONFIRMED: { label: '수주확정', dot: 'bg-yellow-400', badge: 'text-yellow-300 bg-yellow-900/25 border-yellow-800/40', group: 'pre' },
   CONTRACT_ACTIVE: { label: '진행중',   dot: 'bg-green-400',  badge: 'text-green-300  bg-green-900/25  border-green-800/40',  group: 'active' },
   COMPLETED:       { label: '준공완료', dot: 'bg-blue-400',   badge: 'text-blue-300   bg-blue-900/25   border-blue-800/40',   group: 'done' },
   WARRANTY:        { label: '하자기간', dot: 'bg-purple-400', badge: 'text-purple-300 bg-purple-900/25 border-purple-800/40', group: 'done' },
@@ -59,9 +59,10 @@ const getAlertLevel = (site: any): AlertLevel => {
 };
 
 // ── 탭 필터 정의 ────────────────────────────────────────────
-type TabFilter = 'all' | 'sales' | 'active' | 'done';
+type TabFilter = 'all' | 'pre' | 'active' | 'done';
 const TAB_DEFS: { key: TabFilter; label: string }[] = [
   { key: 'all',    label: '전체' },
+  { key: 'pre',    label: '투입전' },
   { key: 'active', label: '진행중' },
   { key: 'done',   label: '완료/하자' },
 ];
@@ -99,16 +100,18 @@ const SitesList = () => {
   }, [fetchSites, search]);
 
   // 그룹 분류
+  const preSites     = useMemo(() => sites.filter(s => getMeta(s.status).group === 'pre'), [sites]);
   const activeSites  = useMemo(() => sites.filter(s => getMeta(s.status).group === 'active'), [sites]);
   const doneSites    = useMemo(() => sites.filter(s => getMeta(s.status).group === 'done' && s.status !== 'FAILED'), [sites]);
   const failedSites  = useMemo(() => sites.filter(s => s.status === 'FAILED'), [sites]);
 
   // 탭에 따른 표시 목록
   const tabSites = useMemo(() => {
+    if (tab === 'pre')    return preSites;
     if (tab === 'active') return activeSites;
     if (tab === 'done')   return doneSites;
-    return activeSites; // 'all' = 진행중만 (영업은 영업관리 메뉴에서)
-  }, [tab, activeSites, doneSites]);
+    return [...preSites, ...activeSites]; // 'all' = 투입전+진행중
+  }, [tab, preSites, activeSites, doneSites]);
 
   // 알림 필터 + 정렬
   const LEVEL_ORDER: Record<AlertLevel, number> = { critical: 0, warning: 1, normal: 2 };
@@ -121,12 +124,13 @@ const SitesList = () => {
 
   // 카운트
   const counts = useMemo(() => ({
+    pre:      preSites.length,
     active:   activeSites.length,
-    critical: activeSites.filter(s => getAlertLevel(s) === 'critical').length,
-    warning:  activeSites.filter(s => getAlertLevel(s) === 'warning').length,
+    critical: [...preSites, ...activeSites].filter(s => getAlertLevel(s) === 'critical').length,
+    warning:  [...preSites, ...activeSites].filter(s => getAlertLevel(s) === 'warning').length,
     done:     doneSites.length,
     failed:   failedSites.length,
-  }), [activeSites, doneSites, failedSites]);
+  }), [preSites, activeSites, doneSites, failedSites]);
 
   return (
     <>
@@ -138,7 +142,7 @@ const SitesList = () => {
           <div>
             <h2 className="text-xl font-bold">현장관리</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              진행중 {counts.active} · 완료 {counts.done}
+              투입전 {counts.pre} · 진행중 {counts.active} · 완료 {counts.done}
             </p>
           </div>
           {canCreate && (
@@ -158,8 +162,9 @@ const SitesList = () => {
         </div>
 
         {/* 요약 칩 */}
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-4 gap-1.5">
           {[
+            { label: '투입전', value: counts.pre,      color: 'border-yellow-900/40 text-yellow-300' },
             { label: '진행중', value: counts.active,   color: 'border-green-900/40  text-green-300' },
             { label: '긴급',   value: counts.critical, color: `border-red-900/50 text-red-300 ${alertOnly ? 'ring-1 ring-red-500' : ''}`, click: () => setAlertOnly(p => !p) },
             { label: '완료',   value: counts.done,     color: 'border-blue-900/40 text-blue-400' },
@@ -186,9 +191,10 @@ const SitesList = () => {
             >
               {t.label}
               <span className="ml-1 text-[10px] opacity-60">
-                {t.key === 'active' ? counts.active :
+                {t.key === 'pre'    ? counts.pre :
+                 t.key === 'active' ? counts.active :
                  t.key === 'done'   ? counts.done :
-                 counts.active}
+                 counts.pre + counts.active}
               </span>
             </button>
           ))}

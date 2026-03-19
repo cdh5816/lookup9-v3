@@ -1461,7 +1461,7 @@ function SiteReportPrint({ site }: { site: any }) {
         .cover-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
         .cover-left { flex: 1; min-width: 0; }
         .cover-eyebrow { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #1B3FAE; margin-bottom: 6px; }
-        .cover-title { font-size: 18px; font-weight: 800; line-height: 1.3; letter-spacing: -0.02em; margin-bottom: 8px; color: #111; }
+        .cover-title { font-size: 18px; font-weight: 800; line-height: 1.3; letter-spacing: -0.02em; margin-bottom: 8px; color: #111; word-break: keep-all; }
         .cover-meta { display: flex; flex-wrap: wrap; gap: 3px 14px; font-size: 10px; color: #888; }
         .cover-right { flex-shrink: 0; text-align: right; }
         .cover-badge {
@@ -1508,7 +1508,7 @@ function SiteReportPrint({ site }: { site: any }) {
 
         /* ── 테이블 ── */
         .tbl-wrap { border-radius: 8px; overflow: hidden; border: 1px solid #e8eaf0; }
-        table { width: 100%; border-collapse: collapse; background: white; }
+        table { width: 100%; border-collapse: collapse; background: white; table-layout: auto; }
         thead tr { background: #f5f7fc; }
         th { padding: 7px 11px; text-align: left; font-size: 8.5px; font-weight: 700; color: #888; letter-spacing: 0.08em; text-transform: uppercase; border-bottom: 1px solid #e8eaf0; white-space: nowrap; }
         td { padding: 8px 11px; font-size: 11px; color: #333; border-bottom: 1px solid #f3f4fa; vertical-align: middle; }
@@ -1647,8 +1647,8 @@ function SiteReportPrint({ site }: { site: any }) {
                   {items.map((item: any, idx: number) => (
                     <tr key={idx}>
                       <td className="td-c" style={{ color: '#ccc', fontWeight: 700 }}>{item.seq || idx + 1}</td>
-                      <td style={{ fontWeight: 600 }}>{item.productName || '-'}</td>
-                      <td style={{ fontSize: 10, color: '#777' }}>{item.spec || '-'}</td>
+                      <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{item.productName || '-'}</td>
+                      <td style={{ fontSize: 10, color: '#777', maxWidth: 200, wordBreak: 'break-all', lineHeight: 1.4 }}>{item.spec || '-'}</td>
                       <td className="td-r">{item.unitPrice ? Number(item.unitPrice).toLocaleString() : '-'}</td>
                       <td className="td-r" style={{ fontWeight: 700, color: '#1B3FAE' }}>{item.contractQuantity ? Number(item.contractQuantity).toLocaleString() : '-'}</td>
                       <td className="td-r" style={{ color: '#16a34a', fontWeight: 600 }}>{item.amount ? Number(item.amount).toLocaleString() : '-'}</td>

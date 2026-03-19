@@ -1409,164 +1409,122 @@ function SiteReportPrint({ site }: { site: any }) {
   };
 
   const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
-  const progressColor = progressRate >= 100 ? '#2563eb' : progressRate >= 60 ? '#16a34a' : progressRate >= 30 ? '#d97706' : '#6b7280';
+  const statusLabel = site.status === 'CONTRACT_ACTIVE' ? '진행중' : site.status === 'COMPLETED' ? '준공완료' : site.status === 'WARRANTY' ? '하자기간' : site.status;
+  const progressColor = progressRate >= 80 ? '#16a34a' : progressRate >= 40 ? '#1B3FAE' : '#d97706';
+
+  // 업무일지 월별 그룹
+  const grouped: Record<string, any[]> = {};
+  comments.forEach((c: any) => {
+    const item = parseItem(c);
+    const key = item.date ? item.date.substring(0, 7) : '기타';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push({ ...item, author: c.author });
+  });
 
   return (
     <>
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        @page { size: A4 portrait; margin: 15mm 16mm; }
+        @page { size: A4 portrait; margin: 12mm 14mm; }
         @media print {
           .no-print { display: none !important; }
           body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          .page { padding: 0 !important; }
         }
         html, body {
           font-family: 'Apple SD Gothic Neo', 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
-          background: #eef0f6;
-          color: #1a1a2e;
-          font-size: 13px;
-          line-height: 1.65;
+          background: #f0f2f6;
+          color: #1a1a1a;
+          font-size: 12px;
+          line-height: 1.5;
         }
-        /* 인쇄 버튼 */
         .print-fab {
-          position: fixed;
-          bottom: 28px; right: 28px;
-          display: flex; align-items: center; gap: 8px;
+          position: fixed; bottom: 24px; right: 24px;
+          display: flex; align-items: center; gap: 7px;
           background: #1B3FAE; color: white;
           border: none; border-radius: 50px;
-          padding: 13px 26px;
-          font-size: 14px; font-weight: 700;
-          cursor: pointer;
-          box-shadow: 0 6px 28px rgba(27,63,174,0.5);
+          padding: 11px 22px; font-size: 13px; font-weight: 700;
+          cursor: pointer; box-shadow: 0 4px 20px rgba(27,63,174,0.45);
           z-index: 9999;
-          letter-spacing: -0.01em;
         }
         .print-fab:hover { background: #1432a0; }
-
-        /* 페이지 */
-        .page { max-width: 800px; margin: 0 auto; padding: 28px 16px 60px; }
+        .page { max-width: 780px; margin: 0 auto; padding: 20px 14px 48px; }
 
         /* ── 커버 ── */
         .cover {
-          background: linear-gradient(135deg, #0d1d6b 0%, #1B3FAE 55%, #3461e8 100%);
-          color: white;
-          border-radius: 16px;
-          padding: 36px 40px 32px;
-          margin-bottom: 20px;
-          position: relative; overflow: hidden;
+          background: #fff;
+          border-radius: 12px;
+          padding: 22px 28px 18px;
+          margin-bottom: 14px;
+          border: 1px solid #e8eaf0;
+          border-left: 4px solid #1B3FAE;
         }
-        .cover::before {
-          content: ''; position: absolute;
-          top: -50px; right: -50px;
-          width: 220px; height: 220px; border-radius: 50%;
-          background: rgba(255,255,255,0.07);
-        }
-        .cover-eyebrow {
-          font-size: 10px; font-weight: 700;
-          letter-spacing: 0.18em; text-transform: uppercase;
-          color: rgba(255,255,255,0.55);
-          margin-bottom: 10px;
-        }
-        .cover-title {
-          font-size: 22px; font-weight: 800; line-height: 1.35;
-          letter-spacing: -0.025em; margin-bottom: 14px;
-        }
-        .cover-chips { display: flex; flex-wrap: wrap; gap: 6px 16px; }
-        .cover-chip {
-          font-size: 11px; color: rgba(255,255,255,0.72);
-          display: flex; align-items: center; gap: 5px;
-        }
+        .cover-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+        .cover-left { flex: 1; min-width: 0; }
+        .cover-eyebrow { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #1B3FAE; margin-bottom: 6px; }
+        .cover-title { font-size: 18px; font-weight: 800; line-height: 1.3; letter-spacing: -0.02em; margin-bottom: 8px; color: #111; }
+        .cover-meta { display: flex; flex-wrap: wrap; gap: 3px 14px; font-size: 10px; color: #888; }
+        .cover-right { flex-shrink: 0; text-align: right; }
         .cover-badge {
-          display: inline-flex; align-items: center;
-          background: rgba(255,255,255,0.15);
-          border: 1px solid rgba(255,255,255,0.25);
-          border-radius: 20px; padding: 3px 12px;
-          font-size: 11px; font-weight: 600; color: white;
-          margin-top: 14px;
+          display: inline-block; background: #f0f3fc;
+          border: 1px solid #d5dcf5;
+          border-radius: 20px; padding: 3px 11px;
+          font-size: 10px; font-weight: 700; color: #1B3FAE; margin-bottom: 4px;
         }
+        .cover-date { font-size: 9px; color: #bbb; }
 
         /* ── 섹션 ── */
-        .section { margin-bottom: 18px; }
-        .section-head {
-          display: flex; align-items: center; gap: 9px;
-          margin-bottom: 11px;
-        }
-        .section-bar { width: 3px; height: 17px; background: #1B3FAE; border-radius: 2px; }
-        .section-title { font-size: 12px; font-weight: 800; color: #1B3FAE; letter-spacing: 0.04em; text-transform: uppercase; }
-        .section-count { font-size: 11px; color: #aaa; font-weight: 500; }
+        .section { margin-bottom: 12px; }
+        .sec-head { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+        .sec-bar { width: 3px; height: 13px; background: #1B3FAE; border-radius: 2px; flex-shrink: 0; }
+        .sec-title { font-size: 10px; font-weight: 800; color: #1B3FAE; letter-spacing: 0.08em; text-transform: uppercase; }
+        .sec-sub { font-size: 10px; color: #aaa; }
+
+        /* ── 통계 ── */
+        .stat-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 7px; margin-bottom: 8px; }
+        .stat-card { background: white; border-radius: 8px; padding: 11px 10px; text-align: center; border: 1px solid #e8eaf0; }
+        .stat-val { font-size: 17px; font-weight: 800; line-height: 1; margin-bottom: 3px; letter-spacing: -0.03em; }
+        .stat-lbl { font-size: 9px; color: #999; font-weight: 600; letter-spacing: 0.02em; }
+
+        /* ── 공정률 ── */
+        .progress-card { background: white; border-radius: 8px; padding: 12px 16px; border: 1px solid #e8eaf0; }
+        .progress-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+        .progress-lbl { font-size: 11px; font-weight: 600; color: #555; }
+        .progress-pct { font-size: 18px; font-weight: 800; letter-spacing: -0.03em; }
+        .progress-track { background: #eef0f8; border-radius: 99px; height: 8px; overflow: hidden; margin-bottom: 4px; }
+        .progress-fill { height: 100%; border-radius: 99px; }
+        .progress-detail { font-size: 9px; color: #bbb; text-align: right; }
 
         /* ── 카드 ── */
-        .card {
-          background: white; border-radius: 12px;
-          padding: 20px 22px;
-          box-shadow: 0 1px 8px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);
-        }
-
-        /* ── 통계 그리드 ── */
-        .stat-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 12px; }
-        .stat-card {
-          background: white; border-radius: 12px; padding: 16px 14px; text-align: center;
-          box-shadow: 0 1px 8px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);
-        }
-        .stat-val { font-size: 20px; font-weight: 800; line-height: 1.1; margin-bottom: 3px; letter-spacing: -0.03em; }
-        .stat-lbl { font-size: 10px; color: #999; font-weight: 600; letter-spacing: 0.02em; }
-
-        /* ── 공정률 바 ── */
-        .progress-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-        .progress-label { font-size: 12px; font-weight: 600; color: #555; }
-        .progress-pct { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
-        .progress-track { background: #e8ecf8; border-radius: 99px; height: 10px; overflow: hidden; margin-bottom: 6px; }
-        .progress-fill { height: 100%; border-radius: 99px; }
-        .progress-detail { font-size: 10px; color: #bbb; text-align: right; }
+        .card { background: white; border-radius: 8px; padding: 13px 16px; border: 1px solid #e8eaf0; }
 
         /* ── 정보 그리드 ── */
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 36px; }
-        .info-item label { display: block; font-size: 9px; font-weight: 700; color: #bbb; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 3px; }
-        .info-item p { font-size: 13px; font-weight: 600; color: #222; }
-        .divider { border: none; border-top: 1px solid #f0f2f8; margin: 14px 0; }
+        .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 24px; }
+        .info-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
+        .info-item label { display: block; font-size: 8px; font-weight: 700; color: #bbb; letter-spacing: 0.09em; text-transform: uppercase; margin-bottom: 2px; }
+        .info-item p { font-size: 12px; font-weight: 600; color: #222; }
+        .divider { border: none; border-top: 1px solid #f0f0f0; margin: 10px 0; }
+        .docs-row { display: flex; gap: 16px; }
+        .doc-chip { font-size: 11px; font-weight: 600; }
 
         /* ── 테이블 ── */
-        .table-wrap { border-radius: 12px; overflow: hidden; box-shadow: 0 1px 8px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); }
+        .tbl-wrap { border-radius: 8px; overflow: hidden; border: 1px solid #e8eaf0; }
         table { width: 100%; border-collapse: collapse; background: white; }
         thead tr { background: #f5f7fc; }
-        th {
-          padding: 10px 13px; text-align: left;
-          font-size: 9px; font-weight: 700; color: #888;
-          letter-spacing: 0.09em; text-transform: uppercase;
-          border-bottom: 1px solid #eaecf5;
-          white-space: nowrap;
-        }
-        td {
-          padding: 10px 13px; font-size: 12px; color: #333;
-          border-bottom: 1px solid #f3f5fb;
-          vertical-align: top;
-        }
+        th { padding: 7px 11px; text-align: left; font-size: 8.5px; font-weight: 700; color: #888; letter-spacing: 0.08em; text-transform: uppercase; border-bottom: 1px solid #e8eaf0; white-space: nowrap; }
+        td { padding: 8px 11px; font-size: 11px; color: #333; border-bottom: 1px solid #f3f4fa; vertical-align: middle; }
         tr:last-child td { border-bottom: none; }
-        .td-r { text-align: right; }
-        .td-c { text-align: center; }
-        .sum-row td { background: #f0f3fc; font-weight: 700; color: #1B3FAE; border-top: 1.5px solid #d8deef; }
-        .type-pill {
-          display: inline-block; padding: 2px 9px; border-radius: 20px;
-          font-size: 10px; font-weight: 700; white-space: nowrap;
-          background: #1B3FAE; color: white;
-        }
-        .tl-text { font-size: 12px; color: #333; white-space: pre-wrap; line-height: 1.6; }
+        .td-r { text-align: right; } .td-c { text-align: center; }
+        .sum-row td { background: #f0f3fc; font-weight: 700; color: #1B3FAE; border-top: 1.5px solid #d5dcf5; font-size: 11px; }
+        .pill { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 9.5px; font-weight: 700; background: #eef1fb; color: #1B3FAE; border: 1px solid #d5dcf5; white-space: nowrap; }
+
+        /* ── 업무일지 월별 ── */
+        .month-label { font-size: 9px; font-weight: 700; color: #999; letter-spacing: 0.08em; padding: 5px 11px; background: #f9fafc; border-bottom: 1px solid #eef0f8; }
 
         /* ── 푸터 ── */
-        .footer {
-          margin-top: 28px; padding-top: 14px;
-          border-top: 1px solid #e2e5f0;
-          display: flex; justify-content: space-between; align-items: center;
-          font-size: 10px; color: #ccc;
-        }
+        .footer { margin-top: 16px; padding-top: 10px; border-top: 1px solid #e0e3ee; display: flex; justify-content: space-between; align-items: center; font-size: 9px; color: #ccc; }
         .footer strong { color: #1B3FAE; font-weight: 700; }
-
-        /* 색상 유틸 */
-        .c-green { color: #16a34a; } .c-blue { color: #1B3FAE; } .c-amber { color: #d97706; } .c-gray { color: #9ca3af; }
       `}</style>
 
-      {/* 인쇄 버튼 */}
       <button className="print-fab no-print" onClick={() => window.print()}>
         🖨&nbsp; 인쇄 / PDF 저장
       </button>
@@ -1575,63 +1533,53 @@ function SiteReportPrint({ site }: { site: any }) {
 
         {/* ── 커버 ── */}
         <div className="cover">
-          <div className="cover-eyebrow">현장 관리 보고서 · LOOKUP9</div>
-          <div className="cover-title">{site.name}</div>
-          <div className="cover-chips">
-            {site.client?.name && <span className="cover-chip">📍&nbsp;{site.client.name}</span>}
-            {site.address   && <span className="cover-chip">🏗&nbsp;{site.address}</span>}
-            <span className="cover-chip">📅&nbsp;{today}</span>
-          </div>
-          <div>
-            <span className="cover-badge">
-              {site.status === 'CONTRACT_ACTIVE' ? '🟢 진행중'
-               : site.status === 'COMPLETED' ? '🔵 준공완료'
-               : site.status === 'WARRANTY' ? '🟣 하자기간'
-               : site.status}
-              &nbsp;&nbsp;·&nbsp;&nbsp;{site.siteType || '납품설치도'}
-            </span>
+          <div className="cover-top">
+            <div className="cover-left">
+              <div className="cover-eyebrow">현장 관리 보고서 · LOOKUP9</div>
+              <div className="cover-title">{site.name}</div>
+              <div className="cover-meta">
+                {site.client?.name && <span>📍 {site.client.name}</span>}
+                {site.address && <span>🏗 {site.address}</span>}
+              </div>
+            </div>
+            <div className="cover-right">
+              <div className="cover-badge">{statusLabel} · {site.siteType || '납품설치도'}</div>
+              <div className="cover-date">생성일: {today}</div>
+            </div>
           </div>
         </div>
 
         {/* ── 공사 진행 현황 ── */}
         <div className="section">
-          <div className="section-head">
-            <div className="section-bar" />
-            <div className="section-title">공사 진행 현황</div>
-          </div>
+          <div className="sec-head"><div className="sec-bar" /><div className="sec-title">공사 진행 현황</div></div>
           <div className="stat-grid">
             {[
-              { val: fmtW(site.contractAmount),  lbl: '계약금액',    cls: 'c-green' },
-              { val: site.contractQuantity ? `${Number(site.contractQuantity).toLocaleString()} ㎡` : '-', lbl: '계약물량', cls: 'c-blue' },
-              { val: shippedQty > 0 ? `${shippedQty.toLocaleString()} ㎡` : '-', lbl: '출하물량', cls: shippedQty > 0 ? 'c-blue' : 'c-gray' },
-              { val: `${progressRate}%`, lbl: '출하 공정률', cls: progressRate >= 80 ? 'c-green' : progressRate >= 40 ? 'c-blue' : 'c-amber' },
-            ].map(({ val, lbl, cls }) => (
+              { val: fmtW(site.contractAmount), lbl: '계약금액', color: '#16a34a' },
+              { val: site.contractQuantity ? `${Number(site.contractQuantity).toLocaleString()} ㎡` : '-', lbl: '계약물량', color: '#1B3FAE' },
+              { val: shippedQty > 0 ? `${shippedQty.toLocaleString()} ㎡` : '-', lbl: '출하물량', color: shippedQty > 0 ? '#1B3FAE' : '#ccc' },
+              { val: `${progressRate}%`, lbl: '출하 공정률', color: progressColor },
+            ].map(({ val, lbl, color }) => (
               <div key={lbl} className="stat-card">
-                <div className={`stat-val ${cls}`}>{val}</div>
+                <div className="stat-val" style={{ color }}>{val}</div>
                 <div className="stat-lbl">{lbl}</div>
               </div>
             ))}
           </div>
-          <div className="card">
+          <div className="progress-card">
             <div className="progress-row">
-              <span className="progress-label">출하 공정률</span>
+              <span className="progress-lbl">출하 공정률</span>
               <span className="progress-pct" style={{ color: progressColor }}>{progressRate}%</span>
             </div>
             <div className="progress-track">
-              <div className="progress-fill" style={{ width: `${progressRate}%`, background: `linear-gradient(90deg, ${progressColor}, ${progressColor}cc)` }} />
+              <div className="progress-fill" style={{ width: `${progressRate}%`, background: progressColor }} />
             </div>
-            <div className="progress-detail">
-              출하 {shippedQty.toLocaleString()} ㎡ &nbsp;/&nbsp; 계약 {Number(site.contractQuantity || 0).toLocaleString()} ㎡
-            </div>
+            <div className="progress-detail">출하 {shippedQty.toLocaleString()} ㎡ / 계약 {Number(site.contractQuantity || 0).toLocaleString()} ㎡</div>
           </div>
         </div>
 
         {/* ── 계약 정보 ── */}
         <div className="section">
-          <div className="section-head">
-            <div className="section-bar" />
-            <div className="section-title">계약 정보</div>
-          </div>
+          <div className="sec-head"><div className="sec-bar" /><div className="sec-title">계약 정보</div></div>
           <div className="card">
             <div className="info-grid">
               {[
@@ -1648,31 +1596,46 @@ function SiteReportPrint({ site }: { site: any }) {
                 </div>
               ))}
             </div>
-            <hr className="divider" />
-            <div style={{ display: 'flex', gap: 24 }}>
-              <span style={{ fontSize: 12, color: site.startDocsDone ? '#16a34a' : '#d1d5db', fontWeight: 600 }}>
-                {site.startDocsDone ? '✅' : '⬜'}&nbsp;착수계 제출
+            <div className="divider" />
+            <div className="docs-row">
+              <span className="doc-chip" style={{ color: site.startDocsDone ? '#16a34a' : '#ccc' }}>
+                {site.startDocsDone ? '✅' : '⬜'} 착수계 제출
               </span>
-              <span style={{ fontSize: 12, color: site.completionDocsDone ? '#2563eb' : '#d1d5db', fontWeight: 600 }}>
-                {site.completionDocsDone ? '✅' : '⬜'}&nbsp;준공계 제출
+              <span className="doc-chip" style={{ color: site.completionDocsDone ? '#2563eb' : '#ccc' }}>
+                {site.completionDocsDone ? '✅' : '⬜'} 준공계 제출
               </span>
             </div>
           </div>
         </div>
 
+        {/* ── 발주처 / 담당자 ── */}
+        {(site.client?.name || site.clientManager) && (
+          <div className="section">
+            <div className="sec-head"><div className="sec-bar" /><div className="sec-title">발주처 / 담당자</div></div>
+            <div className="card">
+              <div className="info-grid-2">
+                <div className="info-item"><label>수요기관</label><p>{site.client?.name || '-'}</p></div>
+                <div className="info-item"><label>담당부서</label><p>{site.clientDept || '-'}</p></div>
+                <div className="info-item"><label>담당자명</label><p>{site.clientManager || '-'}</p></div>
+                <div className="info-item"><label>연락처</label><p>{site.clientManagerPhone || '-'}</p></div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── 납품 품목 ── */}
         {items.length > 0 && (
           <div className="section">
-            <div className="section-head">
-              <div className="section-bar" />
-              <div className="section-title">납품 품목</div>
-              {items.length > 1 && <span className="section-count">{items.length}개 품목</span>}
+            <div className="sec-head">
+              <div className="sec-bar" />
+              <div className="sec-title">납품 품목</div>
+              {items.length > 1 && <span className="sec-sub">{items.length}개 품목</span>}
             </div>
-            <div className="table-wrap">
+            <div className="tbl-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th className="td-c" style={{width:36}}>순</th>
+                    <th className="td-c" style={{width:30}}>순</th>
                     <th>품명</th>
                     <th>규격 / 사양</th>
                     <th className="td-r">단가 (원/㎡)</th>
@@ -1683,21 +1646,17 @@ function SiteReportPrint({ site }: { site: any }) {
                 <tbody>
                   {items.map((item: any, idx: number) => (
                     <tr key={idx}>
-                      <td className="td-c" style={{ color: '#bbb', fontWeight: 700 }}>{item.seq || idx + 1}</td>
+                      <td className="td-c" style={{ color: '#ccc', fontWeight: 700 }}>{item.seq || idx + 1}</td>
                       <td style={{ fontWeight: 600 }}>{item.productName || '-'}</td>
-                      <td style={{ fontSize: 11, color: '#777', wordBreak: 'break-all' }}>{item.spec || '-'}</td>
+                      <td style={{ fontSize: 10, color: '#777' }}>{item.spec || '-'}</td>
                       <td className="td-r">{item.unitPrice ? Number(item.unitPrice).toLocaleString() : '-'}</td>
-                      <td className="td-r" style={{ fontWeight: 700, color: '#1B3FAE' }}>
-                        {item.contractQuantity ? Number(item.contractQuantity).toLocaleString() : '-'}
-                      </td>
-                      <td className="td-r" style={{ color: '#16a34a', fontWeight: 600 }}>
-                        {item.amount ? Number(item.amount).toLocaleString() : '-'}
-                      </td>
+                      <td className="td-r" style={{ fontWeight: 700, color: '#1B3FAE' }}>{item.contractQuantity ? Number(item.contractQuantity).toLocaleString() : '-'}</td>
+                      <td className="td-r" style={{ color: '#16a34a', fontWeight: 600 }}>{item.amount ? Number(item.amount).toLocaleString() : '-'}</td>
                     </tr>
                   ))}
                   {items.length > 1 && (
                     <tr className="sum-row">
-                      <td colSpan={4} className="td-r">합 계</td>
+                      <td colSpan={4} className="td-r">합&nbsp;계</td>
                       <td className="td-r">{items.reduce((s: number, i: any) => s + Number(i.contractQuantity || 0), 0).toLocaleString()} ㎡</td>
                       <td className="td-r">{items.reduce((s: number, i: any) => s + Number(i.amount || 0), 0).toLocaleString()}</td>
                     </tr>
@@ -1708,62 +1667,50 @@ function SiteReportPrint({ site }: { site: any }) {
           </div>
         )}
 
-        {/* ── 발주처 / 담당자 ── */}
-        {(site.client?.name || site.clientManager) && (
-          <div className="section">
-            <div className="section-head">
-              <div className="section-bar" />
-              <div className="section-title">발주처 / 담당자</div>
-            </div>
-            <div className="card">
-              <div className="info-grid">
-                <div className="info-item"><label>수요기관</label><p>{site.client?.name || '-'}</p></div>
-                <div className="info-item"><label>담당부서</label><p>{site.clientDept || '-'}</p></div>
-                <div className="info-item"><label>담당자명</label><p>{site.clientManager || '-'}</p></div>
-                <div className="info-item"><label>연락처</label><p>{site.clientManagerPhone || '-'}</p></div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ── 업무일지 ── */}
         <div className="section">
-          <div className="section-head">
-            <div className="section-bar" />
-            <div className="section-title">업무일지</div>
-            {comments.length > 0 && <span className="section-count">{comments.length}건</span>}
+          <div className="sec-head">
+            <div className="sec-bar" />
+            <div className="sec-title">업무일지</div>
+            {comments.length > 0 && <span className="sec-sub">{comments.length}건</span>}
           </div>
           {comments.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', color: '#ccc', padding: '28px', fontSize: 12 }}>
+            <div className="card" style={{ textAlign: 'center', color: '#ccc', padding: '20px', fontSize: 11 }}>
               등록된 업무일지가 없습니다.
             </div>
           ) : (
-            <div className="table-wrap">
+            <div className="tbl-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th style={{ width: 82 }}>날짜</th>
-                    <th style={{ width: 76 }}>유형</th>
+                    <th style={{width:78}}>날짜</th>
+                    <th style={{width:70}}>유형</th>
                     <th>내용</th>
-                    <th style={{ width: 68 }}>작성자</th>
+                    <th style={{width:62}}>작성자</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {comments.map((c: any) => {
-                    const { type, date, text } = parseItem(c);
-                    return (
-                      <tr key={c.id}>
-                        <td style={{ fontSize: 11, color: '#888', whiteSpace: 'nowrap' }}>
-                          {date ? new Date(date + 'T00:00:00').toLocaleDateString('ko-KR') : '-'}
-                        </td>
-                        <td><span className="type-pill">{type}</span></td>
-                        <td className="tl-text">{text}</td>
-                        <td style={{ fontSize: 11, color: '#aaa', whiteSpace: 'nowrap' }}>
-                          {c.author?.position ? `${c.author.position} ` : ''}{c.author?.name || '-'}
+                  {Object.entries(grouped).map(([month, rows]) => (
+                    <>
+                      <tr key={`m-${month}`}>
+                        <td colSpan={4} className="month-label">
+                          {month !== '기타' ? `${month.replace('-', '년 ')}월` : '기타'}
                         </td>
                       </tr>
-                    );
-                  })}
+                      {rows.map((item: any, idx: number) => (
+                        <tr key={`${month}-${idx}`}>
+                          <td style={{ fontSize: 10, color: '#888', whiteSpace: 'nowrap' }}>
+                            {item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }) : '-'}
+                          </td>
+                          <td><span className="pill">{item.type}</span></td>
+                          <td style={{ fontSize: 11, color: '#333', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{item.text}</td>
+                          <td style={{ fontSize: 10, color: '#aaa', whiteSpace: 'nowrap' }}>
+                            {item.author?.position ? `${item.author.position} ` : ''}{item.author?.name || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -1773,7 +1720,7 @@ function SiteReportPrint({ site }: { site: any }) {
         {/* ── 푸터 ── */}
         <div className="footer">
           <strong>LOOKUP9</strong>
-          <span>{site.name} · 보고서 생성: {new Date().toLocaleString('ko-KR')}</span>
+          <span>{site.name} · {today} 기준</span>
         </div>
       </div>
     </>

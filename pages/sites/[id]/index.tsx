@@ -1390,7 +1390,7 @@ function SiteReportPrint({ site }: { site: any }) {
   };
 
   const shippedQty = (site.shipments || []).reduce((s: number, r: any) => s + Number(r.quantity ?? 0), 0);
-  const progressRate = site.contractQuantity > 0
+  const progressRate = Number(site.contractQuantity) > 0
     ? Math.min(100, Math.round((shippedQty / Number(site.contractQuantity)) * 100)) : 0;
 
   const items: any[] = Array.isArray(site.productItems) && site.productItems.length > 0
@@ -1399,191 +1399,386 @@ function SiteReportPrint({ site }: { site: any }) {
       ? [{ seq: '1', productName: site.productName, spec: site.specification, unit: '㎡', unitPrice: site.unitPrice, contractQuantity: site.contractQuantity, amount: site.contractAmount }]
       : [];
 
+  const fmtW = (v: any) => {
+    if (!v) return '-';
+    const n = Number(v);
+    if (n >= 100000000) return `${(n / 100000000).toFixed(2)}억원`;
+    if (n >= 10000) return `${Math.round(n / 10000).toLocaleString()}만원`;
+    return `${n.toLocaleString()}원`;
+  };
+
+  const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+  const progressColor = progressRate >= 100 ? '#2563eb' : progressRate >= 60 ? '#16a34a' : progressRate >= 30 ? '#d97706' : '#6b7280';
+
   return (
     <>
       <style>{`
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        @page { size: A4 portrait; margin: 15mm 16mm; }
         @media print {
-          body { margin: 0; }
           .no-print { display: none !important; }
-          .page-break { page-break-before: always; }
+          body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .page { padding: 0 !important; }
         }
-        body { font-family: 'Pretendard', 'Noto Sans KR', sans-serif; background: white; color: #111; }
-        .report-wrap { max-width: 800px; margin: 0 auto; padding: 40px 32px; }
-        .report-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
-        .report-sub { font-size: 13px; color: #666; margin-bottom: 24px; }
-        .section-title { font-size: 13px; font-weight: 700; color: #1B3FAE; border-bottom: 2px solid #1B3FAE; padding-bottom: 6px; margin: 24px 0 12px; text-transform: uppercase; letter-spacing: 0.05em; }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 32px; }
-        .info-item label { font-size: 10px; color: #888; display: block; margin-bottom: 2px; }
-        .info-item p { font-size: 13px; font-weight: 500; }
-        .progress-bar-bg { background: #e5e7eb; border-radius: 4px; height: 10px; margin: 8px 0 4px; }
-        .progress-bar-fill { background: #1B3FAE; border-radius: 4px; height: 10px; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th { background: #f3f4f6; padding: 7px 10px; text-align: left; font-size: 11px; color: #555; border: 1px solid #e5e7eb; }
-        td { padding: 7px 10px; border: 1px solid #e5e7eb; vertical-align: top; }
-        .tl-type { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: #1B3FAE; color: white; }
-        .tl-date { font-size: 11px; color: #888; }
-        .tl-text { font-size: 13px; color: #222; white-space: pre-wrap; }
-        .print-btn { position: fixed; top: 20px; right: 20px; padding: 10px 20px; background: #1B3FAE; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
-        .print-btn:hover { background: #1530a0; }
-        .stat-row { display: flex; gap: 16px; margin-bottom: 12px; }
-        .stat-box { flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; text-align: center; }
-        .stat-box .val { font-size: 20px; font-weight: 700; color: #1B3FAE; }
-        .stat-box .lbl { font-size: 11px; color: #888; margin-top: 2px; }
-        .generated { text-align: right; font-size: 11px; color: #aaa; margin-top: 40px; border-top: 1px solid #eee; padding-top: 12px; }
+        html, body {
+          font-family: 'Apple SD Gothic Neo', 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+          background: #eef0f6;
+          color: #1a1a2e;
+          font-size: 13px;
+          line-height: 1.65;
+        }
+        /* 인쇄 버튼 */
+        .print-fab {
+          position: fixed;
+          bottom: 28px; right: 28px;
+          display: flex; align-items: center; gap: 8px;
+          background: #1B3FAE; color: white;
+          border: none; border-radius: 50px;
+          padding: 13px 26px;
+          font-size: 14px; font-weight: 700;
+          cursor: pointer;
+          box-shadow: 0 6px 28px rgba(27,63,174,0.5);
+          z-index: 9999;
+          letter-spacing: -0.01em;
+        }
+        .print-fab:hover { background: #1432a0; }
+
+        /* 페이지 */
+        .page { max-width: 800px; margin: 0 auto; padding: 28px 16px 60px; }
+
+        /* ── 커버 ── */
+        .cover {
+          background: linear-gradient(135deg, #0d1d6b 0%, #1B3FAE 55%, #3461e8 100%);
+          color: white;
+          border-radius: 16px;
+          padding: 36px 40px 32px;
+          margin-bottom: 20px;
+          position: relative; overflow: hidden;
+        }
+        .cover::before {
+          content: ''; position: absolute;
+          top: -50px; right: -50px;
+          width: 220px; height: 220px; border-radius: 50%;
+          background: rgba(255,255,255,0.07);
+        }
+        .cover-eyebrow {
+          font-size: 10px; font-weight: 700;
+          letter-spacing: 0.18em; text-transform: uppercase;
+          color: rgba(255,255,255,0.55);
+          margin-bottom: 10px;
+        }
+        .cover-title {
+          font-size: 22px; font-weight: 800; line-height: 1.35;
+          letter-spacing: -0.025em; margin-bottom: 14px;
+        }
+        .cover-chips { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+        .cover-chip {
+          font-size: 11px; color: rgba(255,255,255,0.72);
+          display: flex; align-items: center; gap: 5px;
+        }
+        .cover-badge {
+          display: inline-flex; align-items: center;
+          background: rgba(255,255,255,0.15);
+          border: 1px solid rgba(255,255,255,0.25);
+          border-radius: 20px; padding: 3px 12px;
+          font-size: 11px; font-weight: 600; color: white;
+          margin-top: 14px;
+        }
+
+        /* ── 섹션 ── */
+        .section { margin-bottom: 18px; }
+        .section-head {
+          display: flex; align-items: center; gap: 9px;
+          margin-bottom: 11px;
+        }
+        .section-bar { width: 3px; height: 17px; background: #1B3FAE; border-radius: 2px; }
+        .section-title { font-size: 12px; font-weight: 800; color: #1B3FAE; letter-spacing: 0.04em; text-transform: uppercase; }
+        .section-count { font-size: 11px; color: #aaa; font-weight: 500; }
+
+        /* ── 카드 ── */
+        .card {
+          background: white; border-radius: 12px;
+          padding: 20px 22px;
+          box-shadow: 0 1px 8px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);
+        }
+
+        /* ── 통계 그리드 ── */
+        .stat-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 12px; }
+        .stat-card {
+          background: white; border-radius: 12px; padding: 16px 14px; text-align: center;
+          box-shadow: 0 1px 8px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);
+        }
+        .stat-val { font-size: 20px; font-weight: 800; line-height: 1.1; margin-bottom: 3px; letter-spacing: -0.03em; }
+        .stat-lbl { font-size: 10px; color: #999; font-weight: 600; letter-spacing: 0.02em; }
+
+        /* ── 공정률 바 ── */
+        .progress-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+        .progress-label { font-size: 12px; font-weight: 600; color: #555; }
+        .progress-pct { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
+        .progress-track { background: #e8ecf8; border-radius: 99px; height: 10px; overflow: hidden; margin-bottom: 6px; }
+        .progress-fill { height: 100%; border-radius: 99px; }
+        .progress-detail { font-size: 10px; color: #bbb; text-align: right; }
+
+        /* ── 정보 그리드 ── */
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 36px; }
+        .info-item label { display: block; font-size: 9px; font-weight: 700; color: #bbb; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 3px; }
+        .info-item p { font-size: 13px; font-weight: 600; color: #222; }
+        .divider { border: none; border-top: 1px solid #f0f2f8; margin: 14px 0; }
+
+        /* ── 테이블 ── */
+        .table-wrap { border-radius: 12px; overflow: hidden; box-shadow: 0 1px 8px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04); }
+        table { width: 100%; border-collapse: collapse; background: white; }
+        thead tr { background: #f5f7fc; }
+        th {
+          padding: 10px 13px; text-align: left;
+          font-size: 9px; font-weight: 700; color: #888;
+          letter-spacing: 0.09em; text-transform: uppercase;
+          border-bottom: 1px solid #eaecf5;
+          white-space: nowrap;
+        }
+        td {
+          padding: 10px 13px; font-size: 12px; color: #333;
+          border-bottom: 1px solid #f3f5fb;
+          vertical-align: top;
+        }
+        tr:last-child td { border-bottom: none; }
+        .td-r { text-align: right; }
+        .td-c { text-align: center; }
+        .sum-row td { background: #f0f3fc; font-weight: 700; color: #1B3FAE; border-top: 1.5px solid #d8deef; }
+        .type-pill {
+          display: inline-block; padding: 2px 9px; border-radius: 20px;
+          font-size: 10px; font-weight: 700; white-space: nowrap;
+          background: #1B3FAE; color: white;
+        }
+        .tl-text { font-size: 12px; color: #333; white-space: pre-wrap; line-height: 1.6; }
+
+        /* ── 푸터 ── */
+        .footer {
+          margin-top: 28px; padding-top: 14px;
+          border-top: 1px solid #e2e5f0;
+          display: flex; justify-content: space-between; align-items: center;
+          font-size: 10px; color: #ccc;
+        }
+        .footer strong { color: #1B3FAE; font-weight: 700; }
+
+        /* 색상 유틸 */
+        .c-green { color: #16a34a; } .c-blue { color: #1B3FAE; } .c-amber { color: #d97706; } .c-gray { color: #9ca3af; }
       `}</style>
 
-      <button className="print-btn no-print" onClick={() => window.print()}>
-        🖨 인쇄 / PDF 저장
+      {/* 인쇄 버튼 */}
+      <button className="print-fab no-print" onClick={() => window.print()}>
+        🖨&nbsp; 인쇄 / PDF 저장
       </button>
 
-      <div className="report-wrap">
-        {/* 제목 */}
-        <div className="report-title">{site.name}</div>
-        <div className="report-sub">
-          {site.client?.name && <span>{site.client.name}</span>}
-          {site.address && <span> · {site.address}</span>}
-          &nbsp;·&nbsp; 보고서 생성일: {new Date().toLocaleDateString('ko-KR')}
+      <div className="page">
+
+        {/* ── 커버 ── */}
+        <div className="cover">
+          <div className="cover-eyebrow">현장 관리 보고서 · LOOKUP9</div>
+          <div className="cover-title">{site.name}</div>
+          <div className="cover-chips">
+            {site.client?.name && <span className="cover-chip">📍&nbsp;{site.client.name}</span>}
+            {site.address   && <span className="cover-chip">🏗&nbsp;{site.address}</span>}
+            <span className="cover-chip">📅&nbsp;{today}</span>
+          </div>
+          <div>
+            <span className="cover-badge">
+              {site.status === 'CONTRACT_ACTIVE' ? '🟢 진행중'
+               : site.status === 'COMPLETED' ? '🔵 준공완료'
+               : site.status === 'WARRANTY' ? '🟣 하자기간'
+               : site.status}
+              &nbsp;&nbsp;·&nbsp;&nbsp;{site.siteType || '납품설치도'}
+            </span>
+          </div>
         </div>
 
-        {/* 공사 진행 현황 */}
-        <div className="section-title">공사 진행 현황</div>
-        <div className="stat-row">
-          <div className="stat-box">
-            <div className="val" style={{ color: '#16a34a' }}>
-              {site.contractAmount ? `${(Number(site.contractAmount) / 100000000).toFixed(2)}억` : '-'}
+        {/* ── 공사 진행 현황 ── */}
+        <div className="section">
+          <div className="section-head">
+            <div className="section-bar" />
+            <div className="section-title">공사 진행 현황</div>
+          </div>
+          <div className="stat-grid">
+            {[
+              { val: fmtW(site.contractAmount),  lbl: '계약금액',    cls: 'c-green' },
+              { val: site.contractQuantity ? `${Number(site.contractQuantity).toLocaleString()} ㎡` : '-', lbl: '계약물량', cls: 'c-blue' },
+              { val: shippedQty > 0 ? `${shippedQty.toLocaleString()} ㎡` : '-', lbl: '출하물량', cls: shippedQty > 0 ? 'c-blue' : 'c-gray' },
+              { val: `${progressRate}%`, lbl: '출하 공정률', cls: progressRate >= 80 ? 'c-green' : progressRate >= 40 ? 'c-blue' : 'c-amber' },
+            ].map(({ val, lbl, cls }) => (
+              <div key={lbl} className="stat-card">
+                <div className={`stat-val ${cls}`}>{val}</div>
+                <div className="stat-lbl">{lbl}</div>
+              </div>
+            ))}
+          </div>
+          <div className="card">
+            <div className="progress-row">
+              <span className="progress-label">출하 공정률</span>
+              <span className="progress-pct" style={{ color: progressColor }}>{progressRate}%</span>
             </div>
-            <div className="lbl">계약금액</div>
-          </div>
-          <div className="stat-box">
-            <div className="val">{site.contractQuantity ? `${Number(site.contractQuantity).toLocaleString()} ㎡` : '-'}</div>
-            <div className="lbl">계약물량</div>
-          </div>
-          <div className="stat-box">
-            <div className="val">{shippedQty > 0 ? `${shippedQty.toLocaleString()} ㎡` : '-'}</div>
-            <div className="lbl">출하물량</div>
-          </div>
-          <div className="stat-box">
-            <div className="val" style={{ color: progressRate >= 100 ? '#2563eb' : progressRate >= 50 ? '#16a34a' : '#d97706' }}>
-              {progressRate}%
+            <div className="progress-track">
+              <div className="progress-fill" style={{ width: `${progressRate}%`, background: `linear-gradient(90deg, ${progressColor}, ${progressColor}cc)` }} />
             </div>
-            <div className="lbl">출하 공정률</div>
+            <div className="progress-detail">
+              출하 {shippedQty.toLocaleString()} ㎡ &nbsp;/&nbsp; 계약 {Number(site.contractQuantity || 0).toLocaleString()} ㎡
+            </div>
           </div>
         </div>
-        <div className="progress-bar-bg">
-          <div className="progress-bar-fill" style={{ width: `${progressRate}%` }} />
-        </div>
-        <div style={{ fontSize: 11, color: '#888', textAlign: 'right' }}>
-          {progressRate}% 출하 완료 ({shippedQty.toLocaleString()} / {Number(site.contractQuantity || 0).toLocaleString()} ㎡)
-        </div>
 
-        {/* 계약 정보 */}
-        <div className="section-title">계약 정보</div>
-        <div className="info-grid">
-          {[
-            { label: '납품요구번호', value: site.contractNo || '-' },
-            { label: '납품기한', value: site.deliveryDeadline ? fmtDate(site.deliveryDeadline) : '-' },
-            { label: '단가', value: site.unitPrice ? `${Number(site.unitPrice).toLocaleString()}원/㎡` : '-' },
-            { label: '하자담보기간', value: site.warrantyPeriod ? `${site.warrantyPeriod}년` : '-' },
-            { label: '검사기관', value: site.inspectionAgency || '-' },
-            { label: '현장 유형', value: site.siteType || '-' },
-          ].map(({ label, value }) => (
-            <div key={label} className="info-item">
-              <label>{label}</label>
-              <p>{value}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* 품목 */}
-        {items.length > 0 && (
-          <>
-            <div className="section-title">납품 품목</div>
-            <table>
-              <thead>
-                <tr>
-                  <th>순</th><th>품명</th><th>규격/사양</th><th style={{textAlign:'right'}}>단가</th>
-                  <th style={{textAlign:'right'}}>물량(㎡)</th><th style={{textAlign:'right'}}>금액</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item: any, idx: number) => (
-                  <tr key={idx}>
-                    <td>{item.seq || idx + 1}</td>
-                    <td>{item.productName || '-'}</td>
-                    <td style={{fontSize:11, color:'#555'}}>{item.spec || '-'}</td>
-                    <td style={{textAlign:'right'}}>{item.unitPrice ? Number(item.unitPrice).toLocaleString() : '-'}</td>
-                    <td style={{textAlign:'right', fontWeight:600}}>{item.contractQuantity ? Number(item.contractQuantity).toLocaleString() : '-'}</td>
-                    <td style={{textAlign:'right'}}>{item.amount ? Number(item.amount).toLocaleString() : '-'}</td>
-                  </tr>
-                ))}
-                {items.length > 1 && (
-                  <tr style={{background:'#f9fafb', fontWeight:700}}>
-                    <td colSpan={4} style={{textAlign:'right', color:'#555'}}>합계</td>
-                    <td style={{textAlign:'right'}}>
-                      {items.reduce((s: number, i: any) => s + Number(i.contractQuantity || 0), 0).toLocaleString()} ㎡
-                    </td>
-                    <td style={{textAlign:'right', color:'#16a34a'}}>
-                      {items.reduce((s: number, i: any) => s + Number(i.amount || 0), 0).toLocaleString()}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </>
-        )}
-
-        {/* 수요기관 */}
-        {(site.client?.name || site.clientManager) && (
-          <>
-            <div className="section-title">발주처 / 담당자</div>
+        {/* ── 계약 정보 ── */}
+        <div className="section">
+          <div className="section-head">
+            <div className="section-bar" />
+            <div className="section-title">계약 정보</div>
+          </div>
+          <div className="card">
             <div className="info-grid">
-              <div className="info-item"><label>수요기관</label><p>{site.client?.name || '-'}</p></div>
-              <div className="info-item"><label>담당부서</label><p>{site.clientDept || '-'}</p></div>
-              <div className="info-item"><label>담당자</label><p>{site.clientManager || '-'}</p></div>
-              <div className="info-item"><label>연락처</label><p>{site.clientManagerPhone || '-'}</p></div>
+              {[
+                { label: '납품요구번호', value: site.contractNo || '-' },
+                { label: '납품기한',     value: site.deliveryDeadline ? fmtDate(site.deliveryDeadline) : '-' },
+                { label: '단가',         value: site.unitPrice ? `${Number(site.unitPrice).toLocaleString()}원/㎡` : '-' },
+                { label: '하자담보기간', value: site.warrantyPeriod ? `${site.warrantyPeriod}년` : '-' },
+                { label: '검사기관',     value: site.inspectionAgency || '-' },
+                { label: '납품 유형',    value: site.siteType || '-' },
+              ].map(({ label, value }) => (
+                <div key={label} className="info-item">
+                  <label>{label}</label>
+                  <p>{value}</p>
+                </div>
+              ))}
             </div>
-          </>
-        )}
+            <hr className="divider" />
+            <div style={{ display: 'flex', gap: 24 }}>
+              <span style={{ fontSize: 12, color: site.startDocsDone ? '#16a34a' : '#d1d5db', fontWeight: 600 }}>
+                {site.startDocsDone ? '✅' : '⬜'}&nbsp;착수계 제출
+              </span>
+              <span style={{ fontSize: 12, color: site.completionDocsDone ? '#2563eb' : '#d1d5db', fontWeight: 600 }}>
+                {site.completionDocsDone ? '✅' : '⬜'}&nbsp;준공계 제출
+              </span>
+            </div>
+          </div>
+        </div>
 
-        {/* 업무일지 */}
-        <div className="section-title">업무일지</div>
-        {comments.length === 0 ? (
-          <p style={{ fontSize: 13, color: '#aaa' }}>등록된 업무일지가 없습니다.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th style={{width:70}}>날짜</th>
-                <th style={{width:80}}>유형</th>
-                <th>내용</th>
-                <th style={{width:70}}>작성자</th>
-              </tr>
-            </thead>
-            <tbody>
-              {comments.map((c: any) => {
-                const { type, date, text } = parseItem(c);
-                return (
-                  <tr key={c.id}>
-                    <td className="tl-date">{date ? new Date(date + 'T00:00:00').toLocaleDateString('ko-KR') : '-'}</td>
-                    <td><span className="tl-type">{type}</span></td>
-                    <td className="tl-text">{text}</td>
-                    <td style={{fontSize:11, color:'#888'}}>
-                      {c.author?.position ? `${c.author.position} ` : ''}{c.author?.name || '-'}
-                    </td>
+        {/* ── 납품 품목 ── */}
+        {items.length > 0 && (
+          <div className="section">
+            <div className="section-head">
+              <div className="section-bar" />
+              <div className="section-title">납품 품목</div>
+              {items.length > 1 && <span className="section-count">{items.length}개 품목</span>}
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th className="td-c" style={{width:36}}>순</th>
+                    <th>품명</th>
+                    <th>규격 / 사양</th>
+                    <th className="td-r">단가 (원/㎡)</th>
+                    <th className="td-r">계약물량 (㎡)</th>
+                    <th className="td-r">금액 (원)</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {items.map((item: any, idx: number) => (
+                    <tr key={idx}>
+                      <td className="td-c" style={{ color: '#bbb', fontWeight: 700 }}>{item.seq || idx + 1}</td>
+                      <td style={{ fontWeight: 600 }}>{item.productName || '-'}</td>
+                      <td style={{ fontSize: 11, color: '#777', wordBreak: 'break-all' }}>{item.spec || '-'}</td>
+                      <td className="td-r">{item.unitPrice ? Number(item.unitPrice).toLocaleString() : '-'}</td>
+                      <td className="td-r" style={{ fontWeight: 700, color: '#1B3FAE' }}>
+                        {item.contractQuantity ? Number(item.contractQuantity).toLocaleString() : '-'}
+                      </td>
+                      <td className="td-r" style={{ color: '#16a34a', fontWeight: 600 }}>
+                        {item.amount ? Number(item.amount).toLocaleString() : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                  {items.length > 1 && (
+                    <tr className="sum-row">
+                      <td colSpan={4} className="td-r">합 계</td>
+                      <td className="td-r">{items.reduce((s: number, i: any) => s + Number(i.contractQuantity || 0), 0).toLocaleString()} ㎡</td>
+                      <td className="td-r">{items.reduce((s: number, i: any) => s + Number(i.amount || 0), 0).toLocaleString()}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
 
-        <div className="generated">
-          LOOKUP9 · {site.name} · 보고서 생성: {new Date().toLocaleString('ko-KR')}
+        {/* ── 발주처 / 담당자 ── */}
+        {(site.client?.name || site.clientManager) && (
+          <div className="section">
+            <div className="section-head">
+              <div className="section-bar" />
+              <div className="section-title">발주처 / 담당자</div>
+            </div>
+            <div className="card">
+              <div className="info-grid">
+                <div className="info-item"><label>수요기관</label><p>{site.client?.name || '-'}</p></div>
+                <div className="info-item"><label>담당부서</label><p>{site.clientDept || '-'}</p></div>
+                <div className="info-item"><label>담당자명</label><p>{site.clientManager || '-'}</p></div>
+                <div className="info-item"><label>연락처</label><p>{site.clientManagerPhone || '-'}</p></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── 업무일지 ── */}
+        <div className="section">
+          <div className="section-head">
+            <div className="section-bar" />
+            <div className="section-title">업무일지</div>
+            {comments.length > 0 && <span className="section-count">{comments.length}건</span>}
+          </div>
+          {comments.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', color: '#ccc', padding: '28px', fontSize: 12 }}>
+              등록된 업무일지가 없습니다.
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: 82 }}>날짜</th>
+                    <th style={{ width: 76 }}>유형</th>
+                    <th>내용</th>
+                    <th style={{ width: 68 }}>작성자</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comments.map((c: any) => {
+                    const { type, date, text } = parseItem(c);
+                    return (
+                      <tr key={c.id}>
+                        <td style={{ fontSize: 11, color: '#888', whiteSpace: 'nowrap' }}>
+                          {date ? new Date(date + 'T00:00:00').toLocaleDateString('ko-KR') : '-'}
+                        </td>
+                        <td><span className="type-pill">{type}</span></td>
+                        <td className="tl-text">{text}</td>
+                        <td style={{ fontSize: 11, color: '#aaa', whiteSpace: 'nowrap' }}>
+                          {c.author?.position ? `${c.author.position} ` : ''}{c.author?.name || '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* ── 푸터 ── */}
+        <div className="footer">
+          <strong>LOOKUP9</strong>
+          <span>{site.name} · 보고서 생성: {new Date().toLocaleString('ko-KR')}</span>
         </div>
       </div>
     </>
   );
 }
+
 
 export async function getServerSideProps({ locale }: GetServerSidePropsContext) {
   return { props: { ...(locale ? await serverSideTranslations(locale, ['common']) : {}) } };

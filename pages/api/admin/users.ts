@@ -7,7 +7,6 @@ import {
   hasMinRole,
   canDeleteUser,
   canAssignRole,
-  isExternalRole,
   deleteUserFully,
   isCompanyAdminRole,
   isSystemRole,
@@ -26,72 +25,91 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     switch (req.method) {
-      case 'GET':
-        return await handleGET(tm.teamId, tm.role, session.user.id, res);
-      case 'POST':
-        return await handlePOST(req, res, tm);
-      case 'DELETE':
-        return await handleDELETE(req, res, tm, session.user.id);
+      case 'GET':    return await handleGET(tm.teamId, tm.role, session.user.id, res);
+      case 'POST':   return await handlePOST(req, res, tm);
+      case 'DELETE': return await handleDELETE(req, res, tm, session.user.id);
       default:
         res.setHeader('Allow', 'GET, POST, DELETE');
         return res.status(405).json({ error: { message: `Method ${req.method} Not Allowed` } });
     }
   } catch (error: any) {
+    console.error('[admin/users]', error);
     return res.status(500).json({ error: { message: error.message || 'Internal server error' } });
   }
 }
 
 const handleGET = async (teamId: string, actorRole: string, actorUserId: string, res: NextApiResponse) => {
-  const [members, sites] = await Promise.all([
-    prisma.teamMember.findMany({
-      where: { teamId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            email: true,
-            company: true,
-            department: true,
-            position: true,
-            phone: true,
-            createdAt: true,
-            siteAssignments: {
-              where: { site: { teamId } },
-              select: {
-                siteId: true,
-                site: { select: { id: true, name: true, status: true } },
-              },
-            },
-            // 협력사 소속 정보
-            partnerMemberships: {
-              select: {
-                partnerCompany: { select: { id: true, name: true } },
-              },
-            },
-          },
+  // 1. 팀 멤버 전체 조회 (user 기본 정보만)
+  const members = await prisma.teamMember.findMany({
+    where: { teamId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          email: true,
+          company: true,
+          department: true,
+          position: true,
+          phone: true,
+          createdAt: true,
         },
       },
-      orderBy: { createdAt: 'desc' },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  // 2. 현장 배정 정보 별도 조회
+  const allUserIds = members.map((m) => m.userId);
+
+  const [siteAssignments, partnerMembers] = await Promise.all([
+    prisma.siteAssignment.findMany({
+      where: { userId: { in: allUserIds }, site: { teamId } },
+      select: {
+        userId: true,
+        siteId: true,
+        site: { select: { id: true, name: true, status: true } },
+      },
     }),
-    prisma.site.findMany({
-      where: { teamId },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, name: true, status: true },
+    // 협력사 소속 정보 - company 가 실제 relation 이름
+    prisma.partnerMember.findMany({
+      where: { userId: { in: allUserIds } },
+      select: {
+        userId: true,
+        company: { select: { id: true, name: true } },
+      },
     }),
   ]);
 
+  // 3. userId 기준으로 매핑
+  const assignmentMap: Record<string, any[]> = {};
+  siteAssignments.forEach((a) => {
+    if (!assignmentMap[a.userId]) assignmentMap[a.userId] = [];
+    assignmentMap[a.userId].push({ siteId: a.siteId, site: a.site });
+  });
+
+  const partnerMap: Record<string, any> = {};
+  partnerMembers.forEach((pm) => {
+    partnerMap[pm.userId] = pm.company;
+  });
+
+  // 4. 조합
   const users = members
     .filter((m) => !['SUPER_ADMIN', 'OWNER'].includes(m.role))
     .map((m) => ({
       ...m.user,
       role: m.role,
-      teamMembers: [{ role: m.role, team: { name: (m as any).team?.name || teamId } }],
-      assignedSites: (m.user.siteAssignments || []).map((a) => a.site),
-      // 협력사 소속 업체명 (PARTNER 전용)
-      partnerCompany: m.user.partnerMemberships?.[0]?.partnerCompany || null,
+      teamMembers: [{ role: m.role, team: { name: teamId } }],
+      siteAssignments: assignmentMap[m.userId] || [],
+      partnerCompany: partnerMap[m.userId] || null,
     }));
+
+  const sites = await prisma.site.findMany({
+    where: { teamId },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, name: true, status: true },
+  });
 
   return res.status(200).json({
     data: users,
@@ -117,9 +135,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
   const targetRole = role || 'USER';
 
   if (!canAssignRole(actorTm.role, targetRole)) {
-    if (targetRole === 'ADMIN_HR' || targetRole === 'ADMIN') {
-      return res.status(403).json({ error: { message: 'Company Admin 계정은 시스템 관리자만 생성할 수 있습니다.' } });
-    }
     return res.status(403).json({ error: { message: `${targetRole} 역할을 부여할 수 없습니다.` } });
   }
 
@@ -131,15 +146,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
     return res.status(400).json({ error: { message: '게스트 계정은 최소 1개 현장을 지정해야 합니다.' } });
   }
 
-  if (normalizedSiteIds.length > 0) {
-    const siteCount = await prisma.site.count({
-      where: { teamId: actorTm.teamId, id: { in: normalizedSiteIds } },
-    });
-    if (siteCount !== normalizedSiteIds.length) {
-      return res.status(400).json({ error: { message: '선택한 현장 중 다른 회사 현장이 포함되어 있습니다.' } });
-    }
-  }
-
   const existing = await prisma.user.findUnique({ where: { email: finalEmail } });
   if (existing) return res.status(400).json({ error: { message: '이미 사용 중인 이메일입니다.' } });
 
@@ -148,50 +154,29 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
   const user = await prisma.$transaction(async (tx) => {
     const created = await tx.user.create({
       data: {
-        name,
-        username,
-        email: finalEmail,
-        password: hashedPassword,
-        company: company || actorTm.team?.name || null,
-        department: department || null,
-        position: position || null,
-        phone: phone || null,
+        name, username, email: finalEmail, password: hashedPassword,
+        company: company || null, department: department || null,
+        position: position || null, phone: phone || null,
       },
     });
-
-    await tx.teamMember.create({
-      data: { teamId: actorTm.teamId, userId: created.id, role: targetRole },
-    });
-
+    await tx.teamMember.create({ data: { teamId: actorTm.teamId, userId: created.id, role: targetRole } });
     if (normalizedSiteIds.length > 0) {
       await tx.siteAssignment.createMany({
-        data: normalizedSiteIds.map((siteId: string) => ({
-          siteId,
-          userId: created.id,
-          assignedRole: targetRole,
-        })),
+        data: normalizedSiteIds.map((siteId: string) => ({ siteId, userId: created.id, assignedRole: targetRole })),
         skipDuplicates: true,
       });
     }
-
     return created;
   });
 
   return res.status(201).json({ data: user });
 };
 
-const handleDELETE = async (
-  req: NextApiRequest,
-  res: NextApiResponse,
-  actorTm: any,
-  actorUserId: string
-) => {
+const handleDELETE = async (req: NextApiRequest, res: NextApiResponse, actorTm: any, actorUserId: string) => {
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ error: { message: 'userId is required' } });
 
-  const targetTm = await prisma.teamMember.findFirst({
-    where: { teamId: actorTm.teamId, userId },
-  });
+  const targetTm = await prisma.teamMember.findFirst({ where: { teamId: actorTm.teamId, userId } });
   if (!targetTm) return res.status(404).json({ error: { message: 'User not found in team' } });
 
   if (!canDeleteUser(actorTm.role, actorUserId, targetTm.role, userId)) {
@@ -199,9 +184,7 @@ const handleDELETE = async (
   }
 
   const result = await deleteUserFully(userId, actorTm.teamId);
-  if (!result.ok) {
-    return res.status(500).json({ error: { message: result.message } });
-  }
+  if (!result.ok) return res.status(500).json({ error: { message: result.message } });
 
   return res.status(200).json({ data: { message: 'User deleted' } });
 };

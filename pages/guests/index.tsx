@@ -17,7 +17,7 @@ const GuestsPage = () => {
   const [success, setSuccess] = useState('');
   const [form, setForm] = useState({
     name: '',
-    email: '',
+    username: '',
     password: '',
     position: '',
     phone: '',
@@ -74,7 +74,7 @@ const GuestsPage = () => {
       if (!res.ok) throw new Error(json?.error?.message || '게스트 생성에 실패했습니다.');
       setSuccess('게스트 계정이 생성되었습니다.');
       setShowCreate(false);
-      setForm({ name: '', email: '', password: '', position: '', phone: '', company: '', role: creatableRoles[0] || 'GUEST', siteIds: [] });
+      setForm({ name: '', username: '', password: '', position: '', phone: '', company: '', role: creatableRoles[0] || 'GUEST', siteIds: [] });
       await load();
     } catch (err: any) {
       setError(err?.message || '게스트 생성에 실패했습니다.');
@@ -105,7 +105,7 @@ const GuestsPage = () => {
           <div className="rounded-2xl border border-gray-800 bg-black/20 p-5">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <input className="input input-bordered w-full" placeholder="이름" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <input className="input input-bordered w-full" placeholder="이메일" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <input className="input input-bordered w-full" placeholder="아이디 (영문/숫자)" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value.trim() })} />
               <input type="password" className="input input-bordered w-full" placeholder="비밀번호" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
               <input className="input input-bordered w-full" placeholder="회사명" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
               <input className="input input-bordered w-full" placeholder="직책" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} />

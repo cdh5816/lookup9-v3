@@ -3,7 +3,21 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { notifySiteMembers } from '@/lib/notification-helper';
 import { verifySiteAccess, hasMinRole } from '@/lib/team-helper';
-import { normalizeStatus } from '@/pages/api/sites/index';
+
+function normalizeStatus(s: string | undefined): string {
+  if (!s) return 'CONTRACT_ACTIVE';
+  const MAP: Record<string, string> = {
+    '영업중': 'SALES_PIPELINE', '영업파이프라인': 'SALES_PIPELINE',
+    'SALES_PIPELINE': 'SALES_PIPELINE', '대기': 'SALES_PIPELINE',
+    '수주확정': 'SALES_CONFIRMED', 'SALES_CONFIRMED': 'SALES_CONFIRMED',
+    '계약완료': 'CONTRACT_ACTIVE', '진행중': 'CONTRACT_ACTIVE',
+    '부분완료': 'CONTRACT_ACTIVE', 'CONTRACT_ACTIVE': 'CONTRACT_ACTIVE',
+    '준공완료': 'COMPLETED', '완료': 'COMPLETED', 'COMPLETED': 'COMPLETED',
+    '하자기간': 'WARRANTY', 'WARRANTY': 'WARRANTY',
+    '영업실패': 'FAILED', '실패': 'FAILED', '보류': 'FAILED', 'FAILED': 'FAILED',
+  };
+  return MAP[s] ?? s;
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getSession(req, res);

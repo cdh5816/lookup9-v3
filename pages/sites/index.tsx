@@ -62,7 +62,6 @@ const getAlertLevel = (site: any): AlertLevel => {
 type TabFilter = 'all' | 'sales' | 'active' | 'done';
 const TAB_DEFS: { key: TabFilter; label: string }[] = [
   { key: 'all',    label: '전체' },
-  { key: 'sales',  label: '영업' },
   { key: 'active', label: '진행중' },
   { key: 'done',   label: '완료/하자' },
 ];
@@ -85,6 +84,7 @@ const SitesList = () => {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
     params.set('includeCompleted', 'true');
+    params.set('excludeSales', 'true'); // 영업 상태는 영업관리 메뉴에서만
     const res = await fetch(`/api/sites?${params.toString()}`);
     if (res.ok) {
       const d = await res.json();
@@ -99,18 +99,16 @@ const SitesList = () => {
   }, [fetchSites, search]);
 
   // 그룹 분류
-  const salesSites   = useMemo(() => sites.filter(s => getMeta(s.status).group === 'sales'), [sites]);
   const activeSites  = useMemo(() => sites.filter(s => getMeta(s.status).group === 'active'), [sites]);
   const doneSites    = useMemo(() => sites.filter(s => getMeta(s.status).group === 'done' && s.status !== 'FAILED'), [sites]);
   const failedSites  = useMemo(() => sites.filter(s => s.status === 'FAILED'), [sites]);
 
   // 탭에 따른 표시 목록
   const tabSites = useMemo(() => {
-    if (tab === 'sales')  return salesSites;
     if (tab === 'active') return activeSites;
     if (tab === 'done')   return doneSites;
-    return [...salesSites, ...activeSites]; // 'all' = 영업+진행중 (완료는 별도 접기)
-  }, [tab, salesSites, activeSites, doneSites]);
+    return activeSites; // 'all' = 진행중만 (영업은 영업관리 메뉴에서)
+  }, [tab, activeSites, doneSites]);
 
   // 알림 필터 + 정렬
   const LEVEL_ORDER: Record<AlertLevel, number> = { critical: 0, warning: 1, normal: 2 };
@@ -123,13 +121,12 @@ const SitesList = () => {
 
   // 카운트
   const counts = useMemo(() => ({
-    sales:    salesSites.length,
     active:   activeSites.length,
-    critical: [...salesSites, ...activeSites].filter(s => getAlertLevel(s) === 'critical').length,
-    warning:  [...salesSites, ...activeSites].filter(s => getAlertLevel(s) === 'warning').length,
+    critical: activeSites.filter(s => getAlertLevel(s) === 'critical').length,
+    warning:  activeSites.filter(s => getAlertLevel(s) === 'warning').length,
     done:     doneSites.length,
     failed:   failedSites.length,
-  }), [salesSites, activeSites, doneSites, failedSites]);
+  }), [activeSites, doneSites, failedSites]);
 
   return (
     <>
@@ -141,7 +138,7 @@ const SitesList = () => {
           <div>
             <h2 className="text-xl font-bold">현장관리</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              영업 {counts.sales} · 진행중 {counts.active} · 완료 {counts.done}
+              진행중 {counts.active} · 완료 {counts.done}
             </p>
           </div>
           {canCreate && (
@@ -161,9 +158,8 @@ const SitesList = () => {
         </div>
 
         {/* 요약 칩 */}
-        <div className="grid grid-cols-4 gap-1.5">
+        <div className="grid grid-cols-3 gap-1.5">
           {[
-            { label: '영업',   value: counts.sales,    color: 'border-orange-900/40 text-orange-300' },
             { label: '진행중', value: counts.active,   color: 'border-green-900/40  text-green-300' },
             { label: '긴급',   value: counts.critical, color: `border-red-900/50 text-red-300 ${alertOnly ? 'ring-1 ring-red-500' : ''}`, click: () => setAlertOnly(p => !p) },
             { label: '완료',   value: counts.done,     color: 'border-blue-900/40 text-blue-400' },
@@ -190,10 +186,9 @@ const SitesList = () => {
             >
               {t.label}
               <span className="ml-1 text-[10px] opacity-60">
-                {t.key === 'sales'  ? counts.sales :
-                 t.key === 'active' ? counts.active :
+                {t.key === 'active' ? counts.active :
                  t.key === 'done'   ? counts.done :
-                 counts.sales + counts.active}
+                 counts.active}
               </span>
             </button>
           ))}

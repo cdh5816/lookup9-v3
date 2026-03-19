@@ -65,7 +65,7 @@ const handleGET = async (teamId: string, actorRole: string, actorUserId: string,
             },
             // 협력사 소속 정보
             partnerMemberships: {
-              include: {
+              select: {
                 partnerCompany: { select: { id: true, name: true } },
               },
             },

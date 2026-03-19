@@ -37,7 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 }
 
 const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => {
-  const { status, search, salesOnly, includeCompleted } = req.query;
+  const { status, search, salesOnly, includeCompleted, excludeSales } = req.query;
   const where: any = { teamId: tm.teamId };
 
   if (salesOnly === 'true') {
@@ -45,11 +45,16 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
   } else if (status && status !== 'all') {
     where.status = normalizeStatus(status as string);
   } else if (includeCompleted === 'true') {
-    // 전체 (FAILED 포함 — 프론트에서 별도 섹션으로 표시)
-    where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY', 'FAILED'] };
+    if (excludeSales === 'true') {
+      // 현장관리: 영업 상태 제외, 계약 이후 현장만
+      where.status = { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY', 'FAILED'] };
+    } else {
+      // 전체 (FAILED 포함)
+      where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY', 'FAILED'] };
+    }
   } else {
-    // 기본: 활성 현장 전체 (FAILED 제외)
-    where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] };
+    // 기본: 계약 이후 활성 현장
+    where.status = { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] };
   }
 
   if (search) {

@@ -113,7 +113,7 @@ const SitesList = () => {
   const tabSites = useMemo(() => {
     if (tab === 'active') return activeSites;
     if (tab === 'done')   return doneSites;
-    return activeSites;
+    return activeSites; // 'all' 탭: 메인 리스트는 진행중, 나머지는 그룹 섹션으로
   }, [tab, activeSites, doneSites]);
 
   const LEVEL_ORDER: Record<AlertLevel, number> = { critical: 0, warning: 1, normal: 2 };
@@ -201,7 +201,7 @@ const SitesList = () => {
                 <span className="ml-1 text-[10px] opacity-60">
                   {t.key === 'active' ? counts.active :
                    t.key === 'done'   ? counts.done :
-                   counts.active}
+                   salesSites.length + counts.pre + counts.active + counts.done}
                 </span>
               </button>
             ))}
@@ -232,7 +232,7 @@ const SitesList = () => {
             <div className="py-12 text-center">
               <span className="loading loading-spinner loading-md" style={{color:"var(--text-muted)"}} />
             </div>
-          ) : displaySites.length === 0 ? (
+          ) : (tab === 'all' && salesSites.length + preSites.length + activeSites.length + doneSites.length + failedSites.length === 0) || (tab !== 'all' && displaySites.length === 0) ? (
             <div className="rounded-xl border-2 border-dashed py-12 text-center" style={{borderColor:"var(--border-base)"}}>
               <p className="text-sm" style={{color:"var(--text-muted)"}}>
                 {alertOnly ? '긴급/임박 현장이 없습니다.' : '현장이 없습니다.'}
@@ -252,54 +252,89 @@ const SitesList = () => {
                 </div>
               )}
             </div>
+          ) : tab === 'all' ? (
+            /* ── 전체 탭: 그룹별로 묶어서 표시 ── */
+            <div className="space-y-3">
+              {/* 진행중 (기본 펼침) */}
+              {activeSites.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 px-1 mb-1.5">
+                    <span className="w-2 h-2 rounded-full bg-green-500" />
+                    <span className="text-xs font-semibold" style={{color:"var(--success-text)"}}>진행중</span>
+                    <span className="text-[10px]" style={{color:"var(--text-muted)"}}>({activeSites.length}건)</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {activeSites
+                      .filter(s => !alertOnly || ['critical','warning'].includes(getAlertLevel(s)))
+                      .sort((a,b) => LEVEL_ORDER[getAlertLevel(a)] - LEVEL_ORDER[getAlertLevel(b)])
+                      .map(site => <SiteCard key={site.id} site={site} />)}
+                  </div>
+                </div>
+              )}
+
+              {/* 영업중 — 접이식 */}
+              {salesSites.length > 0 && (
+                <CollapsibleSection
+                  label="영업중"
+                  count={salesSites.length}
+                  dotColor="bg-orange-400"
+                  bgVar="--warning-bg"
+                  borderVar="--warning-border"
+                  textVar="--warning-text"
+                >
+                  {salesSites.map(site => <SiteCard key={site.id} site={site} />)}
+                </CollapsibleSection>
+              )}
+
+              {/* 수주확정 · 투입전 — 접이식 */}
+              {preSites.length > 0 && (
+                <CollapsibleSection
+                  label="수주확정 · 투입전"
+                  count={preSites.length}
+                  dotColor="bg-yellow-400"
+                  bgVar="--warning-bg"
+                  borderVar="--warning-border"
+                  textVar="--warning-text"
+                >
+                  {preSites.map(site => <SiteCard key={site.id} site={site} />)}
+                </CollapsibleSection>
+              )}
+
+              {/* 완료 · 하자기간 — 접이식 */}
+              {doneSites.length > 0 && (
+                <CollapsibleSection
+                  label="완료 · 하자기간"
+                  count={doneSites.length}
+                  icon={<CheckCircleIcon className="h-4 w-4" style={{color:"var(--info-text)"}} />}
+                  bgVar="--bg-card"
+                  borderVar="--border-base"
+                  textVar="--text-secondary"
+                >
+                  {doneSites.map(site => <SiteCard key={site.id} site={site} dimmed />)}
+                </CollapsibleSection>
+              )}
+
+              {/* 영업실패 — 접이식 */}
+              {failedSites.length > 0 && (
+                <CollapsibleSection
+                  label="영업실패"
+                  count={failedSites.length}
+                  bgVar="--bg-card"
+                  borderVar="--border-base"
+                  textVar="--text-muted"
+                  defaultOpen={false}
+                >
+                  <div className="opacity-50">
+                    {failedSites.map(site => <SiteCard key={site.id} site={site} dimmed />)}
+                  </div>
+                </CollapsibleSection>
+              )}
+            </div>
           ) : (
+            /* ── 진행중 / 완료 탭: 단일 리스트 ── */
             <div className="space-y-1.5">
               {displaySites.map(site => <SiteCard key={site.id} site={site} />)}
             </div>
-          )}
-
-          {/* 수주확정 현장 — 접이식 */}
-          {(tab === 'all') && preSites.length > 0 && (
-            <CollapsibleSection
-              label="수주확정 · 투입전"
-              count={preSites.length}
-              dotColor="bg-yellow-400"
-              bgVar="--warning-bg"
-              borderVar="--warning-border"
-              textVar="--warning-text"
-            >
-              {preSites.map(site => <SiteCard key={site.id} site={site} />)}
-            </CollapsibleSection>
-          )}
-
-          {/* 완료/하자 */}
-          {tab === 'all' && doneSites.length > 0 && (
-            <CollapsibleSection
-              label="완료 · 하자기간"
-              count={doneSites.length}
-              icon={<CheckCircleIcon className="h-4 w-4" style={{color:"var(--info-text)"}} />}
-              bgVar="--bg-card"
-              borderVar="--border-base"
-              textVar="--text-secondary"
-            >
-              {doneSites.map(site => <SiteCard key={site.id} site={site} dimmed />)}
-            </CollapsibleSection>
-          )}
-
-          {/* 영업실패 */}
-          {counts.failed > 0 && (tab === 'all' || tab === 'done') && (
-            <CollapsibleSection
-              label="영업실패"
-              count={failedSites.length}
-              bgVar="--bg-card"
-              borderVar="--border-base"
-              textVar="--text-muted"
-              defaultOpen={showFailed}
-            >
-              <div className="opacity-50">
-                {failedSites.map(site => <SiteCard key={site.id} site={site} dimmed />)}
-              </div>
-            </CollapsibleSection>
           )}
         </div>
       </PullToRefresh>

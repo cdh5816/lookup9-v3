@@ -552,23 +552,32 @@ a { color: inherit; text-decoration: none; }
 /* 다크 배경 클래스 → 라이트 대체 */
 [data-theme="corporate"] .bg-black\/20,
 [data-theme="corporate"] .bg-black\/30,
-[data-theme="corporate"] .bg-black\/40 { background-color: var(--bg-card) !important; }
+[data-theme="corporate"] .bg-black\/40,
+[data-theme="corporate"] .bg-black\/60 { background-color: var(--bg-card) !important; }
+[data-theme="corporate"] .bg-gray-900\/30,
 [data-theme="corporate"] .bg-gray-900\/40,
 [data-theme="corporate"] .bg-gray-900\/50,
 [data-theme="corporate"] .bg-gray-900\/60,
 [data-theme="corporate"] .bg-gray-900\/70 { background-color: var(--bg-card) !important; }
 [data-theme="corporate"] .bg-gray-800\/40,
-[data-theme="corporate"] .bg-gray-800\/60 { background-color: var(--bg-hover) !important; }
+[data-theme="corporate"] .bg-gray-800\/60,
+[data-theme="corporate"] .bg-gray-800\/80,
+[data-theme="corporate"] .bg-gray-800 { background-color: var(--bg-hover) !important; }
+/* gradient dark → light fix */
+[data-theme="corporate"] .from-gray-900\/80 { --tw-gradient-from: var(--bg-card) !important; }
+[data-theme="corporate"] .to-black\/60 { --tw-gradient-to: var(--bg-card) !important; }
 
 /* 다크 border → 라이트 */
 [data-theme="corporate"] .border-gray-800 { border-color: var(--border-base) !important; }
 [data-theme="corporate"] .border-gray-700 { border-color: var(--border-base) !important; }
+[data-theme="corporate"] .border-gray-800\/60,
 [data-theme="corporate"] .border-gray-700\/50,
 [data-theme="corporate"] .border-gray-700\/60,
 [data-theme="corporate"] .border-gray-700\/40 { border-color: var(--border-base) !important; }
 
 /* divider */
-[data-theme="corporate"] .divide-gray-800 > * + * { border-color: var(--border-subtle) !important; }
+[data-theme="corporate"] .divide-gray-800 > * + *,
+[data-theme="corporate"] .divide-gray-800\/60 > * + * { border-color: var(--border-subtle) !important; }
 
 /* hover 보정 */
 [data-theme="corporate"] .hover\:bg-gray-700\/20:hover,

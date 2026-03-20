@@ -114,17 +114,18 @@ export default function SiteDetail() {
  <SiteHeader site={site} canDelete={canDelete} onDelete={handleDeleteSite} onTabChange={setActiveTab} />
 
  {/* ── 탭 바 ── */}
- <div className="sticky top-0 z-10  backdrop-blur border-b">
+ <div className="sticky top-0 z-10 backdrop-blur" style={{borderBottom:'1px solid var(--border-base)',backgroundColor:'var(--header-bg)'}}>
  <div className="flex overflow-x-auto scrollbar-hide">
  {tabs.map(tab => (
  <button
  key={tab}
  onClick={() => setActiveTab(tab)}
- className={`shrink-0 px-4 py-3 text-xs font-semibold border-b-2 transition-all whitespace-nowrap ${
- activeTab === tab
- ? 'border-blue-500 text-blue-400 bg-blue-950/20'
- : 'border-transparent text-gray-500 hover:text-gray-300 hover:'
- }`}
+ className="shrink-0 px-4 py-3 text-xs font-semibold border-b-2 transition-all whitespace-nowrap"
+ style={{
+ borderBottomColor: activeTab === tab ? 'var(--brand)' : 'transparent',
+ color: activeTab === tab ? 'var(--brand)' : 'var(--text-muted)',
+ backgroundColor: activeTab === tab ? 'var(--brand-light)' : 'transparent',
+ }}
  >
  {TAB_LABELS[tab]}
  </button>
@@ -177,29 +178,33 @@ function SiteHeader({ site, canDelete, onDelete, onTabChange }: any) {
  }, 0);
 
  return (
- <div className="rounded-xl border bg-gradient-to-b from-gray-900/80 to-black/60 p-5 space-y-4 mb-0">
+ <div className="rounded-xl p-5 space-y-4 mb-0" style={{backgroundColor:'var(--bg-elevated)',border:'1px solid var(--border-base)'}}>
  {/* 현장명 + 상태 */}
  <div className="flex items-start justify-between gap-3">
  <div className="min-w-0 flex-1">
  <div className="flex flex-wrap items-center gap-2 mb-1">
- <span className={`text-xs font-bold ${STATUS_COLOR[site.status] || 'text-gray-400'}`}>● {site.status}</span>
- <span className={`text-[11px] px-2 py-0.5 rounded font-semibold ${site.siteType === '납품하차도' ? 'bg-purple-900/40 text-purple-300' : 'bg-blue-900/40 text-blue-300'}`}>
+ <span className="text-xs font-bold" style={{color: site.status === 'CONTRACT_ACTIVE' ? 'var(--success-text)' : site.status === 'COMPLETED' ? 'var(--info-text)' : site.status === 'SALES_PIPELINE' ? 'var(--warning-text)' : 'var(--text-muted)'}}>● {site.status}</span>
+ <span className="text-[11px] px-2 py-0.5 rounded font-semibold" style={{backgroundColor: site.siteType === '납품하차도' ? 'rgba(139,92,246,0.12)' : 'var(--info-bg)', color: site.siteType === '납품하차도' ? '#A78BFA' : 'var(--info-text)'}}>
  {site.siteType || '납품설치도'}
  </span>
  {dday && (
- <span className={`text-[11px] px-2 py-0.5 rounded-full border font-bold ${dday.cls}`}>
+ <span className="text-[11px] px-2 py-0.5 rounded-full font-bold" style={{
+   color: dday.label.startsWith('D+') ? 'var(--danger-text)' : dday.label === 'D-Day' ? 'var(--warning-text)' : 'var(--text-muted)',
+   backgroundColor: dday.label.startsWith('D+') ? 'var(--danger-bg)' : dday.label === 'D-Day' ? 'var(--warning-bg)' : 'transparent',
+   border: `1px solid ${dday.label.startsWith('D+') ? 'var(--danger-border)' : dday.label === 'D-Day' ? 'var(--warning-border)' : 'var(--border-base)'}`,
+ }}>
  납기 {dday.label}
  </span>
  )}
  </div>
- <h2 className="text-xl font-bold leading-tight text-white">{site.name}</h2>
- <p className="text-xs text-gray-500 mt-0.5">
+ <h2 className="text-xl font-bold leading-tight" style={{color:'var(--text-primary)'}}>{site.name}</h2>
+ <p className="text-xs mt-0.5" style={{color:'var(--text-muted)'}}>
  {[site.client?.name, site.address].filter(Boolean).join(' · ') || ''}
  </p>
  </div>
  <div className="flex items-center gap-2">
  <button
- className="btn btn-ghost btn-xs gap-1 border text-gray-400 hover:text-white"
+ className="btn btn-ghost btn-xs gap-1"
  onClick={() => {
  const printUrl = `/sites/${site.id}?print=1`;
  window.open(printUrl, '_blank');
@@ -219,40 +224,37 @@ function SiteHeader({ site, canDelete, onDelete, onTabChange }: any) {
  {/* 핵심 지표 4칸 */}
  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
  {[
- { label: '계약금액', value: fmtMoney(contractAmt), accent: 'text-green-400' },
- { label: '계약물량', value: contractQty ? `${fmtNum(contractQty)} ㎡` : '-', accent: 'text-white' },
- { label: '납품기한', value: fmtDate(site.deliveryDeadline), accent: dday?.cls.includes('red') ? 'text-red-400' : dday?.cls.includes('yellow') ? 'text-yellow-400' : 'text-white' },
- { label: '규격/사양', value: site.specification || (contract?.specification) || '-', accent: 'text-gray-300' },
+ { label: '계약금액', value: fmtMoney(contractAmt), colorVar: '--success-text' },
+ { label: '계약물량', value: contractQty ? `${fmtNum(contractQty)} ㎡` : '-', colorVar: '--text-primary' },
+ { label: '납품기한', value: fmtDate(site.deliveryDeadline), colorVar: dday?.label.startsWith('D+') ? '--danger-text' : '--text-primary' },
+ { label: '규격/사양', value: site.specification || (contract?.specification) || '-', colorVar: '--text-secondary' },
  ].map(item => (
- <div key={item.label} className="rounded-lg border px-3 py-2.5">
- <p className="text-[10px] text-gray-500 mb-1">{item.label}</p>
- <p className={`text-sm font-bold truncate ${item.accent}`}>{item.value}</p>
+ <div key={item.label} className="rounded-lg px-3 py-2.5" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+ <p className="text-[10px] mb-1" style={{color:'var(--text-muted)'}}>{item.label}</p>
+ <p className="text-sm font-bold truncate" style={{color:`var(${item.colorVar})`}}>{item.value}</p>
  </div>
  ))}
  </div>
 
- {/* 공정률 바 - 스타일리시 */}
+ {/* 공정률 바 */}
  <div className="space-y-1.5">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-2">
- <span className="text-xs text-gray-500">출하 공정률</span>
+ <span className="text-xs" style={{color:'var(--text-muted)'}}>출하 공정률</span>
  {site.startDocsDone && (
- <span className="flex items-center gap-1 text-[10px] text-green-500">
+ <span className="flex items-center gap-1 text-[10px]" style={{color:'var(--success-text)'}}>
  <CheckCircleIcon className="w-3 h-3" />착수계
  </span>
  )}
  {site.completionDocsDone && (
- <span className="flex items-center gap-1 text-[10px] text-blue-400">
+ <span className="flex items-center gap-1 text-[10px]" style={{color:'var(--info-text)'}}>
  <CheckCircleIcon className="w-3 h-3" />준공계
  </span>
  )}
  </div>
- <span className={`text-lg font-extrabold tabular-nums ${
- progressRate >= 100 ? 'text-blue-400' : progressRate >= 60 ? 'text-green-400' : progressRate >= 30 ? 'text-yellow-400' : 'text-gray-400'
- }`}>{progressRate}%</span>
+ <span className="text-lg font-extrabold tabular-nums" style={{color: progressRate >= 100 ? 'var(--info-text)' : progressRate >= 60 ? 'var(--success-text)' : progressRate >= 30 ? 'var(--warning-text)' : 'var(--text-muted)'}}>{progressRate}%</span>
  </div>
- <div className="relative h-3 w-full overflow-hidden rounded-full">
- {/* 세그먼트 효과 */}
+ <div className="relative h-3 w-full overflow-hidden rounded-full" style={{backgroundColor:'var(--border-base)'}}>
  <div
  className={`h-full rounded-full transition-all duration-700 ease-out ${
  progressRate >= 100 ? 'bg-gradient-to-r from-blue-600 to-blue-400' :
@@ -262,12 +264,11 @@ function SiteHeader({ site, canDelete, onDelete, onTabChange }: any) {
  }`}
  style={{ width: `${progressRate}%` }}
  />
- {/* 마커: 25%, 50%, 75% */}
  {[25, 50, 75].map(pct => (
- <div key={pct} className="absolute top-0 h-full w-px " style={{ left: `${pct}%` }} />
+ <div key={pct} className="absolute top-0 h-full w-px" style={{ left: `${pct}%`, backgroundColor:'var(--border-base)' }} />
  ))}
  </div>
- <div className="flex justify-between text-[10px] text-gray-700">
+ <div className="flex justify-between text-[10px]" style={{color:'var(--text-muted)'}}>
  <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
  </div>
  </div>
@@ -276,15 +277,16 @@ function SiteHeader({ site, canDelete, onDelete, onTabChange }: any) {
  {activeSettlements.length > 0 && (
  <button
  onClick={() => onTabChange('settlement')}
- className="w-full rounded-lg border border-orange-800/50 bg-orange-950/20 px-3 py-2 flex items-center justify-between hover:bg-orange-950/30 transition-colors"
+ className="w-full rounded-lg px-3 py-2 flex items-center justify-between transition-colors"
+ style={{border:'1px solid var(--warning-border)',backgroundColor:'var(--warning-bg)'}}
  >
  <div className="flex items-center gap-2">
- <ExclamationTriangleIcon className="w-4 h-4 text-orange-400" />
- <span className="text-xs text-orange-300 font-medium">
+ <ExclamationTriangleIcon className="w-4 h-4" style={{color:'var(--warning-text)'}} />
+ <span className="text-xs font-medium" style={{color:'var(--warning-text)'}}>
  실정보고 {activeSettlements.length}건 진행중
  </span>
  </div>
- <span className="text-xs text-orange-400 font-bold">
+ <span className="text-xs font-bold" style={{color:'var(--warning-text)'}}>
  {settlementTotal > 0 ? `${fmtMoney(settlementTotal)} 예정` : '확인 필요 →'}
  </span>
  </button>
@@ -294,12 +296,12 @@ function SiteHeader({ site, canDelete, onDelete, onTabChange }: any) {
  {(site.assignments || []).length > 0 && (
  <div className="flex flex-wrap gap-1.5">
  {site.assignments.slice(0, 5).map((a: any) => (
- <span key={a.id} className="rounded-full border px-2.5 py-0.5 text-[11px] text-gray-300">
+ <span key={a.id} className="rounded-full px-2.5 py-0.5 text-[11px]" style={{border:'1px solid var(--border-base)',color:'var(--text-secondary)'}}>
  {a.user.position ? `${a.user.position} ` : ''}{a.user.name}
  </span>
  ))}
  {site.assignments.length > 5 && (
- <span className="rounded-full border px-2.5 py-0.5 text-[11px] text-gray-500">
+ <span className="rounded-full px-2.5 py-0.5 text-[11px]" style={{border:'1px solid var(--border-base)',color:'var(--text-muted)'}}>
  +{site.assignments.length - 5}
  </span>
  )}
@@ -368,12 +370,12 @@ function OverviewTab({ site, siteId, canManage, onMutate }: any) {
  return (
  <div className="space-y-3">
  {/* 계약 정보 카드 */}
- <div className="rounded-xl border p-4">
+ <div className="rounded-xl p-4" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
  <div className="flex items-center justify-between mb-3">
- <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">계약 정보</p>
+ <p className="text-xs font-semibold uppercase tracking-wider" style={{color:'var(--text-muted)'}}>계약 정보</p>
  <div className="flex gap-2">
  {changeHistory.length > 0 && (
- <button className="text-xs text-blue-400 hover:text-blue-300" onClick={() => setShowHistory(!showHistory)}>
+ <button className="text-xs" style={{color:'var(--info-text)'}} onClick={() => setShowHistory(!showHistory)}>
  변경이력 {changeHistory.length}건
  </button>
  )}
@@ -385,17 +387,17 @@ function OverviewTab({ site, siteId, canManage, onMutate }: any) {
 
  {/* 변경 이력 드롭다운 */}
  {showHistory && changeHistory.length > 0 && (
- <div className="mb-3 rounded-lg border p-3 space-y-2">
+ <div className="mb-3 rounded-lg p-3 space-y-2" style={{border:'1px solid var(--border-base)'}}>
  {changeHistory.map((c: any) => (
  <div key={c.id} className="flex items-start justify-between text-xs gap-2">
  <div className="flex-1 min-w-0">
- <span className="text-[10px] px-1.5 py-0.5 rounded text-gray-400 mr-1">{c.type}</span>
- <span className="text-gray-500">{c.beforeValue}</span>
- <span className="text-gray-600 mx-1">→</span>
- <span className="text-gray-200 font-medium">{c.afterValue}</span>
- {c.reason && <p className="text-gray-600 mt-0.5 truncate">{c.reason}</p>}
+ <span className="text-[10px] px-1.5 py-0.5 rounded mr-1" style={{color:'var(--text-muted)'}}>{c.type}</span>
+ <span style={{color:'var(--text-muted)'}}>{c.beforeValue}</span>
+ <span className="mx-1" style={{color:'var(--text-muted)'}}>→</span>
+ <span className="font-medium" style={{color:'var(--text-primary)'}}>{c.afterValue}</span>
+ {c.reason && <p className="mt-0.5 truncate" style={{color:'var(--text-muted)'}}>{c.reason}</p>}
  </div>
- <div className="text-right shrink-0 text-gray-600">
+ <div className="text-right shrink-0" style={{color:'var(--text-muted)'}}>
  <p>{c.requester?.name}</p>
  <p>{fmtDate(c.createdAt)}</p>
  </div>
@@ -462,7 +464,7 @@ function OverviewTab({ site, siteId, canManage, onMutate }: any) {
  {/* 핵심 계약 정보 2열 그리드 */}
  <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
  {[
- { label: '계약금액', value: <span className="text-green-400 font-bold">{fmtMoney(site.contractAmount)}</span> },
+ { label: '계약금액', value: <span className="font-bold" style={{color:'var(--success-text)'}}>{fmtMoney(site.contractAmount)}</span> },
  { label: '납품기한', value: site.deliveryDeadline ? fmtDate(site.deliveryDeadline) : '-' },
  { label: '계약물량 (합계)', value: site.contractQuantity ? `${fmtNum(site.contractQuantity)} ㎡` : '-' },
  { label: '납품요구번호', value: site.contractNo || '-' },
@@ -470,8 +472,8 @@ function OverviewTab({ site, siteId, canManage, onMutate }: any) {
  { label: '검사기관', value: site.inspectionAgency || '-' },
  ].map(({ label, value }) => (
  <div key={label}>
- <p className="text-[10px] text-gray-600 mb-0.5">{label}</p>
- <p className="text-gray-200 font-medium truncate">{value as any}</p>
+ <p className="text-[10px] mb-0.5" style={{color:'var(--text-muted)'}}>{label}</p>
+ <p className="font-medium truncate" style={{color:'var(--text-primary)'}}>{value as any}</p>
  </div>
  ))}
  </div>
@@ -485,9 +487,9 @@ function OverviewTab({ site, siteId, canManage, onMutate }: any) {
  : [];
  if (items.length === 0) return null;
  return (
- <div className="rounded-lg overflow-hidden border">
+ <div className="rounded-lg overflow-hidden" style={{border:'1px solid var(--border-base)'}}>
  <table className="w-full text-xs">
- <thead className="text-[10px] text-gray-400 uppercase tracking-wider">
+ <thead className="text-[10px] uppercase tracking-wider" style={{color:'var(--text-muted)'}}>
  <tr>
  <th className="px-2.5 py-2 text-left w-8">순</th>
  <th className="px-2.5 py-2 text-left">품명</th>
@@ -499,22 +501,22 @@ function OverviewTab({ site, siteId, canManage, onMutate }: any) {
  </thead>
  <tbody>
  {items.map((item: any, idx: number) => (
- <tr key={idx} className="border-t hover:">
- <td className="px-2.5 py-2 text-gray-500">{item.seq || idx + 1}</td>
- <td className="px-2.5 py-2 font-medium text-gray-200">{item.productName || '-'}</td>
- <td className="px-2.5 py-2 text-gray-400 hidden sm:table-cell max-w-xs truncate">{item.spec || '-'}</td>
- <td className="px-2.5 py-2 text-right text-gray-300">{item.unitPrice ? `${Number(item.unitPrice).toLocaleString()}` : '-'}</td>
- <td className="px-2.5 py-2 text-right text-blue-300 font-semibold">{item.contractQuantity ? Number(item.contractQuantity).toLocaleString() : '-'}</td>
- <td className="px-2.5 py-2 text-right text-green-400 hidden sm:table-cell">{item.amount ? `${Number(item.amount).toLocaleString()}` : '-'}</td>
+ <tr key={idx} style={{borderTop:'1px solid var(--border-subtle)'}}>
+ <td className="px-2.5 py-2" style={{color:'var(--text-muted)'}}>{item.seq || idx + 1}</td>
+ <td className="px-2.5 py-2 font-medium" style={{color:'var(--text-primary)'}}>{item.productName || '-'}</td>
+ <td className="px-2.5 py-2 hidden sm:table-cell max-w-xs truncate" style={{color:'var(--text-secondary)'}}>{item.spec || '-'}</td>
+ <td className="px-2.5 py-2 text-right" style={{color:'var(--text-secondary)'}}>{item.unitPrice ? `${Number(item.unitPrice).toLocaleString()}` : '-'}</td>
+ <td className="px-2.5 py-2 text-right font-semibold" style={{color:'var(--info-text)'}}>{item.contractQuantity ? Number(item.contractQuantity).toLocaleString() : '-'}</td>
+ <td className="px-2.5 py-2 text-right hidden sm:table-cell" style={{color:'var(--success-text)'}}>{item.amount ? `${Number(item.amount).toLocaleString()}` : '-'}</td>
  </tr>
  ))}
  {items.length > 1 && (
- <tr className="border-t  font-semibold">
- <td className="px-2.5 py-2 text-gray-500 text-[10px]" colSpan={4}>합계</td>
- <td className="px-2.5 py-2 text-right text-blue-200">
+ <tr className="font-semibold" style={{borderTop:'1px solid var(--border-base)'}}>
+ <td className="px-2.5 py-2 text-[10px]" style={{color:'var(--text-muted)'}} colSpan={4}>합계</td>
+ <td className="px-2.5 py-2 text-right" style={{color:'var(--info-text)'}}>
  {items.reduce((s: number, i: any) => s + Number(i.contractQuantity || 0), 0).toLocaleString()} ㎡
  </td>
- <td className="px-2.5 py-2 text-right text-green-300 hidden sm:table-cell">
+ <td className="px-2.5 py-2 text-right hidden sm:table-cell" style={{color:'var(--success-text)'}}>
  {items.reduce((s: number, i: any) => s + Number(i.amount || 0), 0).toLocaleString()}
  </td>
  </tr>
@@ -526,13 +528,13 @@ function OverviewTab({ site, siteId, canManage, onMutate }: any) {
  })()}
 
  {/* 착수/준공계 */}
- <div className="flex gap-4 pt-1 border-t">
- <div className={`flex items-center gap-1.5 text-xs ${site.startDocsDone ? 'text-green-400' : 'text-gray-600'}`}>
- <div className={`w-2.5 h-2.5 rounded-full ${site.startDocsDone ? 'bg-green-500' : 'bg-gray-400'}`} />
+ <div className="flex gap-4 pt-1" style={{borderTop:'1px solid var(--border-subtle)'}}>
+ <div className="flex items-center gap-1.5 text-xs" style={{color: site.startDocsDone ? 'var(--success-text)' : 'var(--text-muted)'}}>
+ <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: site.startDocsDone ? 'var(--success-text)' : 'var(--text-muted)'}} />
  착수계 제출
  </div>
- <div className={`flex items-center gap-1.5 text-xs ${site.completionDocsDone ? 'text-blue-400' : 'text-gray-600'}`}>
- <div className={`w-2.5 h-2.5 rounded-full ${site.completionDocsDone ? 'bg-blue-500' : 'bg-gray-400'}`} />
+ <div className="flex items-center gap-1.5 text-xs" style={{color: site.completionDocsDone ? 'var(--info-text)' : 'var(--text-muted)'}}>
+ <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: site.completionDocsDone ? 'var(--info-text)' : 'var(--text-muted)'}} />
  준공계 제출
  </div>
  </div>
@@ -542,27 +544,26 @@ function OverviewTab({ site, siteId, canManage, onMutate }: any) {
 
  {/* 실정보고 진행중 요약 */}
  {activeSettlements.length > 0 && (
- <div className="rounded-xl border border-orange-800/40 bg-orange-950/10 p-4">
- <p className="text-xs font-semibold text-orange-400 mb-2">
+ <div className="rounded-xl p-4" style={{border:'1px solid var(--warning-border)',backgroundColor:'var(--warning-bg)'}}>
+ <p className="text-xs font-semibold mb-2" style={{color:'var(--warning-text)'}}>
  ⚠ 진행중 실정보고 / 정산 ({activeSettlements.length}건)
  </p>
  <div className="space-y-2">
  {activeSettlements.slice(0, 3).map((c: any) => (
  <div key={c.id} className="flex items-center justify-between text-xs">
  <div className="flex items-center gap-2">
- <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
- c.status === '수요처승인' ? 'bg-green-900/50 text-green-300' :
- c.status === '공문발송' ? 'bg-blue-900/50 text-blue-300' :
- ''
- }`}>{c.status || '검토중'}</span>
- <span className="text-gray-300">{c.type}</span>
- {c.afterValue && <span className="text-gray-500 truncate max-w-[100px]">{c.afterValue}</span>}
+ <span className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={{
+   backgroundColor: c.status === '수요처승인' ? 'var(--success-bg)' : c.status === '공문발송' ? 'var(--info-bg)' : 'transparent',
+   color: c.status === '수요처승인' ? 'var(--success-text)' : c.status === '공문발송' ? 'var(--info-text)' : 'var(--text-muted)',
+ }}>{c.status || '검토중'}</span>
+ <span style={{color:'var(--text-primary)'}}>{c.type}</span>
+ {c.afterValue && <span className="truncate max-w-[100px]" style={{color:'var(--text-muted)'}}>{c.afterValue}</span>}
  </div>
- {c.impact && <span className="text-orange-400 font-medium">{c.impact}</span>}
+ {c.impact && <span className="font-medium" style={{color:'var(--warning-text)'}}>{c.impact}</span>}
  </div>
  ))}
  {activeSettlements.length > 3 && (
- <p className="text-xs text-gray-600">+{activeSettlements.length - 3}건 더...</p>
+ <p className="text-xs" style={{color:'var(--text-muted)'}}>+{activeSettlements.length - 3}건 더...</p>
  )}
  </div>
  </div>
@@ -570,26 +571,26 @@ function OverviewTab({ site, siteId, canManage, onMutate }: any) {
 
  {/* 발주처 + 담당자 */}
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
- <div className="rounded-xl border p-4">
- <p className="text-[10px] text-gray-500 mb-2">발주처 / 담당자</p>
- <p className="text-sm font-medium text-gray-200">{site.client?.name || '-'}</p>
- {site.clientDept && <p className="text-xs text-gray-400 mt-1">{site.clientDept}</p>}
+ <div className="rounded-xl p-4" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+ <p className="text-[10px] mb-2" style={{color:'var(--text-muted)'}}>발주처 / 담당자</p>
+ <p className="text-sm font-medium" style={{color:'var(--text-primary)'}}>{site.client?.name || '-'}</p>
+ {site.clientDept && <p className="text-xs mt-1" style={{color:'var(--text-secondary)'}}>{site.clientDept}</p>}
  {site.clientManager && (
- <p className="text-xs text-gray-400">{site.clientManager} {site.clientManagerPhone && `· ${site.clientManagerPhone}`}</p>
+ <p className="text-xs" style={{color:'var(--text-secondary)'}}>{site.clientManager} {site.clientManagerPhone && `· ${site.clientManagerPhone}`}</p>
  )}
  </div>
- <div className="rounded-xl border p-4">
- <p className="text-[10px] text-gray-500 mb-2">현장 주소</p>
- <p className="text-sm font-medium text-gray-200">{site.address || '-'}</p>
- {site.salesStage && <p className="text-xs text-orange-400 mt-1">영업단계: {site.salesStage}</p>}
+ <div className="rounded-xl p-4" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+ <p className="text-[10px] mb-2" style={{color:'var(--text-muted)'}}>현장 주소</p>
+ <p className="text-sm font-medium" style={{color:'var(--text-primary)'}}>{site.address || '-'}</p>
+ {site.salesStage && <p className="text-xs mt-1" style={{color:'var(--warning-text)'}}>영업단계: {site.salesStage}</p>}
  </div>
  </div>
 
  {/* 메모 */}
  {site.description && (
- <div className="rounded-xl border p-4">
- <p className="text-[10px] text-gray-500 mb-1">현장 메모</p>
- <p className="text-sm whitespace-pre-wrap text-gray-300">{site.description}</p>
+ <div className="rounded-xl p-4" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+ <p className="text-[10px] mb-1" style={{color:'var(--text-muted)'}}>현장 메모</p>
+ <p className="text-sm whitespace-pre-wrap" style={{color:'var(--text-secondary)'}}>{site.description}</p>
  </div>
  )}
 
@@ -1165,9 +1166,9 @@ function AssignmentPanel({ siteId, assignments, canManage, onMutate }: any) {
  };
 
  return (
- <div className="rounded-xl border p-4">
+ <div className="rounded-xl p-4" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
  <div className="mb-3 flex items-center justify-between">
- <p className="text-xs text-gray-500">배정 인원 ({assignments?.length || 0})</p>
+ <p className="text-xs" style={{color:'var(--text-muted)'}}>배정 인원 ({assignments?.length || 0})</p>
  {canManage && (
  <button className="btn btn-ghost btn-xs" onClick={() => setShowSearch(!showSearch)}>
  <PlusIcon className="h-3.5 w-3.5" /> 직원 배정
@@ -1177,16 +1178,21 @@ function AssignmentPanel({ siteId, assignments, canManage, onMutate }: any) {
  {showSearch && (
  <div className="mb-3 space-y-2">
  <div className="relative">
- <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+ <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{color:'var(--text-muted)'}} />
  <input type="text" className="input input-bordered input-sm w-full pl-9" placeholder="이름 또는 이메일"
  value={sq} onChange={e => handleSearch(e.target.value)} />
  </div>
  {sr.length > 0 && (
- <div className="max-h-40 overflow-y-auto rounded border">
+ <div className="max-h-40 overflow-y-auto rounded" style={{border:'1px solid var(--border-base)'}}>
  {sr.map(u => (
- <button key={u.id} onClick={() => handleAssign(u.id)} className="w-full px-3 py-2 text-left text-sm hover:bg-transparent">
- {u.position ? `${u.position} ` : ''}{u.name}
- <span className="text-gray-500 ml-1 text-xs">({u.email})</span>
+ <button key={u.id} onClick={() => handleAssign(u.id)}
+ className="w-full px-3 py-2 text-left text-sm"
+ style={{borderBottom:'1px solid var(--border-subtle)'}}
+ onMouseOver={e => (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
+ onMouseOut={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+ >
+ <span style={{color:'var(--text-primary)'}}>{u.position ? `${u.position} ` : ''}{u.name}</span>
+ <span className="ml-1 text-xs" style={{color:'var(--text-muted)'}}>({u.email})</span>
  </button>
  ))}
  </div>
@@ -1194,13 +1200,14 @@ function AssignmentPanel({ siteId, assignments, canManage, onMutate }: any) {
  </div>
  )}
  {!assignments?.length ? (
- <p className="text-sm text-gray-500">배정된 인원이 없습니다.</p>
+ <p className="text-sm" style={{color:'var(--text-muted)'}}>배정된 인원이 없습니다.</p>
  ) : (
  <div className="space-y-1">
  {assignments.map((a: any) => (
  <div key={a.id} className="flex items-center justify-between py-1">
- <p className="text-sm">{a.user.position ? `${a.user.position} ` : ''}{a.user.name}
- <span className="ml-2 text-xs text-gray-500">{a.user.department || ''}</span>
+ <p className="text-sm" style={{color:'var(--text-primary)'}}>
+ {a.user.position ? `${a.user.position} ` : ''}{a.user.name}
+ <span className="ml-2 text-xs" style={{color:'var(--text-muted)'}}>{a.user.department || ''}</span>
  </p>
  {canManage && (
  <button className="btn btn-ghost btn-xs text-error" onClick={() => handleRemove(a.user.id)}>
@@ -1267,17 +1274,17 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
  };
 
  return (
- <div className="rounded-xl border p-4">
+ <div className="rounded-xl p-4" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
  <div className="flex items-center justify-between mb-3">
- <p className="text-xs font-medium text-gray-400">시공업체</p>
+ <p className="text-xs font-medium" style={{color:'var(--text-muted)'}}>시공업체</p>
  {canManage && !editing && (
  <button className="btn btn-ghost btn-xs" onClick={() => { setEditing(true); setShowDropdown(false); }}>수정</button>
  )}
  </div>
 
  {assigned > 0 && (
- <div className="mb-2 rounded-lg bg-blue-950/30 border border-blue-800/40 px-3 py-1.5 text-xs text-blue-300">
- ✓ {form.installerName} 소속 계정 {assigned}명이 현장에 자동 배정되었습니다.
+ <div className="mb-2 rounded-lg px-3 py-1.5 text-xs" style={{backgroundColor:'var(--info-bg)',border:'1px solid var(--info-border)',color:'var(--info-text)'}}>
+ ✓ {form.installerName} 소속 계정 {assigned}명이 현장 열람/수정 가능하도록 연동되었습니다.
  </div>
  )}
 
@@ -1286,7 +1293,7 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
  {/* 업체명 — 검색 드롭다운 */}
  <div className="relative">
- <label className="block text-[10px] text-gray-500 mb-1">업체명</label>
+ <label className="block text-[10px] mb-1" style={{color:'var(--text-muted)'}}>업체명</label>
  <input
  className="input input-bordered input-sm w-full"
  placeholder="업체명 검색 또는 직접 입력"
@@ -1296,43 +1303,46 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
  autoComplete="off"
  />
  {showDropdown && filtered.length > 0 && (
- <div className="absolute z-50 left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-lg border shadow-2xl">
+ <div className="absolute z-50 left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-lg" style={{backgroundColor:'var(--bg-elevated)',border:'1px solid var(--border-base)',boxShadow:'var(--shadow-elevated)'}}>
  {filtered.map((co: any) => (
  <button
  key={co.id}
  type="button"
- className="w-full text-left px-3 py-2.5 hover:bg-transparent transition-colors border-b last:border-0"
+ className="w-full text-left px-3 py-2.5 transition-colors"
+ style={{borderBottom:'1px solid var(--border-subtle)'}}
  onMouseDown={() => selectCompany(co)}
+ onMouseOver={e => (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
+ onMouseOut={e => (e.currentTarget.style.backgroundColor = 'transparent')}
  >
- <p className="text-sm font-semibold text-white">{co.name}</p>
- <p className="text-[11px] text-gray-400">
- {co.contact && `담당: ${co.contact}`}{co.contact && co.phone && ' · '}{co.phone && co.phone}
+ <p className="text-sm font-semibold" style={{color:'var(--text-primary)'}}>{co.name}</p>
+ <p className="text-[11px]" style={{color:'var(--text-muted)'}}>
+ {co.contact && `대표이사: ${co.contact}`}{co.contact && co.phone && ' · '}{co.phone && co.phone}
  </p>
  </button>
  ))}
  </div>
  )}
  {showDropdown && form.installerName.trim() && filtered.length === 0 && (
- <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg border px-3 py-2.5 text-xs text-gray-500 shadow-2xl">
+ <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg px-3 py-2.5 text-xs" style={{backgroundColor:'var(--bg-elevated)',border:'1px solid var(--border-base)',color:'var(--text-muted)',boxShadow:'var(--shadow-elevated)'}}>
  등록된 업체 없음 — 직접 입력으로 저장됩니다
  </div>
  )}
  </div>
  <div>
- <label className="block text-[10px] text-gray-500 mb-1">담당자</label>
+ <label className="block text-[10px] mb-1" style={{color:'var(--text-muted)'}}>대표이사</label>
  <input className="input input-bordered input-sm w-full"
  value={form.installerContact}
  onChange={e => setForm({ ...form, installerContact: e.target.value })} />
  </div>
  <div>
- <label className="block text-[10px] text-gray-500 mb-1">연락처</label>
+ <label className="block text-[10px] mb-1" style={{color:'var(--text-muted)'}}>연락처</label>
  <input className="input input-bordered input-sm w-full"
  value={form.installerPhone}
  onChange={e => setForm({ ...form, installerPhone: e.target.value })} />
  </div>
  </div>
- <p className="text-[10px] text-gray-600">
- ※ 등록된 협력업체를 선택하면 담당자·연락처가 자동으로 채워지고, 소속 계정이 이 현장에 자동 배정됩니다.
+ <p className="text-[10px]" style={{color:'var(--text-muted)'}}>
+ ※ 등록된 협력업체를 선택하면 대표이사·연락처가 자동으로 채워지고, 소속 계정이 이 현장을 열람/수정할 수 있게 됩니다.
  </p>
  <div className="flex justify-end gap-2">
  <button className="btn btn-ghost btn-xs" onClick={() => { setEditing(false); setShowDropdown(false); }}>취소</button>
@@ -1344,24 +1354,24 @@ function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
  site.installerName ? (
  <div className="grid grid-cols-3 gap-x-4 text-sm">
  <div>
- <p className="text-[10px] text-gray-600 mb-0.5">업체명</p>
- <p className="text-gray-200 font-medium">{site.installerName}</p>
+ <p className="text-[10px] mb-0.5" style={{color:'var(--text-muted)'}}>업체명</p>
+ <p className="font-medium" style={{color:'var(--text-primary)'}}>{site.installerName}</p>
  </div>
  {site.installerContact && (
  <div>
- <p className="text-[10px] text-gray-600 mb-0.5">담당자</p>
- <p className="text-gray-300">{site.installerContact}</p>
+ <p className="text-[10px] mb-0.5" style={{color:'var(--text-muted)'}}>대표이사</p>
+ <p style={{color:'var(--text-secondary)'}}>{site.installerContact}</p>
  </div>
  )}
  {site.installerPhone && (
  <div>
- <p className="text-[10px] text-gray-600 mb-0.5">연락처</p>
- <p className="text-gray-300">{site.installerPhone}</p>
+ <p className="text-[10px] mb-0.5" style={{color:'var(--text-muted)'}}>연락처</p>
+ <p style={{color:'var(--text-secondary)'}}>{site.installerPhone}</p>
  </div>
  )}
  </div>
  ) : (
- <p className="text-sm text-gray-600">등록된 시공업체가 없습니다.</p>
+ <p className="text-sm" style={{color:'var(--text-muted)'}}>등록된 시공업체가 없습니다.</p>
  )
  )}
  </div>

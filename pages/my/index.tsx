@@ -36,12 +36,15 @@ const MyPage = () => {
   const permissions = profile.permissions || {};
   const showApprovals = permissions.canApprove;
 
+  const myRole = profile.role || profile.teamMembers?.[0]?.role || '';
+  const isGuestOrViewer = ['GUEST', 'VIEWER'].includes(myRole);
+
   const tabs: { key: MyTab; label: string }[] = [
     { key: 'profile', label: '내 정보' },
-    { key: 'leave', label: '연차' },
-    { key: 'worklog', label: '업무일지' },
+    ...(!isGuestOrViewer ? [{ key: 'leave' as MyTab, label: '연차' }] : []),
+    ...(!isGuestOrViewer ? [{ key: 'worklog' as MyTab, label: '업무일지' }] : []),
     { key: 'sites', label: '내 현장' },
-    { key: 'activity', label: '활동' },
+    ...(!isGuestOrViewer ? [{ key: 'activity' as MyTab, label: '활동' }] : []),
     ...(showApprovals ? [{ key: 'approvals' as MyTab, label: '전자결재' }] : []),
   ];
 

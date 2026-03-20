@@ -59,10 +59,9 @@ const getAlertLevel = (site: any): AlertLevel => {
 };
 
 // ── 탭 필터 정의 ────────────────────────────────────────────
-type TabFilter = 'all' | 'pre' | 'active' | 'done';
+type TabFilter = 'all' | 'active' | 'done';
 const TAB_DEFS: { key: TabFilter; label: string }[] = [
   { key: 'all',    label: '전체' },
-  { key: 'pre',    label: '투입전' },
   { key: 'active', label: '진행중' },
   { key: 'done',   label: '완료/하자' },
 ];
@@ -85,7 +84,6 @@ const SitesList = () => {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
     params.set('includeCompleted', 'true');
-    params.set('excludeSales', 'true'); // 영업 상태는 영업관리 메뉴에서만
     const res = await fetch(`/api/sites?${params.toString()}`);
     if (res.ok) {
       const d = await res.json();
@@ -100,6 +98,7 @@ const SitesList = () => {
   }, [fetchSites, search]);
 
   // 그룹 분류
+  const salesSites   = useMemo(() => sites.filter(s => getMeta(s.status).group === 'sales'), [sites]);
   const preSites     = useMemo(() => sites.filter(s => getMeta(s.status).group === 'pre'), [sites]);
   const activeSites  = useMemo(() => sites.filter(s => getMeta(s.status).group === 'active'), [sites]);
   const doneSites    = useMemo(() => sites.filter(s => getMeta(s.status).group === 'done' && s.status !== 'FAILED'), [sites]);
@@ -107,11 +106,10 @@ const SitesList = () => {
 
   // 탭에 따른 표시 목록
   const tabSites = useMemo(() => {
-    if (tab === 'pre')    return preSites;
     if (tab === 'active') return activeSites;
     if (tab === 'done')   return doneSites;
-    return [...preSites, ...activeSites]; // 'all' = 투입전+진행중
-  }, [tab, preSites, activeSites, doneSites]);
+    return activeSites; // 'all' = 진행중만 (수주확정/완료는 접이식 섹션)
+  }, [tab, activeSites, doneSites]);
 
   // 알림 필터 + 정렬
   const LEVEL_ORDER: Record<AlertLevel, number> = { critical: 0, warning: 1, normal: 2 };
@@ -126,8 +124,8 @@ const SitesList = () => {
   const counts = useMemo(() => ({
     pre:      preSites.length,
     active:   activeSites.length,
-    critical: [...preSites, ...activeSites].filter(s => getAlertLevel(s) === 'critical').length,
-    warning:  [...preSites, ...activeSites].filter(s => getAlertLevel(s) === 'warning').length,
+    critical: activeSites.filter(s => getAlertLevel(s) === 'critical').length,
+    warning:  activeSites.filter(s => getAlertLevel(s) === 'warning').length,
     done:     doneSites.length,
     failed:   failedSites.length,
   }), [preSites, activeSites, doneSites, failedSites]);
@@ -191,10 +189,9 @@ const SitesList = () => {
             >
               {t.label}
               <span className="ml-1 text-[10px] opacity-60">
-                {t.key === 'pre'    ? counts.pre :
-                 t.key === 'active' ? counts.active :
+                {t.key === 'active' ? counts.active :
                  t.key === 'done'   ? counts.done :
-                 counts.pre + counts.active}
+                 counts.active}
               </span>
             </button>
           ))}
@@ -250,6 +247,11 @@ const SitesList = () => {
           </div>
         )}
 
+        {/* 수주확정 현장 — 접이식 */}
+        {(tab === 'all') && preSites.length > 0 && (
+          <PreSection sites={preSites} />
+        )}
+
         {/* 완료/하자 현장 — 'all' 탭에서만 접기 표시 */}
         {tab === 'all' && doneSites.length > 0 && (
           <DoneSection sites={doneSites} />
@@ -265,6 +267,33 @@ const SitesList = () => {
         )}
       </div>
     </>
+  );
+};
+
+// ── 수주확정(투입전) 섹션 ─────────────────────────────────────
+const PreSection = ({ sites }: { sites: any[] }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(p => !p)}
+        className="w-full flex items-center justify-between rounded-xl border border-yellow-900/30 bg-yellow-950/10 px-4 py-3 hover:bg-yellow-950/20 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-yellow-400" />
+          <span className="text-sm font-medium text-yellow-300">수주확정 · 투입전</span>
+          <span className="text-xs text-gray-600">({sites.length}건)</span>
+        </div>
+        {open
+          ? <ChevronDownIcon className="h-4 w-4 text-gray-500" />
+          : <ChevronRightIcon className="h-4 w-4 text-gray-500" />}
+      </button>
+      {open && (
+        <div className="mt-1.5 space-y-1.5">
+          {sites.map(site => <SiteCard key={site.id} site={site} />)}
+        </div>
+      )}
+    </div>
   );
 };
 

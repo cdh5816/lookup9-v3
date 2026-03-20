@@ -31,10 +31,10 @@ const STATUS_LABEL: Record<string, string> = {
 const ROLE_BADGE: Record<string, string> = {
  ADMIN_HR: 'bg-orange-900/40 text-orange-300 border-orange-800/40',
  MANAGER: 'bg-blue-900/30 text-blue-300 border-blue-800/30',
- USER: ' text-gray-300',
+ USER: 'bg-gray-800/60 text-gray-300 /40',
  PARTNER: 'bg-purple-900/30 text-purple-300 border-purple-800/30',
- GUEST: ' text-gray-400',
- VIEWER: ' text-gray-500',
+ GUEST: 'bg-gray-800/40 text-gray-400 /30',
+ VIEWER: 'bg-gray-800/40 text-gray-500 /30',
 };
 const ROLE_LABEL: Record<string, string> = {
  ADMIN_HR: 'COMPANY_ADMIN', MANAGER: 'MANAGER', USER: 'USER',
@@ -46,12 +46,12 @@ const ROLE_LABEL: Record<string, string> = {
 // ══════════════════════════════════════════════════════
 const AdminUsers = () => {
  const { data: profileData, isLoading: profileLoading } = useSWR("/api/my/profile", fetcher);
- const myRole = profileData?.data?.role || profileData?.data?.teamMembers?.[0]?.role ||"";
- const isAdminHR = ["SUPER_ADMIN","OWNER","ADMIN_HR","ADMIN"].includes(myRole);
- const canAccessPartner = ["SUPER_ADMIN","OWNER","ADMIN_HR","ADMIN","MANAGER"].includes(myRole);
- const [tab, setTab] = useState<"staff" |"partner">("staff");
+ const myRole = profileData?.data?.role || profileData?.data?.teamMembers?.[0]?.role || "";
+ const isAdminHR = ["SUPER_ADMIN", "OWNER", "ADMIN_HR", "ADMIN"].includes(myRole);
+ const canAccessPartner = ["SUPER_ADMIN", "OWNER", "ADMIN_HR", "ADMIN", "MANAGER"].includes(myRole);
+ const [tab, setTab] = useState<"staff" | "partner">("staff");
  useEffect(() => {
- if (!profileLoading && myRole) setTab(isAdminHR ?"staff" :"partner");
+ if (!profileLoading && myRole) setTab(isAdminHR ? "staff" : "partner");
  }, [myRole, isAdminHR, profileLoading]);
 
  return (
@@ -71,7 +71,7 @@ const AdminUsers = () => {
  <div className="py-10 text-center text-sm text-gray-500">접근 권한이 없습니다.</div>
  ) : (
  <>
- <div className="flex gap-1 border-b">
+ <div className="flex gap-1 border-b /50">
  {isAdminHR && (
  <TabBtn active={tab === 'staff'} onClick={() => setTab('staff')}>직원</TabBtn>
  )}
@@ -229,7 +229,7 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  className={`rounded-lg border px-3.5 py-1.5 text-xs font-semibold transition ${
  filter === f
  ? 'border-blue-600 bg-blue-950/40 text-blue-300'
- : ' text-gray-400 '
+ : ' text-gray-400 hover:border-gray-600'
  }`}>
  {f === 'internal' ? '내부 직원' : '협력사 직원'}
  <span className="ml-1.5 text-[10px] opacity-60">
@@ -269,14 +269,14 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  </div>
 
  {/* 유저 목록 */}
- <div className="rounded-xl border overflow-hidden">
+ <div className="rounded-xl border /50 overflow-hidden">
  {loading ? (
  <div className="py-10 text-center text-sm text-gray-500"><span className="loading loading-spinner loading-sm" /></div>
  ) : visibleUsers.length === 0 ? (
  <div className="py-10 text-center text-sm text-gray-500">등록된 계정이 없습니다.</div>
  ) : (
  <table className="w-full text-sm">
- <thead className="text-[11px] text-gray-400 uppercase tracking-wider">
+ <thead className=" text-[11px] text-gray-400 uppercase tracking-wider">
  <tr>
  <th className="px-4 py-3 text-left">이름</th>
  <th className="px-4 py-3 text-left">아이디</th>
@@ -298,7 +298,7 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  const canDelete = isAdminHR && !isSelf && (!isProtected || myRole === 'SUPER_ADMIN');
 
  return (
- <tr key={user.id} className="border-t hover: transition-colors">
+ <tr key={user.id} className="border-t /30 /20 transition-colors">
  <td className="px-4 py-3 font-semibold">
  {user.name}
  {isSelf && <span className="ml-1.5 text-[10px] bg-blue-900/40 text-blue-300 px-1.5 py-0.5 rounded">나</span>}
@@ -360,8 +360,8 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
 
  {/* 계정 생성 모달 */}
  {showCreate && (
- <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
- <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border p-5 shadow-2xl">
+ <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{background:"rgba(0,0,0,0.6)"}}>
+ <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl p-5" style={{backgroundColor:"var(--bg-elevated)",border:"1px solid var(--border-base)",boxShadow:"var(--shadow-elevated)"}}>
  <div className="flex items-center justify-between mb-4">
  <h3 className="text-lg font-bold">
  {filter === 'internal' ? '직원 계정 생성' : '협력사 계정 생성'}
@@ -607,7 +607,7 @@ const PartnerPanel = () => {
  const isEditing = editId === co.id;
 
  return (
- <div key={co.id} className="rounded-xl border overflow-hidden">
+ <div key={co.id} className="rounded-xl border /50/50 overflow-hidden">
  {/* 업체 헤더 */}
  <div className="flex items-center gap-2.5 px-4 py-3">
  <button onClick={() => setExpandedId(expanded ? null : co.id)} className="text-gray-500 hover:text-white transition flex-shrink-0">
@@ -626,7 +626,7 @@ const PartnerPanel = () => {
  <span className="text-xs text-gray-500">계정 {co.members?.length ?? 0}명</span>
  <span className="text-xs text-gray-500">현장 {siteAssigned.length}건</span>
  {co.sites?.slice(0,2).map((sa: any) => (
- <span key={sa.siteId} className="rounded-full border px-2 py-0.5 text-[10px] text-gray-300">
+ <span key={sa.siteId} className="rounded-full border bg-gray-800/60 px-2 py-0.5 text-[10px] text-gray-300">
  {sa.site?.name}
  </span>
  ))}
@@ -665,13 +665,13 @@ const PartnerPanel = () => {
 
  {/* 현장 배정 패널 */}
  {showSiteAssign === co.id && (
- <div className="border-t bg-blue-950/10 px-4 py-3">
+ <div className="border-t /50 bg-blue-950/10 px-4 py-3">
  <p className="text-xs font-bold text-blue-300 mb-2">현장 배정 — 체크하면 소속 계정 전체가 해당 현장에 접근</p>
  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
  {sites.map((s: any) => {
  const assigned = siteAssigned.includes(s.id);
  return (
- <label key={s.id} className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 cursor-pointer transition ${assigned ? 'border-blue-700/50 bg-blue-950/20' : ' '}`}>
+ <label key={s.id} className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 cursor-pointer transition ${assigned ? 'border-blue-700/50 bg-blue-950/20' : '/40 hover:border-gray-600'}`}>
  <input type="checkbox" className="checkbox checkbox-sm checkbox-primary" checked={assigned}
  onChange={() => handleToggleSite(co.id, s.id, assigned)} />
  <div className="min-w-0">
@@ -688,9 +688,9 @@ const PartnerPanel = () => {
 
  {/* 소속 계정 (펼침) */}
  {expanded && (
- <div className="border-t px-4 py-3">
+ <div className="border-t /50 px-4 py-3">
  {isEditing && (
- <div className="mb-3 grid grid-cols-2 gap-2 rounded-lg border p-3">
+ <div className="mb-3 grid grid-cols-2 gap-2 rounded-lg border /40 bg-gray-800/30 p-3">
  {[['사업자번호','bizNo'],['담당자','contact'],['연락처','phone'],['이메일','email']].map(([lbl,key]) => (
  <Field key={key} label={lbl}>
  <input className="input input-bordered input-sm w-full" value={editForm[key]}
@@ -745,8 +745,8 @@ const PartnerPanel = () => {
 
  {/* 업체 생성 모달 */}
  {showCreate && (
- <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
- <div className="w-full max-w-md rounded-2xl border p-5 shadow-2xl">
+ <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{background:"rgba(0,0,0,0.6)"}}>
+ <div className="w-full max-w-md rounded-2xl p-5" style={{backgroundColor:"var(--bg-elevated)",border:"1px solid var(--border-base)",boxShadow:"var(--shadow-elevated)"}}>
  <div className="flex items-center justify-between mb-4">
  <h3 className="text-lg font-bold">협력업체 등록</h3>
  <button onClick={() => setShowCreate(false)} className="p-1.5 rounded-lg text-gray-400 "><XMarkIcon className="h-5 w-5" /></button>
@@ -775,8 +775,8 @@ const PartnerPanel = () => {
 
  {/* 신규 계정 생성 모달 */}
  {showMember && (
- <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
- <div className="w-full max-w-sm rounded-2xl border p-5 shadow-2xl">
+ <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{background:"rgba(0,0,0,0.6)"}}>
+ <div className="w-full max-w-sm rounded-2xl p-5" style={{backgroundColor:"var(--bg-elevated)",border:"1px solid var(--border-base)",boxShadow:"var(--shadow-elevated)"}}>
  <div className="flex items-center justify-between mb-3">
  <div>
  <h3 className="text-base font-bold">협력사 계정 생성</h3>
@@ -804,8 +804,8 @@ const PartnerPanel = () => {
 
  {/* 기존 계정 연결 모달 */}
  {showLink && (
- <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
- <div className="w-full max-w-md rounded-2xl border p-5 shadow-2xl">
+ <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{background:"rgba(0,0,0,0.6)"}}>
+ <div className="w-full max-w-md rounded-2xl p-5" style={{backgroundColor:"var(--bg-elevated)",border:"1px solid var(--border-base)",boxShadow:"var(--shadow-elevated)"}}>
  <div className="flex items-center justify-between mb-3">
  <div>
  <h3 className="text-base font-bold">기존 계정 연결</h3>
@@ -825,7 +825,7 @@ const PartnerPanel = () => {
  ) : (
  <div className="space-y-1.5 max-h-64 overflow-y-auto">
  {unlinkedUsers.map(u => (
- <div key={u.id} className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+ <div key={u.id} className="flex items-center justify-between rounded-lg border /50 bg-gray-800/30 px-3 py-2.5">
  <div>
  <p className="text-sm font-semibold text-white">{u.name}</p>
  <p className="text-xs text-gray-400">@{u.username}{u.position && ` · ${u.position}`}{u.phone && ` · ${u.phone}`}</p>
@@ -895,12 +895,12 @@ const CompanySearchInput = ({ value, onChange }: { value: string; onChange: (v: 
  autoComplete="off"
  />
  {show && filtered.length > 0 && (
- <div className="absolute z-50 left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-lg border shadow-2xl">
+ <div className="absolute z-50 left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-lg shadow-2xl">
  {filtered.map((co: any) => (
  <button
  key={co.id}
  type="button"
- className="w-full text-left px-3 py-2.5  transition-colors border-b last:border-0"
+ className="w-full text-left px-3 py-2.5 transition-colors border-b /40 last:border-0"
  onMouseDown={() => { onChange(co.name); setShow(false); }}
  >
  <p className="text-sm font-semibold text-white">{co.name}</p>
@@ -910,7 +910,7 @@ const CompanySearchInput = ({ value, onChange }: { value: string; onChange: (v: 
  </div>
  )}
  {show && value.trim() && filtered.length === 0 && (
- <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg border px-3 py-2 text-xs text-gray-500 shadow-2xl">
+ <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg px-3 py-2 text-xs text-gray-500 shadow-2xl">
  등록된 업체 없음 — 직접 입력됩니다
  </div>
  )}

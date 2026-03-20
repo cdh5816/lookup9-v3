@@ -216,7 +216,7 @@ const PartnerCompaniesPage = () => {
  <div className="flex-1 min-w-0">
  {isEditing ? (
  <input
- className="input input-bordered input-sm w-full max-w-sm"
+ className="input input-bordered input-sm w-full max-w-sm bg-gray-800"
  value={editForm.name}
  onChange={e => setEditForm({ ...editForm, name: e.target.value })}
  />
@@ -411,11 +411,11 @@ const PartnerCompaniesPage = () => {
 
  {/* ── 업체 생성 모달 ── */}
  {showCreate && (
- <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
- <div className="w-full max-w-lg rounded-2xl border p-5 shadow-2xl">
+ <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{background:"rgba(0,0,0,0.6)"}}>
+ <div className="w-full max-w-lg rounded-2xl p-5" style={{backgroundColor:"var(--bg-elevated)",border:"1px solid var(--border-base)",boxShadow:"var(--shadow-elevated)"}}>
  <div className="mb-4 flex items-center justify-between">
  <h3 className="text-lg font-bold">협력업체 등록</h3>
- <button onClick={() => { setShowCreate(false); setError(''); }} className="rounded-lg p-1.5 text-gray-400 ">
+ <button onClick={() => { setShowCreate(false); setError(''); }} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-800">
  <XMarkIcon className="h-5 w-5" />
  </button>
  </div>
@@ -455,8 +455,8 @@ const PartnerCompaniesPage = () => {
 
  {/* ── 계정 추가 모달 ── */}
  {showMemberForm && (
- <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
- <div className="w-full max-w-md rounded-2xl border p-5 shadow-2xl">
+ <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{background:"rgba(0,0,0,0.6)"}}>
+ <div className="w-full max-w-md rounded-2xl border bg-gray-900 p-5 shadow-2xl">
  <div className="mb-4 flex items-center justify-between">
  <div>
  <h3 className="text-lg font-bold">협력사 계정 추가</h3>
@@ -464,7 +464,7 @@ const PartnerCompaniesPage = () => {
  {companies.find(c => c.id === showMemberForm)?.name} 소속으로 등록됩니다.
  </p>
  </div>
- <button onClick={() => { setShowMemberForm(null); setError(''); }} className="rounded-lg p-1.5 text-gray-400 ">
+ <button onClick={() => { setShowMemberForm(null); setError(''); }} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-800">
  <XMarkIcon className="h-5 w-5" />
  </button>
  </div>

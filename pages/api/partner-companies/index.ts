@@ -37,7 +37,7 @@ const handleGET = async (tm: any, req: NextApiRequest, res: NextApiResponse) => 
   // 협력사에 소속되지 않은 PARTNER 계정 목록 반환 (기존 계정 연결용)
   if (unlinked === 'true') {
     const linkedUserIds = (await prisma.partnerMember.findMany({
-      where: { partnerCompany: { teamId: tm.teamId } },
+      where: { company: { teamId: tm.teamId } },
       select: { userId: true },
     })).map((m) => m.userId);
 

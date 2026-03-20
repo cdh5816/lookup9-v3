@@ -166,6 +166,33 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
         skipDuplicates: true,
       });
     }
+
+    // ── PARTNER 계정: 소속 협력사 자동 연결 ──
+    if (targetRole === 'PARTNER' && company) {
+      const partnerCompany = await tx.partnerCompany.findFirst({
+        where: { teamId: actorTm.teamId, name: { equals: company, mode: 'insensitive' } },
+      });
+      if (partnerCompany) {
+        // PartnerMember 생성
+        await tx.partnerMember.upsert({
+          where: { partnerCompanyId_userId: { partnerCompanyId: partnerCompany.id, userId: created.id } },
+          create: { partnerCompanyId: partnerCompany.id, userId: created.id, position: position || null },
+          update: {},
+        });
+        // 해당 협력사에 배정된 현장들에도 자동 배정
+        const companyAssigns = await tx.partnerSiteAssign.findMany({
+          where: { partnerCompanyId: partnerCompany.id },
+          select: { siteId: true },
+        });
+        if (companyAssigns.length > 0) {
+          await tx.siteAssignment.createMany({
+            data: companyAssigns.map(a => ({ siteId: a.siteId, userId: created.id, assignedRole: 'PARTNER' })),
+            skipDuplicates: true,
+          });
+        }
+      }
+    }
+
     return created;
   });
 

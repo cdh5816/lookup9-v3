@@ -488,10 +488,10 @@ const PerformanceTab = ({ performance, sites }: { performance: any[]; sites: any
         <div className="px-4 py-3 flex items-center gap-2" style={{backgroundColor:"var(--bg-hover)",borderBottom:"1px solid var(--border-base)"}}>
           <UserIcon className="h-4 w-4 text-gray-400" />
           <h3 className="text-sm font-semibold">담당자별 영업실적</h3>
-          <span className="text-xs style={{color:"var(--text-muted)"}}>— 이름 클릭 시 해당 현장 목록 확인</span>
+          <span className="text-xs" style={{color:"var(--text-muted)"}}>— 이름 클릭 시 해당 현장 목록 확인</span>
         </div>
         {performance.length === 0 ? (
-          <div className="py-10 text-center text-sm style={{color:"var(--text-muted)"}}>영업담당자가 지정된 현장이 없습니다.</div>
+          <div className="py-10 text-center text-sm" style={{color:"var(--text-muted)"}}>영업담당자가 지정된 현장이 없습니다.</div>
         ) : (
           <table className="table table-sm w-full text-sm">
             <thead>
@@ -578,7 +578,7 @@ const PerformanceTab = ({ performance, sites }: { performance: any[]; sites: any
                 </td>
                 <td className="px-4 py-3 text-right text-blue-300">{fmtMoney(totalAmount)}</td>
                 <td className="px-4 py-3 text-right text-green-400">{fmtMoney(totalConfirmedAmount)}</td>
-                <td className="px-4 py-3 text-center text-xs style={{color:"var(--text-muted)"}}>
+                <td className="px-4 py-3 text-center text-xs" style={{color:"var(--text-muted)"}}>
                   {totalAll > 0 ? `${Math.round((totalConfirmed / totalAll) * 100)}%` : '-'}
                 </td>
               </tr>
@@ -613,7 +613,7 @@ const PerformanceTab = ({ performance, sites }: { performance: any[]; sites: any
                 <tr key={s.id} className="border-b border-blue-900/20 hover:bg-blue-900/10 transition">
                   <td className="px-4 py-2 font-medium">
                     {s.name}
-                    {s.client?.name && <div className="text-[11px] style={{color:"var(--text-muted)"}}>{s.client.name}</div>}
+                    {s.client?.name && <div className="text-[11px]" style={{color:"var(--text-muted)"}}>{s.client.name}</div>}
                   </td>
                   <td className="px-4 py-2 text-gray-400">{s.designOffice || '-'}</td>
                   <td className="px-4 py-2 text-gray-400">{s.materialSpec || '-'}</td>

@@ -1,5 +1,5 @@
 import React from 'react';
-import usePullToRefresh from '@/hooks/usePullToRefresh';
+import usePullToRefresh from 'hooks/usePullToRefresh';
 
 interface PullToRefreshProps {
   onRefresh: () => Promise<void>;

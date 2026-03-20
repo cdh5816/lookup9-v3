@@ -405,7 +405,7 @@ const CreateSite = () => {
  onChange={(e) => setBulkText(e.target.value)}
  placeholder={[
  '1\t대구 A현장\tOO건설\t영업중\tAL 3T\t1200\t220000\t264000000\t2026-03-11\t2026-04-15\t현장설치도\tAIRX',
- '2\t구미 B현장\tXX종합건설\t계약완료\tAL 2T\t800\t210000\t168000000\t2026-03-12\t2026-04-20\t납품하차도\t덕인금속',
+ '2\t구미 B현장\tXX종합건설\t계약완료\tAL 2T\t800\t210000\t168000000\t2026-03-12\t2026-04-20\t납품하차도\t샘플패널',
  ].join('\n')}
  />
  </div>

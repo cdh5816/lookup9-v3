@@ -66,6 +66,9 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
       { salesPm:       { contains: search as string, mode: 'insensitive' } },
       { createdBy:     { name: { contains: search as string, mode: 'insensitive' } } },
       { clientManager: { contains: search as string, mode: 'insensitive' } },
+      { installerName: { contains: search as string, mode: 'insensitive' } },
+      { specification: { contains: search as string, mode: 'insensitive' } },
+      { contractNo:    { contains: search as string, mode: 'insensitive' } },
     ];
   }
 

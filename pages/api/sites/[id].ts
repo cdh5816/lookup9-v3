@@ -58,7 +58,7 @@ const handleGET = async (id: string, res: NextApiResponse) => {
       createdBy: { select: { name: true, position: true, department: true } },
       assignments: {
         include: {
-          user: { select: { id: true, name: true, position: true, department: true, company: true } },
+          user: { select: { id: true, name: true, position: true, department: true, company: true, phone: true } },
         },
       },
       sales: {

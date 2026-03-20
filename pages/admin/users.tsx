@@ -895,22 +895,25 @@ const CompanySearchInput = ({ value, onChange }: { value: string; onChange: (v: 
  autoComplete="off"
  />
  {show && filtered.length > 0 && (
- <div className="absolute z-50 left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-lg shadow-2xl">
+ <div className="absolute z-50 left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-lg" style={{backgroundColor:'var(--bg-elevated)',border:'1px solid var(--border-base)',boxShadow:'var(--shadow-elevated)'}}>
  {filtered.map((co: any) => (
  <button
  key={co.id}
  type="button"
- className="w-full text-left px-3 py-2.5 transition-colors border-b /40 last:border-0"
+ className="w-full text-left px-3 py-2.5 transition-colors"
+ style={{borderBottom:'1px solid var(--border-subtle)'}}
  onMouseDown={() => { onChange(co.name); setShow(false); }}
+ onMouseOver={e => (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
+ onMouseOut={e => (e.currentTarget.style.backgroundColor = 'transparent')}
  >
- <p className="text-sm font-semibold text-white">{co.name}</p>
- {co.contact && <p className="text-[11px] text-gray-400">담당: {co.contact}{co.phone ? ` · ${co.phone}` : ''}</p>}
+ <p className="text-sm font-semibold" style={{color:'var(--text-primary)'}}>{co.name}</p>
+ {co.contact && <p className="text-[11px]" style={{color:'var(--text-muted)'}}>대표이사: {co.contact}{co.phone ? ` · ${co.phone}` : ''}</p>}
  </button>
  ))}
  </div>
  )}
  {show && value.trim() && filtered.length === 0 && (
- <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg px-3 py-2 text-xs text-gray-500 shadow-2xl">
+ <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg px-3 py-2 text-xs" style={{backgroundColor:'var(--bg-elevated)',border:'1px solid var(--border-base)',color:'var(--text-muted)',boxShadow:'var(--shadow-elevated)'}}>
  등록된 업체 없음 — 직접 입력됩니다
  </div>
  )}

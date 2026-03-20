@@ -130,6 +130,39 @@ function ExcelEditTable({ siteId, orders, shipBySeq, contractQty, canManage, onM
   const addNewRow = () => setNewRows(prev => [...prev, { quantity: '', orderDate: '', supplyDate: '', notes: '' }]);
   const removeNewRow = (idx: number) => setNewRows(prev => prev.filter((_, i) => i !== idx));
 
+  // 엑셀 붙여넣기 핸들러 — 탭 구분 (물량\t발주일\t공급일\t비고)
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData('text/plain').trim();
+    if (!text) return;
+    const lines = text.split('\n').filter(l => l.trim());
+    if (lines.length < 1) return;
+    // 탭 구분이 있는 경우에만 처리 (일반 텍스트 입력은 무시)
+    const hasTabs = lines.some(l => l.includes('\t'));
+    if (!hasTabs && lines.length === 1) return; // 단일 값은 기본 동작 유지
+    e.preventDefault();
+    const parsed = lines.map(line => {
+      const cols = line.split('\t').map(c => c.trim());
+      return {
+        quantity: (cols[0] || '').replace(/[^0-9.]/g, ''),
+        orderDate: parseKorDate(cols[1] || ''),
+        supplyDate: parseKorDate(cols[2] || ''),
+        notes: cols[3] || '',
+      };
+    }).filter(r => r.quantity || r.orderDate);
+    if (parsed.length > 0) {
+      setNewRows(prev => [...prev, ...parsed]);
+    }
+  };
+
+  // 날짜 파싱: 2025-09-08, 2025.09.08, 2025/09/08 형태 모두 지원
+  const parseKorDate = (s: string): string => {
+    if (!s) return '';
+    const cleaned = s.replace(/[.\/ ]/g, '-').replace(/[^0-9-]/g, '');
+    const m = cleaned.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+    return '';
+  };
+
   const dirtyCount = rows.filter(r => r.dirty).length + newRows.length;
 
   const handleSaveAll = async () => {
@@ -164,7 +197,7 @@ function ExcelEditTable({ siteId, orders, shipBySeq, contractQty, canManage, onM
   const is: React.CSSProperties = { width: '100%', border: 'none', background: 'transparent', fontSize: '12px', color: 'var(--text-primary)', outline: 'none', padding: '2px 0' };
 
   return (
-    <div>
+    <div onPaste={canManage ? handlePaste : undefined}>
       <div className="overflow-x-auto" style={{maxHeight:'500px',overflowY:'auto'}}>
         <table className="w-full" style={{borderCollapse:'collapse'}}>
           <thead>
@@ -219,7 +252,10 @@ function ExcelEditTable({ siteId, orders, shipBySeq, contractQty, canManage, onM
       </div>
       {canManage && (
         <div className="flex items-center justify-between px-4 py-2.5" style={{borderTop:'1px solid var(--border-base)'}}>
-          <button className="btn btn-ghost btn-xs gap-1" onClick={addNewRow}><PlusIcon className="h-3.5 w-3.5" />행 추가</button>
+          <div className="flex items-center gap-3">
+            <button className="btn btn-ghost btn-xs gap-1" onClick={addNewRow}><PlusIcon className="h-3.5 w-3.5" />행 추가</button>
+            <span className="text-[10px]" style={{color:'var(--text-muted)'}}>엑셀에서 Ctrl+V로 일괄 붙여넣기 가능 (물량 · 발주일 · 공급일 · 비고)</span>
+          </div>
           {dirtyCount > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-xs" style={{color:'var(--warning-text)'}}>{dirtyCount}건 변경</span>

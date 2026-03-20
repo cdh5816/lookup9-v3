@@ -285,7 +285,7 @@ const Dashboard = () => {
 
 // ── 게스트 전용 대시보드 ──
 const GuestDashboard = ({ profile, onRefresh }: { profile: any; onRefresh: () => Promise<void> }) => {
-  const mySites = profile.siteAssignments?.map((a: any) => a.site).filter(Boolean) || [];
+  const mySites = profile.mySites || profile.siteAssignments?.map((a: any) => a.site).filter(Boolean) || [];
   return (
     <>
       <Head><title>대시보드 | LOOKUP9</title></Head>
@@ -293,23 +293,34 @@ const GuestDashboard = ({ profile, onRefresh }: { profile: any; onRefresh: () =>
         <div className="space-y-4">
           <div>
             <h2 className="text-lg font-bold" style={{color:"var(--text-primary)"}}>안녕하세요, {profile.name}님</h2>
-            <p className="text-sm mt-1" style={{color:"var(--text-secondary)"}}>배정된 현장을 확인하세요.</p>
+            <p className="text-sm mt-1" style={{color:"var(--text-secondary)"}}>배정된 현장 {mySites.length}건</p>
           </div>
           {mySites.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed py-12 text-center text-sm" style={{borderColor:"var(--border-base)",color:"var(--text-muted)"}}>
-              배정된 현장이 없습니다.
+            <div className="rounded-xl py-12 text-center" style={{border:"2px dashed var(--border-base)",color:"var(--text-muted)"}}>
+              <BuildingOffice2Icon className="h-10 w-10 mx-auto mb-3" style={{color:"var(--text-muted)"}} />
+              <p className="text-sm font-medium">배정된 현장이 없습니다.</p>
+              <p className="text-xs mt-1" style={{color:"var(--text-muted)"}}>관리자에게 현장 배정을 요청해주세요.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="space-y-2">
               {mySites.map((site: any) => (
                 <Link key={site.id} href={`/sites/${site.id}`}>
                   <div className="cursor-pointer rounded-xl p-4 transition-all active:scale-[0.98]" style={{border:"1px solid var(--border-base)",backgroundColor:"var(--bg-surface)"}}>
                     <div className="flex items-center gap-2">
-                      <span className={`h-2.5 w-2.5 rounded-full ${STATUS_DOT[site.status] || 'bg-gray-400'}`} />
-                      <h3 className="font-bold" style={{color:"var(--text-primary)"}}>{site.name}</h3>
-                      <span className="text-xs ml-auto" style={{color:"var(--text-muted)"}}>{site.status}</span>
+                      <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${STATUS_DOT[site.status] || 'bg-gray-400'}`} />
+                      <h3 className="font-bold flex-1 min-w-0 truncate" style={{color:"var(--text-primary)"}}>{site.name}</h3>
+                      <ChevronRightIcon className="h-4 w-4 shrink-0" style={{color:"var(--text-muted)"}} />
                     </div>
-                    {site.address && <p className="text-sm mt-1.5" style={{color:"var(--text-secondary)"}}>{site.address}</p>}
+                    {site.address && <p className="text-sm mt-1.5 pl-4" style={{color:"var(--text-secondary)"}}>{site.address}</p>}
+                    <div className="flex items-center gap-3 mt-2 pl-4">
+                      <span className="text-xs px-2 py-0.5 rounded-full" style={{
+                        backgroundColor: site.status === 'CONTRACT_ACTIVE' ? 'var(--success-bg)' : 'var(--bg-hover)',
+                        color: site.status === 'CONTRACT_ACTIVE' ? 'var(--success-text)' : 'var(--text-muted)',
+                        border: `1px solid ${site.status === 'CONTRACT_ACTIVE' ? 'var(--success-border)' : 'var(--border-base)'}`,
+                      }}>
+                        {site.status === 'CONTRACT_ACTIVE' ? '진행중' : site.status === 'COMPLETED' ? '준공완료' : site.status}
+                      </span>
+                    </div>
                   </div>
                 </Link>
               ))}

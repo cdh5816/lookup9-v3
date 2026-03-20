@@ -625,9 +625,9 @@ function PaintTab({ siteId, specs, canManage, onMutate }: any) {
  };
 
  return (
- <div className="rounded-xl border p-5">
+ <div className="rounded-xl p-5" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
  <div className="mb-4 flex items-center justify-between">
- <h3 className="font-semibold">도장 사양 / 도료 발주</h3>
+ <h3 className="font-semibold" style={{color:'var(--text-primary)'}}>도장 사양 / 도료 발주</h3>
  {canManage && (
  <button className="btn btn-primary btn-xs" onClick={() => setShowForm(!showForm)}>
  {showForm ? '취소' : <><PlusIcon className="w-3.5 h-3.5 mr-1" />추가</>}
@@ -635,30 +635,30 @@ function PaintTab({ siteId, specs, canManage, onMutate }: any) {
  )}
  </div>
  {showForm && (
- <div className="mb-4 rounded-lg border p-4 space-y-3">
+ <div className="mb-4 rounded-lg p-4 space-y-3" style={{border:'1px solid var(--border-base)'}}>
  <div className="grid grid-cols-2 gap-3">
- <div><label className="block text-xs text-gray-400 mb-1">컬러코드 *</label><input className="input input-bordered input-sm w-full" value={form.colorCode} onChange={e => setForm({ ...form, colorCode: e.target.value })} /></div>
- <div><label className="block text-xs text-gray-400 mb-1">컬러명 *</label><input className="input input-bordered input-sm w-full" value={form.colorName} onChange={e => setForm({ ...form, colorName: e.target.value })} /></div>
- <div><label className="block text-xs text-gray-400 mb-1">제조사</label><input className="input input-bordered input-sm w-full" value={form.manufacturer} onChange={e => setForm({ ...form, manufacturer: e.target.value })} /></div>
- <div><label className="block text-xs text-gray-400 mb-1">마감유형</label><input className="input input-bordered input-sm w-full" value={form.finishType} onChange={e => setForm({ ...form, finishType: e.target.value })} /></div>
- <div><label className="block text-xs text-gray-400 mb-1">적용면적</label><input className="input input-bordered input-sm w-full" value={form.area} onChange={e => setForm({ ...form, area: e.target.value })} /></div>
- <div><label className="block text-xs text-gray-400 mb-1">수량</label><input type="number" className="input input-bordered input-sm w-full" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} /></div>
+ <div><label className="block text-xs mb-1" style={{color:'var(--text-muted)'}}>컬러코드 *</label><input className="input input-bordered input-sm w-full" value={form.colorCode} onChange={e => setForm({ ...form, colorCode: e.target.value })} /></div>
+ <div><label className="block text-xs mb-1" style={{color:'var(--text-muted)'}}>컬러명 *</label><input className="input input-bordered input-sm w-full" value={form.colorName} onChange={e => setForm({ ...form, colorName: e.target.value })} /></div>
+ <div><label className="block text-xs mb-1" style={{color:'var(--text-muted)'}}>제조사</label><input className="input input-bordered input-sm w-full" value={form.manufacturer} onChange={e => setForm({ ...form, manufacturer: e.target.value })} /></div>
+ <div><label className="block text-xs mb-1" style={{color:'var(--text-muted)'}}>마감유형</label><input className="input input-bordered input-sm w-full" value={form.finishType} onChange={e => setForm({ ...form, finishType: e.target.value })} /></div>
+ <div><label className="block text-xs mb-1" style={{color:'var(--text-muted)'}}>적용면적</label><input className="input input-bordered input-sm w-full" value={form.area} onChange={e => setForm({ ...form, area: e.target.value })} /></div>
+ <div><label className="block text-xs mb-1" style={{color:'var(--text-muted)'}}>수량</label><input type="number" className="input input-bordered input-sm w-full" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} /></div>
  </div>
- <label className="flex items-center gap-2 text-sm cursor-pointer">
+ <label className="flex items-center gap-2 text-sm cursor-pointer" style={{color:'var(--text-primary)'}}>
  <input type="checkbox" className="checkbox checkbox-sm" checked={form.isPrimary} onChange={e => setForm({ ...form, isPrimary: e.target.checked })} />주요 색상
  </label>
  <div className="flex justify-end"><button className={`btn btn-primary btn-sm ${sub ? 'loading' : ''}`} disabled={sub} onClick={handleSubmit}>저장</button></div>
  </div>
  )}
- {specs.length === 0 ? <p className="text-sm text-gray-500">등록된 도장 사양이 없습니다.</p> : (
+ {specs.length === 0 ? <p className="text-sm" style={{color:'var(--text-muted)'}}>등록된 도장 사양이 없습니다.</p> : (
  <div className="space-y-2">
  {specs.map((s: any) => (
- <div key={s.id} className="rounded-lg border p-3 text-sm">
+ <div key={s.id} className="rounded-lg p-3 text-sm" style={{border:'1px solid var(--border-base)'}}>
  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
  <div className="flex items-center gap-2">
  {s.isPrimary && <span className="badge badge-xs badge-primary">주요</span>}
- <span className="font-medium">{s.colorCode}</span>
- <span className="text-gray-400">{s.colorName}</span>
+ <span className="font-medium" style={{color:'var(--text-primary)'}}>{s.colorCode}</span>
+ <span style={{color:'var(--text-secondary)'}}>{s.colorName}</span>
  </div>
  {canManage ? (
  <select className="select select-bordered select-xs" value={s.status} onChange={e => handleStatus(s.id, e.target.value)}>
@@ -666,7 +666,7 @@ function PaintTab({ siteId, specs, canManage, onMutate }: any) {
  </select>
  ) : <span className="badge badge-sm badge-outline">{s.status}</span>}
  </div>
- <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+ <div className="flex flex-wrap gap-3 text-xs" style={{color:'var(--text-muted)'}}>
  {s.manufacturer && <span>제조사: {s.manufacturer}</span>}
  {s.quantity && <span>수량: {fmtNum(s.quantity)}</span>}
  {s.area && <span>면적: {s.area}</span>}
@@ -711,9 +711,9 @@ function ShippingTab({ siteId, shipments, canManage, onMutate }: any) {
  };
 
  return (
- <div className="rounded-xl border p-5">
+ <div className="rounded-xl p-5" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
  <div className="mb-4 flex items-center justify-between">
- <h3 className="font-semibold">출하 기록</h3>
+ <h3 className="font-semibold" style={{color:'var(--text-primary)'}}>출하 기록</h3>
  {canManage && (
  <button className="btn btn-primary btn-xs" onClick={() => setShowForm(!showForm)}>
  {showForm ? '취소' : <><PlusIcon className="w-3.5 h-3.5 mr-1" />출하 등록</>}
@@ -721,29 +721,29 @@ function ShippingTab({ siteId, shipments, canManage, onMutate }: any) {
  )}
  </div>
  {showForm && (
- <div className="mb-4 rounded-lg border p-4 space-y-3">
- {error && <div className="text-xs text-red-400 bg-red-900/20 rounded p-2">{error}</div>}
- <p className="text-xs text-blue-400 bg-blue-900/20 rounded p-2">✓ 출하 등록 시 생산 공급일이 자동으로 기록되고 담당자에게 알림이 전송됩니다.</p>
+ <div className="mb-4 rounded-lg p-4 space-y-3" style={{border:'1px solid var(--border-base)'}}>
+ {error && <div className="text-xs rounded p-2" style={{color:'var(--danger-text)',backgroundColor:'var(--danger-bg)'}}>{error}</div>}
+ <p className="text-xs rounded p-2" style={{color:'var(--info-text)',backgroundColor:'var(--info-bg)'}}>✓ 출하 등록 시 생산 공급일이 자동으로 기록되고 담당자에게 알림이 전송됩니다.</p>
  <div className="grid grid-cols-2 gap-3">
- <div><label className="block text-xs text-gray-400 mb-1">출고일 *</label><input type="date" className="input input-bordered input-sm w-full" value={form.shippedAt} onChange={e => setForm({ ...form, shippedAt: e.target.value })} /></div>
- <div><label className="block text-xs text-gray-400 mb-1">수량 (㎡)</label><input className="input input-bordered input-sm w-full" placeholder="1,200" value={form.quantity ? Number(form.quantity.replace(/,/g, '')).toLocaleString() : ''} onChange={e => setForm({ ...form, quantity: e.target.value.replace(/,/g, '') })} /></div>
- <div><label className="block text-xs text-gray-400 mb-1">차량번호</label><input className="input input-bordered input-sm w-full" value={form.vehicleInfo} onChange={e => setForm({ ...form, vehicleInfo: e.target.value })} /></div>
- <div><label className="block text-xs text-gray-400 mb-1">기사 정보</label><input className="input input-bordered input-sm w-full" placeholder="이름 / 연락처" value={form.driverInfo} onChange={e => setForm({ ...form, driverInfo: e.target.value })} /></div>
- <div><label className="block text-xs text-gray-400 mb-1">도착지</label><input className="input input-bordered input-sm w-full" value={form.destination} onChange={e => setForm({ ...form, destination: e.target.value })} /></div>
- <div><label className="block text-xs text-gray-400 mb-1">인수자</label><input className="input input-bordered input-sm w-full" value={form.receivedBy} onChange={e => setForm({ ...form, receivedBy: e.target.value })} /></div>
+ <div><label className="block text-xs mb-1" style={{color:'var(--text-muted)'}}>출고일 *</label><input type="date" className="input input-bordered input-sm w-full" value={form.shippedAt} onChange={e => setForm({ ...form, shippedAt: e.target.value })} /></div>
+ <div><label className="block text-xs mb-1" style={{color:'var(--text-muted)'}}>수량 (㎡)</label><input className="input input-bordered input-sm w-full" placeholder="1,200" value={form.quantity ? Number(form.quantity.replace(/,/g, '')).toLocaleString() : ''} onChange={e => setForm({ ...form, quantity: e.target.value.replace(/,/g, '') })} /></div>
+ <div><label className="block text-xs mb-1" style={{color:'var(--text-muted)'}}>차량번호</label><input className="input input-bordered input-sm w-full" value={form.vehicleInfo} onChange={e => setForm({ ...form, vehicleInfo: e.target.value })} /></div>
+ <div><label className="block text-xs mb-1" style={{color:'var(--text-muted)'}}>기사 정보</label><input className="input input-bordered input-sm w-full" placeholder="이름 / 연락처" value={form.driverInfo} onChange={e => setForm({ ...form, driverInfo: e.target.value })} /></div>
+ <div><label className="block text-xs mb-1" style={{color:'var(--text-muted)'}}>도착지</label><input className="input input-bordered input-sm w-full" value={form.destination} onChange={e => setForm({ ...form, destination: e.target.value })} /></div>
+ <div><label className="block text-xs mb-1" style={{color:'var(--text-muted)'}}>인수자</label><input className="input input-bordered input-sm w-full" value={form.receivedBy} onChange={e => setForm({ ...form, receivedBy: e.target.value })} /></div>
  </div>
- <div><label className="block text-xs text-gray-400 mb-1">메모</label><textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+ <div><label className="block text-xs mb-1" style={{color:'var(--text-muted)'}}>메모</label><textarea className="textarea textarea-bordered w-full text-sm" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
  <div className="flex justify-end"><button className={`btn btn-primary btn-sm ${sub ? 'loading' : ''}`} disabled={sub} onClick={handleSubmit}>저장</button></div>
  </div>
  )}
- {shipments.length === 0 ? <p className="text-sm text-gray-500">등록된 출하 기록이 없습니다.</p> : (
+ {shipments.length === 0 ? <p className="text-sm" style={{color:'var(--text-muted)'}}>등록된 출하 기록이 없습니다.</p> : (
  <div className="space-y-2">
  {shipments.map((s: any) => (
- <div key={s.id} className="rounded-lg border p-4">
+ <div key={s.id} className="rounded-lg p-4" style={{border:'1px solid var(--border-base)'}}>
  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
  <div className="flex items-center gap-2">
- <span className="font-semibold text-sm">{s.sequence}차 출고</span>
- {s.shipmentNo && <span className="text-xs text-gray-500">{s.shipmentNo}</span>}
+ <span className="font-semibold text-sm" style={{color:'var(--text-primary)'}}>{s.sequence}차 출고</span>
+ {s.shipmentNo && <span className="text-xs" style={{color:'var(--text-muted)'}}>{s.shipmentNo}</span>}
  </div>
  <div className="flex items-center gap-2">
  {canManage ? (
@@ -755,14 +755,14 @@ function ShippingTab({ siteId, shipments, canManage, onMutate }: any) {
  </div>
  </div>
  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
- <span className="text-gray-500">출고일: <span className="text-gray-300">{s.shippedAt ? fmtDate(s.shippedAt) : '-'}</span></span>
- <span className="text-gray-500">수량: <span className="text-gray-300">{s.quantity ? fmtNum(s.quantity) : '-'} ㎡</span></span>
- <span className="text-gray-500">차량: <span className="text-gray-300">{s.vehicleInfo || '-'}</span></span>
- <span className="text-gray-500">기사: <span className="text-gray-300">{s.driverInfo || '-'}</span></span>
- <span className="text-gray-500">도착지: <span className="text-gray-300">{s.destination || '-'}</span></span>
- <span className="text-gray-500">인수자: <span className="text-gray-300">{s.receivedBy || '-'}</span></span>
+ <span style={{color:'var(--text-muted)'}}>출고일: <span style={{color:'var(--text-primary)'}}>{s.shippedAt ? fmtDate(s.shippedAt) : '-'}</span></span>
+ <span style={{color:'var(--text-muted)'}}>수량: <span style={{color:'var(--text-primary)'}}>{s.quantity ? fmtNum(s.quantity) : '-'} ㎡</span></span>
+ <span style={{color:'var(--text-muted)'}}>차량: <span style={{color:'var(--text-primary)'}}>{s.vehicleInfo || '-'}</span></span>
+ <span style={{color:'var(--text-muted)'}}>기사: <span style={{color:'var(--text-primary)'}}>{s.driverInfo || '-'}</span></span>
+ <span style={{color:'var(--text-muted)'}}>도착지: <span style={{color:'var(--text-primary)'}}>{s.destination || '-'}</span></span>
+ <span style={{color:'var(--text-muted)'}}>인수자: <span style={{color:'var(--text-primary)'}}>{s.receivedBy || '-'}</span></span>
  </div>
- {s.notes && <p className="text-xs text-gray-400 mt-2">{s.notes}</p>}
+ {s.notes && <p className="text-xs mt-2" style={{color:'var(--text-secondary)'}}>{s.notes}</p>}
  </div>
  ))}
  </div>

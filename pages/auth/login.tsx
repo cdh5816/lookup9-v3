@@ -154,7 +154,8 @@ const Login: NextPageWithLayout<
                     <span className="label-text-alt">
                       <Link
                         href="/auth/forgot-password"
-                        className="text-xs text-gray-400 hover:text-gray-200"
+                        className="text-xs hover:opacity-80"
+                        style={{color:'#60A5FA'}}
                       >
                         {t('forgot-password')}
                       </Link>
@@ -180,8 +181,8 @@ const Login: NextPageWithLayout<
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
               />
-              <span className="text-sm text-gray-400">자동 로그인</span>
-              <span className="text-xs text-gray-600">(체크 해제 시 브라우저 종료 후 자동 로그아웃)</span>
+              <span className="text-sm" style={{color:'#A1A1AA'}}>자동 로그인</span>
+              <span className="text-xs" style={{color:'#52525B'}}>(체크 해제 시 브라우저 종료 후 자동 로그아웃)</span>
             </label>
 
             <GoogleReCAPTCHA

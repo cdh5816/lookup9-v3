@@ -270,7 +270,60 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
     },
   });
 
-  // 시공업체는 단순 정보 저장만 (배정은 협력업체 탭에서 별도 관리)
+  // ── 시공업체 자동 배정 ──
+  // installerName이 변경되었으면, 해당 이름의 PartnerCompany를 찾아서 자동 배정
+  if (installerName !== undefined && installerName) {
+    try {
+      const partnerCompany = await prisma.partnerCompany.findFirst({
+        where: {
+          teamId: tm.teamId,
+          name: { equals: installerName, mode: 'insensitive' },
+        },
+        include: {
+          members: { select: { userId: true } },
+        },
+      });
+
+      if (partnerCompany) {
+        // 1) PartnerSiteAssign 생성 (이미 있으면 무시)
+        await prisma.partnerSiteAssign.upsert({
+          where: {
+            partnerCompanyId_siteId: {
+              partnerCompanyId: partnerCompany.id,
+              siteId: id,
+            },
+          },
+          update: {},
+          create: {
+            partnerCompanyId: partnerCompany.id,
+            siteId: id,
+          },
+        });
+
+        // 2) 협력사의 모든 멤버에게 SiteAssignment 생성 (이미 있으면 무시)
+        for (const member of partnerCompany.members) {
+          await prisma.siteAssignment.upsert({
+            where: {
+              siteId_userId: {
+                siteId: id,
+                userId: member.userId,
+              },
+            },
+            update: {},
+            create: {
+              siteId: id,
+              userId: member.userId,
+              assignedRole: 'PARTNER',
+            },
+          });
+        }
+      }
+    } catch (autoAssignErr) {
+      // 자동 배정 실패해도 현장 저장은 성공 처리
+      console.error('Auto partner assign error:', autoAssignErr);
+    }
+  }
+
   return res.status(200).json({ data: site });
 };
 

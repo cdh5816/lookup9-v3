@@ -47,11 +47,14 @@ const EditableCell = ({
   if (!editing) {
     return (
       <span
-        className="block min-h-[20px] cursor-pointer rounded px-1 hover:bg-gray-700/40 transition text-sm"
+        className="block min-h-[20px] cursor-pointer rounded px-1 transition text-sm"
         onClick={() => { setDraft(value); setEditing(true); }}
         title="클릭하여 편집"
+        style={{minHeight:'28px'}}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
       >
-        {value || <span className="text-gray-600">-</span>}
+        {value || <span style={{color:"var(--text-placeholder)"}}>-</span>}
       </span>
     );
   }
@@ -213,7 +216,7 @@ const SalesPage = () => {
       <div className="space-y-4">
 
         {/* ── 헤더 + 영업합산 카드 ── */}
-        <div className="rounded-2xl border border-gray-800 bg-black/30 p-4 space-y-3">
+        <div className="rounded-2xl p-4 space-y-3" style={{border:"1px solid var(--border-base)",backgroundColor:"var(--bg-card)"}}>
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold">영업관리</h2>
@@ -259,7 +262,7 @@ const SalesPage = () => {
         </div>
 
         {/* ── 탭: 현장목록 / 영업실적 ── */}
-        <div className="flex gap-1 border-b border-gray-800">
+        <div className="flex gap-1" style={{borderBottom:"1px solid var(--border-base)"}}>
           <button
             onClick={() => setActiveTab('list')}
             className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition -mb-px ${activeTab === 'list' ? 'border-blue-500 text-blue-300' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
@@ -285,7 +288,8 @@ const SalesPage = () => {
                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  className="input input-bordered input-sm w-full pl-9 bg-black/20"
+                  className="input input-bordered input-sm w-full pl-9"
+                  style={{backgroundColor:"var(--input-bg)"}}
                   placeholder="PJ명, 발주처, 설계사무소, 영업담당 검색..."
                   value={search}
                   onChange={e => setSearch(e.target.value)}
@@ -298,8 +302,8 @@ const SalesPage = () => {
 
             {/* 테이블 */}
             {filtered.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-gray-700 py-16 text-center">
-                <p className="text-sm text-gray-500">
+              <div className="rounded-xl border-2 border-dashed py-16 text-center" style={{borderColor:"var(--border-base)"}}>
+                <p style={{color:"var(--text-muted)"}} className="text-sm">
                   {search || stageFilter !== 'all' ? '검색 결과가 없습니다.' : '등록된 영업현장이 없습니다.'}
                 </p>
                 {canCreate && !search && stageFilter === 'all' && (
@@ -309,22 +313,22 @@ const SalesPage = () => {
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-gray-800">
+              <div className="overflow-x-auto rounded-xl" style={{border:"1px solid var(--border-base)"}}>
                 <table className="table table-sm w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-800 bg-gray-900/60 text-xs text-gray-400">
-                      <th className="w-8 px-3 py-3 text-center">NO</th>
-                      <th className="min-w-[180px] px-3 py-3">PJ명</th>
-                      <th className="min-w-[100px] px-3 py-3">설계사무소</th>
-                      <th className="min-w-[80px] px-3 py-3">담당PM</th>
-                      <th className="min-w-[120px] px-3 py-3">자재규모 및 사양</th>
-                      <th className="w-[70px] px-3 py-3 text-center">구분</th>
-                      <th className="min-w-[70px] px-3 py-3">영업담당</th>
-                      <th className="min-w-[120px] px-3 py-3">발주처 및 담당자</th>
-                      <th className="min-w-[120px] px-3 py-3">주소</th>
-                      <th className="min-w-[100px] px-3 py-3">비고</th>
-                      <th className="w-[90px] px-3 py-3 text-center">단계</th>
-                      <th className="w-[80px] px-3 py-3 text-center">작업</th>
+                    <tr style={{borderBottom:"1px solid var(--border-base)",backgroundColor:"var(--bg-hover)"}} className="text-xs">
+                      <th className="w-8 px-3 py-3 text-center" style={{color:"var(--text-muted)"}}>NO</th>
+                      <th className="min-w-[180px] px-3 py-3" style={{color:"var(--text-muted)"}}>PJ명</th>
+                      <th className="min-w-[100px] px-3 py-3" style={{color:"var(--text-muted)"}}>설계사무소</th>
+                      <th className="min-w-[80px] px-3 py-3" style={{color:"var(--text-muted)"}}>담당PM</th>
+                      <th className="min-w-[120px] px-3 py-3" style={{color:"var(--text-muted)"}}>자재규모 및 사양</th>
+                      <th className="w-[70px] px-3 py-3 text-center" style={{color:"var(--text-muted)"}}>구분</th>
+                      <th className="min-w-[70px] px-3 py-3" style={{color:"var(--text-muted)"}}>영업담당</th>
+                      <th className="min-w-[120px] px-3 py-3" style={{color:"var(--text-muted)"}}>발주처 및 담당자</th>
+                      <th className="min-w-[120px] px-3 py-3" style={{color:"var(--text-muted)"}}>주소</th>
+                      <th className="min-w-[100px] px-3 py-3" style={{color:"var(--text-muted)"}}>비고</th>
+                      <th className="w-[90px] px-3 py-3 text-center" style={{color:"var(--text-muted)"}}>단계</th>
+                      <th className="w-[80px] px-3 py-3 text-center" style={{color:"var(--text-muted)"}}>작업</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -335,7 +339,8 @@ const SalesPage = () => {
                       return (
                         <tr
                           key={site.id}
-                          className={`border-b border-gray-800/50 transition ${isFailed ? 'opacity-50' : isConfirmed ? 'bg-green-950/10' : 'hover:bg-gray-800/20'} ${isSaving ? 'opacity-60 pointer-events-none' : ''}`}
+                          className={`transition ${isFailed ? 'opacity-50' : isConfirmed ? '' : ''} ${isSaving ? 'opacity-60 pointer-events-none' : ''}`}
+                          style={{borderBottom:"1px solid var(--border-subtle)", backgroundColor: isConfirmed ? 'var(--success-bg)' : 'transparent'}}
                         >
                           <td className="px-3 py-2 text-center text-gray-500 text-xs">{idx + 1}</td>
 
@@ -471,22 +476,22 @@ const PerformanceTab = ({ performance, sites }: { performance: any[]; sites: any
           { label: '예상 총금액', value: fmtMoney(totalAmount), color: 'text-blue-400' },
           { label: '확정 금액', value: fmtMoney(totalConfirmedAmount), color: 'text-green-400' },
         ].map(c => (
-          <div key={c.label} className="rounded-xl border border-gray-800 bg-black/20 p-3 text-center">
+          <div key={c.label} className="rounded-xl p-3 text-center" style={{border:"1px solid var(--border-base)",backgroundColor:"var(--bg-card)"}}>
             <p className={`text-xl font-bold ${c.color}`}>{c.value}</p>
-            <p className="text-[11px] text-gray-400 mt-0.5">{c.label}</p>
+            <p className="text-[11px] mt-0.5" style={{color:"var(--text-muted)"}}>{c.label}</p>
           </div>
         ))}
       </div>
 
       {/* 개인별 실적 테이블 */}
-      <div className="rounded-xl border border-gray-800 overflow-hidden">
-        <div className="px-4 py-3 bg-gray-900/60 border-b border-gray-800 flex items-center gap-2">
+      <div className="rounded-xl overflow-hidden" style={{border:"1px solid var(--border-base)"}}>
+        <div className="px-4 py-3 flex items-center gap-2" style={{backgroundColor:"var(--bg-hover)",borderBottom:"1px solid var(--border-base)"}}>
           <UserIcon className="h-4 w-4 text-gray-400" />
           <h3 className="text-sm font-semibold">담당자별 영업실적</h3>
-          <span className="text-xs text-gray-500">— 이름 클릭 시 해당 현장 목록 확인</span>
+          <span className="text-xs style={{color:"var(--text-muted)"}}>— 이름 클릭 시 해당 현장 목록 확인</span>
         </div>
         {performance.length === 0 ? (
-          <div className="py-10 text-center text-sm text-gray-500">영업담당자가 지정된 현장이 없습니다.</div>
+          <div className="py-10 text-center text-sm style={{color:"var(--text-muted)"}}>영업담당자가 지정된 현장이 없습니다.</div>
         ) : (
           <table className="table table-sm w-full text-sm">
             <thead>
@@ -573,7 +578,7 @@ const PerformanceTab = ({ performance, sites }: { performance: any[]; sites: any
                 </td>
                 <td className="px-4 py-3 text-right text-blue-300">{fmtMoney(totalAmount)}</td>
                 <td className="px-4 py-3 text-right text-green-400">{fmtMoney(totalConfirmedAmount)}</td>
-                <td className="px-4 py-3 text-center text-xs text-gray-500">
+                <td className="px-4 py-3 text-center text-xs style={{color:"var(--text-muted)"}}>
                   {totalAll > 0 ? `${Math.round((totalConfirmed / totalAll) * 100)}%` : '-'}
                 </td>
               </tr>
@@ -608,7 +613,7 @@ const PerformanceTab = ({ performance, sites }: { performance: any[]; sites: any
                 <tr key={s.id} className="border-b border-blue-900/20 hover:bg-blue-900/10 transition">
                   <td className="px-4 py-2 font-medium">
                     {s.name}
-                    {s.client?.name && <div className="text-[11px] text-gray-500">{s.client.name}</div>}
+                    {s.client?.name && <div className="text-[11px] style={{color:"var(--text-muted)"}}>{s.client.name}</div>}
                   </td>
                   <td className="px-4 py-2 text-gray-400">{s.designOffice || '-'}</td>
                   <td className="px-4 py-2 text-gray-400">{s.materialSpec || '-'}</td>
@@ -662,8 +667,8 @@ const CreateSalesModal = ({ onClose, onCreated }: { onClose: () => void; onCreat
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-2xl rounded-2xl border border-gray-700 bg-gray-900 p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:"rgba(0,0,0,0.4)"}} onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto" style={{border:"1px solid var(--border-base)",backgroundColor:"var(--bg-elevated)",boxShadow:"var(--shadow-elevated)"}} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold">영업현장 등록</h3>
           <button className="btn btn-ghost btn-sm btn-circle" onClick={onClose}><XMarkIcon className="h-5 w-5" /></button>
@@ -671,60 +676,60 @@ const CreateSalesModal = ({ onClose, onCreated }: { onClose: () => void; onCreat
         {error && <p className="text-sm text-red-400 bg-red-950/30 rounded-lg px-3 py-2">{error}</p>}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label className="block text-xs text-gray-400 mb-1">PJ명 (사업명) *</label>
+            <label className="block text-xs mb-1" style={{color:"var(--text-muted)"}}>PJ명 (사업명) *</label>
             <input className="input input-bordered input-sm w-full" placeholder="예) ○○초등학교 그린리모델링 공사" value={form.name} onChange={e => set('name', e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">발주처</label>
+            <label className="block text-xs mb-1" style={{color:"var(--text-muted)"}}>발주처</label>
             <input className="input input-bordered input-sm w-full" value={form.clientName} onChange={e => set('clientName', e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">발주처 담당자</label>
+            <label className="block text-xs mb-1" style={{color:"var(--text-muted)"}}>발주처 담당자</label>
             <input className="input input-bordered input-sm w-full" placeholder="담당자명 / 연락처" value={form.clientContact} onChange={e => set('clientContact', e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">설계사무소</label>
+            <label className="block text-xs mb-1" style={{color:"var(--text-muted)"}}>설계사무소</label>
             <input className="input input-bordered input-sm w-full" value={form.designOffice} onChange={e => set('designOffice', e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">담당PM</label>
+            <label className="block text-xs mb-1" style={{color:"var(--text-muted)"}}>담당PM</label>
             <input className="input input-bordered input-sm w-full" value={form.salesPm} onChange={e => set('salesPm', e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">자재규모 및 사양</label>
+            <label className="block text-xs mb-1" style={{color:"var(--text-muted)"}}>자재규모 및 사양</label>
             <input className="input input-bordered input-sm w-full" placeholder="예) MS-G01-01 / 2,820㎡" value={form.materialSpec} onChange={e => set('materialSpec', e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">구분</label>
+            <label className="block text-xs mb-1" style={{color:"var(--text-muted)"}}>구분</label>
             <select className="select select-bordered select-sm w-full" value={form.sectorType} onChange={e => set('sectorType', e.target.value)}>
               <option value="">선택</option>
               {SECTOR_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">영업담당</label>
+            <label className="block text-xs mb-1" style={{color:"var(--text-muted)"}}>영업담당</label>
             <input className="input input-bordered input-sm w-full" value={form.salesOwner} onChange={e => set('salesOwner', e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">영업 단계</label>
+            <label className="block text-xs mb-1" style={{color:"var(--text-muted)"}}>영업 단계</label>
             <select className="select select-bordered select-sm w-full" value={form.salesStage} onChange={e => set('salesStage', e.target.value)}>
               {STAGE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">예상 계약금액 (원)</label>
+            <label className="block text-xs mb-1" style={{color:"var(--text-muted)"}}>예상 계약금액 (원)</label>
             <input className="input input-bordered input-sm w-full" placeholder="예) 27000000" value={form.estimatedAmount} onChange={e => set('estimatedAmount', e.target.value)} />
           </div>
           <div className="sm:col-span-2">
-            <label className="block text-xs text-gray-400 mb-1">주소</label>
+            <label className="block text-xs mb-1" style={{color:"var(--text-muted)"}}>주소</label>
             <input className="input input-bordered input-sm w-full" value={form.address} onChange={e => set('address', e.target.value)} />
           </div>
           <div className="sm:col-span-2">
-            <label className="block text-xs text-gray-400 mb-1">비고</label>
+            <label className="block text-xs mb-1" style={{color:"var(--text-muted)"}}>비고</label>
             <textarea className="textarea textarea-bordered w-full text-sm" rows={2} placeholder="영업 메모, 특이사항..." value={form.salesNote} onChange={e => set('salesNote', e.target.value)} />
           </div>
         </div>
-        <div className="flex gap-2 justify-end border-t border-gray-800 pt-3">
+        <div className="flex gap-2 justify-end pt-3" style={{borderTop:"1px solid var(--border-base)"}}>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>취소</button>
           <button className="btn btn-primary btn-sm" onClick={handleSubmit} disabled={saving}>
             {saving ? <span className="loading loading-spinner loading-xs" /> : '등록'}

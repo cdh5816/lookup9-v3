@@ -11,19 +11,21 @@ import {
   DocumentArrowUpIcon, CheckCircleIcon,
   ChevronDownIcon, ChevronRightIcon, FunnelIcon,
 } from '@heroicons/react/24/outline';
+import PullToRefresh from '@/components/shared/PullToRefresh';
 
-// ── 상태 정의 ──────────────────────────────────────────────
-const STATUS_META: Record<string, { label: string; dot: string; badge: string; group: 'active' | 'sales' | 'done' }> = {
-  SALES_PIPELINE:  { label: '영업중',   dot: 'bg-orange-400', badge: 'text-orange-300 bg-orange-900/25 border-orange-800/40', group: 'sales' },
-  SALES_CONFIRMED: { label: '수주확정', dot: 'bg-yellow-400', badge: 'text-yellow-300 bg-yellow-900/25 border-yellow-800/40', group: 'pre' },
-  CONTRACT_ACTIVE: { label: '진행중',   dot: 'bg-green-400',  badge: 'text-green-300  bg-green-900/25  border-green-800/40',  group: 'active' },
-  COMPLETED:       { label: '준공완료', dot: 'bg-blue-400',   badge: 'text-blue-300   bg-blue-900/25   border-blue-800/40',   group: 'done' },
-  WARRANTY:        { label: '하자기간', dot: 'bg-purple-400', badge: 'text-purple-300 bg-purple-900/25 border-purple-800/40', group: 'done' },
-  FAILED:          { label: '영업실패', dot: 'bg-gray-600',   badge: 'text-gray-500   bg-gray-800/30   border-gray-700/40',   group: 'done' },
+// ── 상태 정의 (버그 수정: group 타입에 'pre' 추가) ─────────────────
+type StatusGroup = 'active' | 'sales' | 'pre' | 'done';
+const STATUS_META: Record<string, { label: string; dot: string; group: StatusGroup }> = {
+  SALES_PIPELINE:  { label: '영업중',   dot: 'bg-orange-400', group: 'sales' },
+  SALES_CONFIRMED: { label: '수주확정', dot: 'bg-yellow-400', group: 'pre' },
+  CONTRACT_ACTIVE: { label: '진행중',   dot: 'bg-green-400',  group: 'active' },
+  COMPLETED:       { label: '준공완료', dot: 'bg-blue-400',   group: 'done' },
+  WARRANTY:        { label: '하자기간', dot: 'bg-purple-400', group: 'done' },
+  FAILED:          { label: '영업실패', dot: 'bg-gray-500',   group: 'done' },
 };
 
 const getMeta = (status: string) =>
-  STATUS_META[status] ?? { label: status, dot: 'bg-gray-600', badge: 'text-gray-400 bg-gray-800/20 border-gray-700/30', group: 'active' };
+  STATUS_META[status] ?? { label: status, dot: 'bg-gray-500', group: 'active' as StatusGroup };
 
 // ── 유틸 ──────────────────────────────────────────────────
 const fmtMoney = (v: any) => {
@@ -58,7 +60,7 @@ const getAlertLevel = (site: any): AlertLevel => {
   return 'normal';
 };
 
-// ── 탭 필터 정의 ────────────────────────────────────────────
+// ── 탭 필터 ────────────────────────────────────────────
 type TabFilter = 'all' | 'active' | 'done';
 const TAB_DEFS: { key: TabFilter; label: string }[] = [
   { key: 'all',    label: '전체' },
@@ -97,6 +99,10 @@ const SitesList = () => {
     return () => clearTimeout(t);
   }, [fetchSites, search]);
 
+  const handleRefresh = useCallback(async () => {
+    await fetchSites();
+  }, [fetchSites]);
+
   // 그룹 분류
   const salesSites   = useMemo(() => sites.filter(s => getMeta(s.status).group === 'sales'), [sites]);
   const preSites     = useMemo(() => sites.filter(s => getMeta(s.status).group === 'pre'), [sites]);
@@ -104,14 +110,12 @@ const SitesList = () => {
   const doneSites    = useMemo(() => sites.filter(s => getMeta(s.status).group === 'done' && s.status !== 'FAILED'), [sites]);
   const failedSites  = useMemo(() => sites.filter(s => s.status === 'FAILED'), [sites]);
 
-  // 탭에 따른 표시 목록
   const tabSites = useMemo(() => {
     if (tab === 'active') return activeSites;
     if (tab === 'done')   return doneSites;
-    return activeSites; // 'all' = 진행중만 (수주확정/완료는 접이식 섹션)
+    return activeSites;
   }, [tab, activeSites, doneSites]);
 
-  // 알림 필터 + 정렬
   const LEVEL_ORDER: Record<AlertLevel, number> = { critical: 0, warning: 1, normal: 2 };
   const displaySites = useMemo(() => {
     let list = [...tabSites];
@@ -120,7 +124,6 @@ const SitesList = () => {
     return list;
   }, [tabSites, alertOnly]);
 
-  // 카운트
   const counts = useMemo(() => ({
     pre:      preSites.length,
     active:   activeSites.length,
@@ -133,221 +136,210 @@ const SitesList = () => {
   return (
     <>
       <Head><title>현장관리 | LOOKUP9</title></Head>
-      <div className="space-y-3">
+      <PullToRefresh onRefresh={handleRefresh}>
+        <div className="space-y-3">
 
-        {/* 헤더 */}
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-bold">현장관리</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              투입전 {counts.pre} · 진행중 {counts.active} · 완료 {counts.done}
-            </p>
-          </div>
-          {canCreate && (
-            <div className="flex gap-2">
-              <Link href="/sites/create-from-pdf">
-                <button className="btn btn-sm gap-1 border border-blue-700/60 bg-blue-950/30 text-blue-400 hover:bg-blue-950/60">
-                  <DocumentArrowUpIcon className="h-4 w-4" />PDF
-                </button>
-              </Link>
-              <Link href="/sites/create">
-                <button className="btn btn-primary btn-sm gap-1.5">
-                  <PlusIcon className="h-4 w-4" />등록
-                </button>
-              </Link>
+          {/* 헤더 */}
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold" style={{color:"var(--text-primary)"}}>현장관리</h2>
+              <p className="text-xs mt-0.5" style={{color:"var(--text-muted)"}}>
+                투입전 {counts.pre} · 진행중 {counts.active} · 완료 {counts.done}
+              </p>
             </div>
-          )}
-        </div>
-
-        {/* 요약 칩 */}
-        <div className="grid grid-cols-4 gap-1.5">
-          {[
-            { label: '투입전', value: counts.pre,      color: 'border-yellow-900/40 text-yellow-300' },
-            { label: '진행중', value: counts.active,   color: 'border-green-900/40  text-green-300' },
-            { label: '긴급',   value: counts.critical, color: `border-red-900/50 text-red-300 ${alertOnly ? 'ring-1 ring-red-500' : ''}`, click: () => setAlertOnly(p => !p) },
-            { label: '완료',   value: counts.done,     color: 'border-blue-900/40 text-blue-400' },
-          ].map(chip => (
-            <button key={chip.label} type="button" onClick={chip.click}
-              className={`rounded-lg border px-2 py-2 text-center bg-black/20 transition ${chip.color} hover:brightness-110`}>
-              <p className="text-base font-bold leading-none">{chip.value}</p>
-              <p className="text-[10px] text-gray-600 mt-0.5">{chip.label}</p>
-            </button>
-          ))}
-        </div>
-
-        {/* 탭 */}
-        <div className="flex gap-1 border-b border-gray-800 pb-0">
-          {TAB_DEFS.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-                tab === t.key
-                  ? 'text-white border-b-2 border-blue-500 -mb-px bg-blue-950/20'
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              {t.label}
-              <span className="ml-1 text-[10px] opacity-60">
-                {t.key === 'active' ? counts.active :
-                 t.key === 'done'   ? counts.done :
-                 counts.active}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {/* 검색 + 긴급필터 */}
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-            <input
-              type="text"
-              className="input input-bordered input-sm w-full pl-9 bg-black/20"
-              placeholder="현장명, 수요기관 검색..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-          {alertOnly && (
-            <button className="btn btn-sm btn-error btn-outline gap-1" onClick={() => setAlertOnly(false)}>
-              <FunnelIcon className="h-3.5 w-3.5" />해제
-            </button>
-          )}
-        </div>
-
-        {/* 현장 목록 */}
-        {loading ? (
-          <div className="py-12 text-center">
-            <span className="loading loading-spinner loading-md text-gray-500" />
-          </div>
-        ) : displaySites.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-700 py-12 text-center">
-            <p className="text-sm text-gray-500">
-              {alertOnly ? '긴급/임박 현장이 없습니다.' : '현장이 없습니다.'}
-            </p>
-            {canCreate && !alertOnly && (
-              <div className="mt-3 flex justify-center gap-2">
+            {canCreate && (
+              <div className="flex gap-2">
                 <Link href="/sites/create-from-pdf">
-                  <button className="btn btn-ghost btn-sm gap-1 text-blue-400">
-                    <DocumentArrowUpIcon className="h-4 w-4" />PDF로 등록
+                  <button className="btn btn-sm gap-1" style={{border:"1px solid var(--info-border)",backgroundColor:"var(--info-bg)",color:"var(--info-text)"}}>
+                    <DocumentArrowUpIcon className="h-4 w-4" />PDF
                   </button>
                 </Link>
                 <Link href="/sites/create">
-                  <button className="btn btn-ghost btn-sm gap-1">
-                    <PlusIcon className="h-4 w-4" />직접 등록
+                  <button className="btn btn-primary btn-sm gap-1.5">
+                    <PlusIcon className="h-4 w-4" />등록
                   </button>
                 </Link>
               </div>
             )}
           </div>
-        ) : (
-          <div className="space-y-1.5">
-            {displaySites.map(site => <SiteCard key={site.id} site={site} />)}
+
+          {/* 요약 칩 — CSS 변수 기반 */}
+          <div className="grid grid-cols-4 gap-1.5">
+            {[
+              { label: '투입전', value: counts.pre,      bgVar: '--warning-bg', borderVar: '--warning-border', colorVar: '--warning-text' },
+              { label: '진행중', value: counts.active,   bgVar: '--success-bg', borderVar: '--success-border', colorVar: '--success-text' },
+              { label: '긴급',   value: counts.critical, bgVar: '--danger-bg',  borderVar: '--danger-border',  colorVar: '--danger-text', click: () => setAlertOnly(p => !p), ring: alertOnly },
+              { label: '완료',   value: counts.done,     bgVar: '--info-bg',    borderVar: '--info-border',    colorVar: '--info-text' },
+            ].map(chip => (
+              <button key={chip.label} type="button" onClick={chip.click}
+                className="rounded-xl px-2 py-2.5 text-center transition-all active:scale-[0.97]"
+                style={{
+                  backgroundColor: `var(${chip.bgVar})`,
+                  border: `1px solid var(${chip.borderVar})`,
+                  ...(chip.ring ? { boxShadow: '0 0 0 2px var(--danger-text)' } : {}),
+                }}>
+                <p className="text-lg font-bold leading-none" style={{color:`var(${chip.colorVar})`}}>{chip.value}</p>
+                <p className="text-[10px] mt-1" style={{color:"var(--text-muted)"}}>{chip.label}</p>
+              </button>
+            ))}
           </div>
-        )}
 
-        {/* 수주확정 현장 — 접이식 */}
-        {(tab === 'all') && preSites.length > 0 && (
-          <PreSection sites={preSites} />
-        )}
+          {/* 탭 */}
+          <div className="flex gap-1" style={{borderBottom:"1px solid var(--border-base)"}}>
+            {TAB_DEFS.map(t => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className="px-3 py-2 text-xs font-medium rounded-t transition-colors -mb-px"
+                style={{
+                  color: tab === t.key ? 'var(--brand)' : 'var(--text-muted)',
+                  borderBottom: tab === t.key ? '2px solid var(--brand)' : '2px solid transparent',
+                  backgroundColor: tab === t.key ? 'var(--brand-light)' : 'transparent',
+                }}
+              >
+                {t.label}
+                <span className="ml-1 text-[10px] opacity-60">
+                  {t.key === 'active' ? counts.active :
+                   t.key === 'done'   ? counts.done :
+                   counts.active}
+                </span>
+              </button>
+            ))}
+          </div>
 
-        {/* 완료/하자 현장 — 'all' 탭에서만 접기 표시 */}
-        {tab === 'all' && doneSites.length > 0 && (
-          <DoneSection sites={doneSites} />
-        )}
+          {/* 검색 */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{color:"var(--text-muted)"}} />
+              <input
+                type="text"
+                className="input input-bordered input-sm w-full pl-9"
+                style={{backgroundColor:"var(--input-bg)"}}
+                placeholder="현장명, 수요기관 검색..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            {alertOnly && (
+              <button className="btn btn-sm gap-1" style={{border:"1px solid var(--danger-border)",color:"var(--danger-text)"}} onClick={() => setAlertOnly(false)}>
+                <FunnelIcon className="h-3.5 w-3.5" />해제
+              </button>
+            )}
+          </div>
 
-        {/* 영업실패 현장 */}
-        {counts.failed > 0 && (tab === 'all' || tab === 'done') && (
-          <FailedSection
-            sites={failedSites}
-            open={showFailed}
-            onToggle={() => setShowFailed(p => !p)}
-          />
-        )}
-      </div>
+          {/* 현장 목록 */}
+          {loading ? (
+            <div className="py-12 text-center">
+              <span className="loading loading-spinner loading-md" style={{color:"var(--text-muted)"}} />
+            </div>
+          ) : displaySites.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed py-12 text-center" style={{borderColor:"var(--border-base)"}}>
+              <p className="text-sm" style={{color:"var(--text-muted)"}}>
+                {alertOnly ? '긴급/임박 현장이 없습니다.' : '현장이 없습니다.'}
+              </p>
+              {canCreate && !alertOnly && (
+                <div className="mt-3 flex justify-center gap-2">
+                  <Link href="/sites/create-from-pdf">
+                    <button className="btn btn-ghost btn-sm gap-1" style={{color:"var(--info-text)"}}>
+                      <DocumentArrowUpIcon className="h-4 w-4" />PDF로 등록
+                    </button>
+                  </Link>
+                  <Link href="/sites/create">
+                    <button className="btn btn-ghost btn-sm gap-1">
+                      <PlusIcon className="h-4 w-4" />직접 등록
+                    </button>
+                  </Link>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {displaySites.map(site => <SiteCard key={site.id} site={site} />)}
+            </div>
+          )}
+
+          {/* 수주확정 현장 — 접이식 */}
+          {(tab === 'all') && preSites.length > 0 && (
+            <CollapsibleSection
+              label="수주확정 · 투입전"
+              count={preSites.length}
+              dotColor="bg-yellow-400"
+              bgVar="--warning-bg"
+              borderVar="--warning-border"
+              textVar="--warning-text"
+            >
+              {preSites.map(site => <SiteCard key={site.id} site={site} />)}
+            </CollapsibleSection>
+          )}
+
+          {/* 완료/하자 */}
+          {tab === 'all' && doneSites.length > 0 && (
+            <CollapsibleSection
+              label="완료 · 하자기간"
+              count={doneSites.length}
+              icon={<CheckCircleIcon className="h-4 w-4" style={{color:"var(--info-text)"}} />}
+              bgVar="--bg-card"
+              borderVar="--border-base"
+              textVar="--text-secondary"
+            >
+              {doneSites.map(site => <SiteCard key={site.id} site={site} dimmed />)}
+            </CollapsibleSection>
+          )}
+
+          {/* 영업실패 */}
+          {counts.failed > 0 && (tab === 'all' || tab === 'done') && (
+            <CollapsibleSection
+              label="영업실패"
+              count={failedSites.length}
+              bgVar="--bg-card"
+              borderVar="--border-base"
+              textVar="--text-muted"
+              defaultOpen={showFailed}
+            >
+              <div className="opacity-50">
+                {failedSites.map(site => <SiteCard key={site.id} site={site} dimmed />)}
+              </div>
+            </CollapsibleSection>
+          )}
+        </div>
+      </PullToRefresh>
     </>
   );
 };
 
-// ── 수주확정(투입전) 섹션 ─────────────────────────────────────
-const PreSection = ({ sites }: { sites: any[] }) => {
-  const [open, setOpen] = useState(false);
+// ── 접이식 섹션 (통합) ──────────────────────────────────
+const CollapsibleSection = ({ label, count, dotColor, icon, bgVar, borderVar, textVar, defaultOpen = false, children }: {
+  label: string; count: number; dotColor?: string; icon?: React.ReactNode;
+  bgVar: string; borderVar: string; textVar: string; defaultOpen?: boolean; children: React.ReactNode;
+}) => {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div>
       <button
         onClick={() => setOpen(p => !p)}
-        className="w-full flex items-center justify-between rounded-xl border border-yellow-900/30 bg-yellow-950/10 px-4 py-3 hover:bg-yellow-950/20 transition-colors"
+        className="w-full flex items-center justify-between rounded-xl px-4 py-3 transition-all active:scale-[0.99]"
+        style={{ backgroundColor: `var(${bgVar})`, border: `1px solid var(${borderVar})` }}
       >
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-yellow-400" />
-          <span className="text-sm font-medium text-yellow-300">수주확정 · 투입전</span>
-          <span className="text-xs text-gray-600">({sites.length}건)</span>
+          {dotColor && <span className={`w-2 h-2 rounded-full ${dotColor}`} />}
+          {icon}
+          <span className="text-sm font-medium" style={{color:`var(${textVar})`}}>{label}</span>
+          <span className="text-xs" style={{color:"var(--text-muted)"}}>({count}건)</span>
         </div>
         {open
-          ? <ChevronDownIcon className="h-4 w-4 text-gray-500" />
-          : <ChevronRightIcon className="h-4 w-4 text-gray-500" />}
+          ? <ChevronDownIcon className="h-4 w-4" style={{color:"var(--text-muted)"}} />
+          : <ChevronRightIcon className="h-4 w-4" style={{color:"var(--text-muted)"}} />}
       </button>
       {open && (
-        <div className="mt-1.5 space-y-1.5">
-          {sites.map(site => <SiteCard key={site.id} site={site} />)}
+        <div className="mt-1.5 space-y-1.5 slide-up">
+          {children}
         </div>
       )}
     </div>
   );
 };
 
-// ── 완료/하자 섹션 ────────────────────────────────────────────
-const DoneSection = ({ sites }: { sites: any[] }) => {
-  const [open, setOpen] = useState(false);
-  return (
-    <div>
-      <button
-        onClick={() => setOpen(p => !p)}
-        className="w-full flex items-center justify-between rounded-xl border border-gray-800 bg-black/20 px-4 py-3 hover:bg-gray-900/30 transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <CheckCircleIcon className="h-4 w-4 text-blue-400" />
-          <span className="text-sm font-medium text-gray-300">완료 · 하자기간</span>
-          <span className="text-xs text-gray-600">({sites.length}건)</span>
-        </div>
-        {open
-          ? <ChevronDownIcon className="h-4 w-4 text-gray-500" />
-          : <ChevronRightIcon className="h-4 w-4 text-gray-500" />}
-      </button>
-      {open && (
-        <div className="mt-1.5 space-y-1.5">
-          {sites.map(site => <SiteCard key={site.id} site={site} dimmed />)}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ── 영업실패 섹션 ─────────────────────────────────────────────
-const FailedSection = ({ sites, open, onToggle }: { sites: any[]; open: boolean; onToggle: () => void }) => (
-  <div>
-    <button
-      onClick={onToggle}
-      className="w-full flex items-center justify-between rounded-xl border border-gray-800/50 bg-black/10 px-4 py-3 hover:bg-gray-900/20 transition-colors"
-    >
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-gray-600">영업실패</span>
-        <span className="text-xs text-gray-700">({sites.length}건)</span>
-      </div>
-      {open
-        ? <ChevronDownIcon className="h-4 w-4 text-gray-700" />
-        : <ChevronRightIcon className="h-4 w-4 text-gray-700" />}
-    </button>
-    {open && (
-      <div className="mt-1.5 space-y-1.5 opacity-50">
-        {sites.map(site => <SiteCard key={site.id} site={site} dimmed />)}
-      </div>
-    )}
-  </div>
-);
-
-// ── 현장 카드 ──────────────────────────────────────────────────
+// ── 현장 카드 — 테마 안전 ──────────────────────────────────
 const SiteCard = ({ site, dimmed = false }: { site: any; dimmed?: boolean }) => {
   const meta = getMeta(site.status);
   const alertLevel = getAlertLevel(site);
@@ -360,15 +352,16 @@ const SiteCard = ({ site, dimmed = false }: { site: any; dimmed?: boolean }) => 
     ? dday.overdue ? `D+${Math.abs(dday.diff)}` : dday.diff === 0 ? 'D-Day' : `D-${dday.diff}`
     : null;
 
-  const cardBorder = dimmed
-    ? 'border-l-gray-800 border-gray-800/50 bg-black/10 opacity-70 hover:opacity-90'
-    : {
-        critical: 'border-l-red-500/80 border-red-800/40 bg-red-950/10 hover:bg-red-950/20',
-        warning:  'border-l-yellow-500/60 border-yellow-800/30 bg-yellow-950/5 hover:bg-yellow-950/10',
-        normal:   'border-l-gray-700 border-gray-800 bg-black/20 hover:border-gray-600 hover:bg-gray-900/30',
-      }[alertLevel];
+  // 테마 안전 border 스타일
+  const getBorderStyle = () => {
+    if (dimmed) return { borderLeft: '4px solid var(--border-base)', border: '1px solid var(--border-base)', backgroundColor: 'var(--bg-card)', opacity: 0.7 };
+    switch (alertLevel) {
+      case 'critical': return { borderLeft: '4px solid var(--danger-text)', border: '1px solid var(--danger-border)', backgroundColor: 'var(--danger-bg)' };
+      case 'warning': return { borderLeft: '4px solid var(--warning-text)', border: '1px solid var(--warning-border)', backgroundColor: 'var(--warning-bg)' };
+      default: return { borderLeft: '4px solid var(--border-base)', border: '1px solid var(--border-base)', backgroundColor: 'var(--bg-card)' };
+    }
+  };
 
-  // 서브 텍스트: 수요기관 · 규격/사양
   const subParts = [
     site.client?.name,
     site.specification || site.productName,
@@ -377,67 +370,90 @@ const SiteCard = ({ site, dimmed = false }: { site: any; dimmed?: boolean }) => 
 
   return (
     <Link href={`/sites/${site.id}`}>
-      <div className={`group rounded-lg border border-l-4 px-3.5 py-2.5 transition-all cursor-pointer ${cardBorder}`}>
-        {/* 1행: 상태점 + 현장명 + 금액/D-Day/상태뱃지 */}
+      <div
+        className="group rounded-xl px-3.5 py-3 transition-all cursor-pointer active:scale-[0.99]"
+        style={getBorderStyle()}
+      >
+        {/* 1행: 상태점 + 현장명 + D-Day/상태뱃지 */}
         <div className="flex items-center gap-2">
           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${meta.dot}`} />
-          <p className="text-sm font-semibold text-white truncate flex-1 min-w-0 group-hover:text-blue-300 transition-colors">
+          <p className="text-sm font-semibold truncate flex-1 min-w-0" style={{color:"var(--text-primary)"}}>
             {site.name}
           </p>
           <div className="flex items-center gap-1.5 shrink-0">
             {site.contractAmount && (
-              <span className="text-xs text-blue-300 font-medium hidden sm:block">
+              <span className="text-xs font-medium hidden sm:block" style={{color:"var(--info-text)"}}>
                 {fmtMoney(site.contractAmount)}원
               </span>
             )}
             {ddayLabel && (
-              <span className={`text-[11px] px-1.5 py-0.5 rounded font-bold border ${
-                dday?.overdue ? 'text-red-300 bg-red-900/30 border-red-700/50' :
-                dday?.urgent  ? 'text-yellow-300 bg-yellow-900/20 border-yellow-700/40' :
-                'text-gray-500 border-gray-700/40'
-              }`}>{ddayLabel}</span>
+              <span
+                className="text-[11px] px-1.5 py-0.5 rounded font-bold"
+                style={{
+                  color: dday?.overdue ? 'var(--danger-text)' : dday?.urgent ? 'var(--warning-text)' : 'var(--text-muted)',
+                  backgroundColor: dday?.overdue ? 'var(--danger-bg)' : dday?.urgent ? 'var(--warning-bg)' : 'transparent',
+                  border: `1px solid ${dday?.overdue ? 'var(--danger-border)' : dday?.urgent ? 'var(--warning-border)' : 'var(--border-base)'}`,
+                }}
+              >{ddayLabel}</span>
             )}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold border ${meta.badge}`}>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+              style={{
+                color: `var(${
+                  meta.group === 'active' ? '--success-text' :
+                  meta.group === 'pre' ? '--warning-text' :
+                  meta.group === 'sales' ? '--warning-text' :
+                  '--text-muted'
+                })`,
+                backgroundColor: `var(${
+                  meta.group === 'active' ? '--success-bg' :
+                  meta.group === 'pre' ? '--warning-bg' :
+                  meta.group === 'sales' ? '--warning-bg' :
+                  '--bg-hover'
+                })`,
+                border: `1px solid var(${
+                  meta.group === 'active' ? '--success-border' :
+                  meta.group === 'pre' ? '--warning-border' :
+                  meta.group === 'sales' ? '--warning-border' :
+                  '--border-base'
+                })`,
+              }}
+            >
               {meta.label}
             </span>
           </div>
         </div>
 
-        {/* 2행: 수요기관/규격 + 알림 + 공정률 */}
-        <div className="flex items-center gap-3 mt-1 pl-3.5">
-          <p className="text-xs text-gray-500 truncate flex-1 min-w-0">
+        {/* 2행: 서브정보 + 이슈 + 공정률 */}
+        <div className="flex items-center gap-3 mt-1.5 pl-3.5">
+          <p className="text-xs truncate flex-1 min-w-0" style={{color:"var(--text-muted)"}}>
             {subParts.join(' · ') || site.address || ''}
           </p>
           <div className="flex items-center gap-2 shrink-0">
             {(issueCount > 0 || reqCount > 0) && (
-              <span className="flex items-center gap-0.5 text-[10px] text-red-400">
+              <span className="flex items-center gap-0.5 text-[10px]" style={{color:"var(--danger-text)"}}>
                 <ExclamationTriangleIcon className="w-3 h-3" />
                 {issueCount + reqCount}
               </span>
             )}
             {site.contractQuantity && meta.group !== 'sales' && (
               <div className="flex items-center gap-1.5">
-                <div className="w-16 h-1 rounded-full bg-gray-800 overflow-hidden">
+                <div className="w-16 h-1 rounded-full overflow-hidden" style={{backgroundColor:"var(--border-base)"}}>
                   <div
                     className={`h-full rounded-full ${
                       progress >= 100 ? 'bg-blue-500' :
                       progress >= 80  ? 'bg-green-500' :
-                      progress >= 40  ? 'bg-green-600' : 'bg-gray-600'
+                      progress >= 40  ? 'bg-green-600' : 'bg-gray-400'
                     }`}
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <span className={`text-[10px] font-bold tabular-nums ${
-                  progress >= 80 ? 'text-green-400' : progress >= 40 ? 'text-blue-400' : 'text-gray-500'
-                }`}>
+                <span className="text-[10px] font-bold tabular-nums" style={{
+                  color: progress >= 80 ? 'var(--success-text)' : progress >= 40 ? 'var(--info-text)' : 'var(--text-muted)'
+                }}>
                   {progress}%
                 </span>
               </div>
-            )}
-            {meta.group === 'sales' && site.sales?.[0]?.estimateAmount && (
-              <span className="text-[10px] text-orange-400/70">
-                예상 {fmtMoney(site.sales[0].estimateAmount)}원
-              </span>
             )}
           </div>
         </div>

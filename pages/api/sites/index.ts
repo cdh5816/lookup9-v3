@@ -41,7 +41,7 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
   const where: any = { teamId: tm.teamId };
 
   if (salesOnly === 'true') {
-    where.status = { in: ['SALES_PIPELINE', 'FAILED'] }; // 수주확정은 현장관리 투입전으로
+    where.status = { in: ['SALES_PIPELINE', 'SALES_CONFIRMED', 'FAILED'] }; // 영업관리: 영업중+수주확정+실패 모두 표시
   } else if (status && status !== 'all') {
     where.status = normalizeStatus(status as string);
   } else if (includeCompleted === 'true') {

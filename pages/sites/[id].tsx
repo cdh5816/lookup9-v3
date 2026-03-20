@@ -9,6 +9,7 @@ import fetcher from '@/lib/fetcher';
 import ProgressDashboard from '@/components/sites/ProgressDashboard';
 import InspectionPanel from '@/components/sites/InspectionPanel';
 import CalendarPanel from '@/components/sites/CalendarPanel';
+import MonthlyReportPanel from '@/components/sites/MonthlyReportPanel';
 import {
  PlusIcon, TrashIcon, MagnifyingGlassIcon,
  ExclamationTriangleIcon, PencilIcon, CheckIcon,
@@ -33,12 +34,12 @@ const STATUS_COLOR: Record<string, string> = {
  FAILED: 'bg-gray-500',
 };
 const STATUS_BADGE: Record<string, string> = {
- SALES_PIPELINE: 'bg-orange-900/40 text-orange-300 border-orange-800/50',
- SALES_CONFIRMED: 'bg-yellow-900/40 text-yellow-300 border-yellow-800/50',
- CONTRACT_ACTIVE: 'bg-green-900/40 text-green-300 border-green-800/50',
- COMPLETED: 'bg-blue-900/40 text-blue-300 border-blue-800/50',
- WARRANTY: 'bg-purple-900/40 text-purple-300 border-purple-800/50',
- FAILED: ' text-gray-400 ',
+ SALES_PIPELINE: 'status-warning',
+ SALES_CONFIRMED: 'status-warning',
+ CONTRACT_ACTIVE: 'status-success',
+ COMPLETED: 'status-info',
+ WARRANTY: 'status-info',
+ FAILED: '',
 };
 const ISSUE_TYPES = ['누수', '손상', '색상 오류', '치수 불일치', '반입 문제', '재작업', '민원', '기타'];
 const ISSUE_STATUSES = ['발생', '조사중', '조치중', '완료', '보류'];
@@ -79,7 +80,7 @@ const calcProgress = (site: any) => {
 };
 
 // ── 탭 정의 ──────────────────────────────────────────
-type TabKey = 'overview' | 'sales' | 'production' | 'settlement' | 'documents' | 'defect' | 'comments' | 'progress' | 'inspection' | 'calendar';
+type TabKey = 'overview' | 'sales' | 'production' | 'settlement' | 'documents' | 'defect' | 'comments' | 'progress' | 'inspection' | 'calendar' | 'report';
 interface TabDef { key: TabKey; label: string; badge?: (site: any) => number }
 
 const ALL_TABS: TabDef[] = [
@@ -92,13 +93,14 @@ const ALL_TABS: TabDef[] = [
  { key: 'calendar', label: '일정' },
  { key: 'documents', label: '서류' },
  { key: 'defect', label: '하자' },
+ { key: 'report', label: '리포트' },
  { key: 'comments', label: '코멘트' },
 ];
 
 const getVisibleTabs = (role: string): TabKey[] => {
  if (['PARTNER', 'GUEST', 'VIEWER'].includes(role))
- return ['overview', 'progress', 'inspection', 'calendar', 'documents', 'comments'];
- return ['overview', 'progress', 'sales', 'production', 'inspection', 'settlement', 'calendar', 'documents', 'defect', 'comments'];
+ return ['overview', 'progress', 'inspection', 'calendar', 'documents', 'report', 'comments'];
+ return ['overview', 'progress', 'sales', 'production', 'inspection', 'settlement', 'calendar', 'documents', 'defect', 'report', 'comments'];
 };
 
 // ── 메인 ──────────────────────────────────────────────
@@ -154,7 +156,7 @@ const SiteDetail = () => {
  <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
  <div className="min-w-0 flex-1">
  <div className="flex flex-wrap items-center gap-2 mb-1.5">
- <span className={`rounded-md border px-2.5 py-0.5 text-xs font-bold ${STATUS_BADGE[site.status] || ' text-gray-400 '}`}>
+ <span className={`rounded-md px-2.5 py-0.5 text-xs font-bold ${STATUS_BADGE[site.status] || ''}`} style={{border: !STATUS_BADGE[site.status] ? '1px solid var(--border-base)' : undefined, color: !STATUS_BADGE[site.status] ? 'var(--text-muted)' : undefined}}>
  {STATUS_LABEL[site.status] ?? site.status}
  </span>
  <span className="rounded-md px-2 py-0.5 text-xs" style={{border:"1px solid var(--border-base)",backgroundColor:"var(--bg-hover)",color:"var(--text-muted)"}}>
@@ -247,6 +249,7 @@ const SiteDetail = () => {
  {activeKey === 'calendar' && <CalendarPanel siteId={id as string} canManage={canManage} />}
  {activeKey === 'documents' && <DocumentPanel siteId={id as string} canManage={canManage} />}
  {activeKey === 'defect' && <DefectPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />}
+ {activeKey === 'report' && <MonthlyReportPanel siteId={id as string} />}
  {activeKey === 'comments' && <CommentsPanel site={site} siteId={id as string} onMutate={mutate} />}
  </div>
  </div>
@@ -592,7 +595,7 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
  <div className="space-y-2">
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
  <InfoRow label="협력사명" value={site.installerName} />
- <InfoRow label="현장 담당자" value={site.installerContact} />
+ <InfoRow label="대표이사" value={site.installerContact} />
  <InfoRow label="연락처" value={site.installerPhone} />
  </div>
  <div className="rounded-lg border border-blue-800/30 bg-blue-950/20 px-3 py-2 mt-1">
@@ -617,7 +620,7 @@ const OverviewPanel = ({ site, siteId, canManage, isExternal, onMutate, role }: 
  value={form.installerName} onChange={e => setForm({ ...form, installerName: e.target.value })} />
  </div>
  <div>
- <label className="block text-[11px] text-gray-400 mb-1 font-semibold">현장 담당자</label>
+ <label className="block text-[11px] text-gray-400 mb-1 font-semibold">대표이사</label>
  <input type="text" className="input input-bordered input-sm w-full"
  placeholder="예: 홍길동 소장"
  value={form.installerContact} onChange={e => setForm({ ...form, installerContact: e.target.value })} />

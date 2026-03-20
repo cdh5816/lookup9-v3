@@ -6,6 +6,7 @@ import {
   BuildingOffice2Icon,
   BellIcon,
   ChartBarIcon,
+  WrenchScrewdriverIcon,
   Bars3BottomLeftIcon,
 } from '@heroicons/react/24/outline';
 import {
@@ -13,6 +14,7 @@ import {
   BuildingOffice2Icon as BuildingOffice2IconSolid,
   BellIcon as BellIconSolid,
   ChartBarIcon as ChartBarIconSolid,
+  WrenchScrewdriverIcon as WrenchScrewdriverIconSolid,
 } from '@heroicons/react/24/solid';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
@@ -35,14 +37,9 @@ const BottomNav = ({ onMoreClick }: BottomNavProps) => {
   const isPartner = userRole === 'PARTNER';
   const isManager = permissions.isManager || permissions.isCompanyAdmin || ['SUPER_ADMIN', 'OWNER'].includes(userRole);
   const dept = profile?.department || '';
-  const canSeeSales = isManager || ['영업', '영업팀', '영업부'].includes(dept);
+  const canSeeSales = !isGuest && !isPartner && (isManager || ['영업', '영업팀', '영업부'].includes(dept));
 
-  // 게스트: 대시보드, 현장, 알림, 더보기
-  // 파트너: 대시보드, 현장, 알림, 더보기
-  // 내부직원 (영업O): 대시보드, 현장, 영업, 알림, 더보기
-  // 내부직원 (영업X): 대시보드, 현장, 알림, 더보기
-
-  const items: {
+  type NavItem = {
     key: string;
     label: string;
     href: string;
@@ -50,8 +47,11 @@ const BottomNav = ({ onMoreClick }: BottomNavProps) => {
     iconActive: React.ElementType;
     badge?: number;
     isMore?: boolean;
-  }[] = [];
+  };
 
+  const items: NavItem[] = [];
+
+  // 대시보드
   items.push({
     key: 'dashboard',
     label: '대시보드',
@@ -60,6 +60,7 @@ const BottomNav = ({ onMoreClick }: BottomNavProps) => {
     iconActive: HomeIconSolid,
   });
 
+  // 현장 (모든 역할)
   items.push({
     key: 'sites',
     label: '현장',
@@ -68,7 +69,19 @@ const BottomNav = ({ onMoreClick }: BottomNavProps) => {
     iconActive: BuildingOffice2IconSolid,
   });
 
-  if (!isGuest && !isPartner && canSeeSales) {
+  // 협력사: 시공내역
+  if (isPartner) {
+    items.push({
+      key: 'partner-dashboard',
+      label: '시공내역',
+      href: '/partner/dashboard',
+      icon: WrenchScrewdriverIcon,
+      iconActive: WrenchScrewdriverIconSolid,
+    });
+  }
+
+  // 내부직원 중 영업 권한: 영업
+  if (canSeeSales) {
     items.push({
       key: 'sales',
       label: '영업',
@@ -78,6 +91,7 @@ const BottomNav = ({ onMoreClick }: BottomNavProps) => {
     });
   }
 
+  // 알림
   items.push({
     key: 'notifications',
     label: '알림',
@@ -87,6 +101,7 @@ const BottomNav = ({ onMoreClick }: BottomNavProps) => {
     badge: unreadNotifications,
   });
 
+  // 더보기
   items.push({
     key: 'more',
     label: '더보기',
@@ -100,6 +115,7 @@ const BottomNav = ({ onMoreClick }: BottomNavProps) => {
     if (href === '/dashboard') return path === '/dashboard';
     if (href === '/sites') return path.startsWith('/sites');
     if (href === '/sales') return path.startsWith('/sales');
+    if (href === '/partner/dashboard') return path === '/partner/dashboard';
     if (href === '/notifications') return path.startsWith('/notifications');
     return false;
   };
@@ -114,7 +130,7 @@ const BottomNav = ({ onMoreClick }: BottomNavProps) => {
           return (
             <button
               key={item.key}
-              className={`bottom-nav-item`}
+              className="bottom-nav-item"
               onClick={onMoreClick}
               role="tab"
               aria-label={item.label}

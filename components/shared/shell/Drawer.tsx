@@ -68,7 +68,7 @@ const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
                 <Navigation onNavigate={closeSidebar} />
 
                 {/* 하단 퀵 액션 — 모바일 전용 */}
-                <div className="mt-auto pt-4" style={{borderTop:"1px solid var(--border-subtle)"}}>
+                <div className="mt-auto pt-4 space-y-0.5" style={{borderTop:"1px solid var(--border-subtle)"}}>
                   <Link href="/my" onClick={closeSidebar}>
                     <div className="sidebar-link">
                       <UserCircleIcon className="icon" />
@@ -83,10 +83,14 @@ const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
                   </Link>
                   <button
                     onClick={handleLogout}
-                    className="sidebar-link w-full text-left"
-                    style={{ color: 'var(--danger-text)' }}
+                    className="w-full flex items-center gap-2.5 rounded-lg px-3 py-3 text-sm font-medium transition-all mt-2"
+                    style={{
+                      color: 'var(--danger-text)',
+                      backgroundColor: 'var(--danger-bg)',
+                      border: '1px solid var(--danger-border)',
+                    }}
                   >
-                    <ArrowRightOnRectangleIcon className="icon" />
+                    <ArrowRightOnRectangleIcon className="h-5 w-5" />
                     <span>로그아웃</span>
                   </button>
                 </div>

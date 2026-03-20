@@ -55,22 +55,23 @@ const MyPage = () => {
 
  {/* 프로필 헤더 카드 */}
  <div className="rounded-xl p-5 flex items-center gap-4" style={{border:"1px solid var(--border-base)",backgroundColor:"var(--bg-card)"}}>
- <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full">
- <UserCircleIcon className="h-9 w-9 text-gray-400" />
+ <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full" style={{backgroundColor:'var(--brand-light)'}}>
+ <UserCircleIcon className="h-9 w-9" style={{color:'var(--brand)'}} />
  </div>
  <div className="flex-1 min-w-0">
- <h2 className="text-lg font-bold truncate">
+ <h2 className="text-lg font-bold truncate" style={{color:'var(--text-primary)'}}>
  {profile.position ? `${profile.position} ` : ''}{user?.name}
  </h2>
- <p className="text-sm text-gray-400 truncate">{user?.email}</p>
- <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+ <p className="text-sm truncate" style={{color:'var(--text-muted)'}}>{user?.email}</p>
+ <div className="mt-1 flex flex-wrap items-center gap-2 text-xs" style={{color:'var(--text-muted)'}}>
  {profile.role && <span className="badge badge-sm badge-ghost">{profile.role}</span>}
  {profile.department && <span>{profile.department}</span>}
  {profile.company && <span>{profile.company}</span>}
+ {profile.phone && <span style={{color:'var(--info-text)'}}>{profile.phone}</span>}
  </div>
  </div>
  <div className="shrink-0 flex flex-col items-end gap-2">
- <Link href="/messages" className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition">
+ <Link href="/messages" className="flex items-center gap-1.5 text-sm transition" style={{color:'var(--text-muted)'}}>
  <EnvelopeIcon className="h-4 w-4" />
  {(profile.unreadMessages || 0) > 0 && (
  <span className="badge badge-xs badge-primary">{profile.unreadMessages}</span>
@@ -80,17 +81,17 @@ const MyPage = () => {
  </div>
 
  {/* 탭 */}
- <div className="border-b">
+ <div style={{borderBottom:'1px solid var(--border-base)'}}>
  <div className="flex gap-0.5 overflow-x-auto">
  {tabs.map((tab) => (
  <button
  key={tab.key}
  onClick={() => setActiveTab(tab.key)}
- className={`shrink-0 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
- activeTab === tab.key
- ? 'border-blue-500 text-blue-400'
- : 'border-transparent text-gray-400 hover:text-gray-200'
- }`}
+ className="shrink-0 px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+ style={{
+ borderBottomColor: activeTab === tab.key ? 'var(--brand)' : 'transparent',
+ color: activeTab === tab.key ? 'var(--brand)' : 'var(--text-muted)',
+ }}
  >
  {tab.label}
  </button>
@@ -112,6 +113,11 @@ const MyPage = () => {
 // ========= 내 정보 탭 =========
 const ProfileTab = ({ profile }: { profile: any }) => {
  const { t } = useTranslation('common');
+ const myRole = profile.role || '';
+ const isGuestOrViewer = ['GUEST', 'VIEWER'].includes(myRole);
+ const isPartner = myRole === 'PARTNER';
+ const showAdminCards = !isGuestOrViewer && !isPartner;
+
  return (
  <div className="space-y-4">
  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -122,35 +128,37 @@ const ProfileTab = ({ profile }: { profile: any }) => {
  { label: '연락처', value: profile.phone },
  ].map((item) => (
  <div key={item.label} className="rounded-xl p-4" style={{border:"1px solid var(--border-base)",backgroundColor:"var(--bg-card)"}}>
- <p className="text-xs text-gray-500 mb-1">{item.label}</p>
- <p className="text-sm font-medium">{item.value || '-'}</p>
+ <p className="text-xs mb-1" style={{color:'var(--text-muted)'}}>{item.label}</p>
+ <p className="text-sm font-medium" style={{color:'var(--text-primary)'}}>{item.value || '-'}</p>
  </div>
  ))}
  </div>
 
+ {showAdminCards && (
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
- <Link href="/approvals" className="rounded-xl border p-4  transition">
- <div className="flex items-center gap-2 font-semibold mb-1">
- <ClipboardDocumentCheckIcon className="h-4 w-4 text-blue-400" />
+ <Link href="/approvals" className="rounded-xl p-4 transition" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+ <div className="flex items-center gap-2 font-semibold mb-1" style={{color:'var(--text-primary)'}}>
+ <ClipboardDocumentCheckIcon className="h-4 w-4" style={{color:'var(--info-text)'}} />
  전자결재
  </div>
- <p className="text-xs text-gray-500 leading-5">승인/반려가 필요한 요청을 확인합니다.</p>
+ <p className="text-xs leading-5" style={{color:'var(--text-muted)'}}>승인/반려가 필요한 요청을 확인합니다.</p>
  </Link>
- <Link href="/guests" className="rounded-xl border p-4  transition">
- <div className="flex items-center gap-2 font-semibold mb-1">
- <UserPlusIcon className="h-4 w-4 text-blue-400" />
+ <Link href="/guests" className="rounded-xl p-4 transition" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+ <div className="flex items-center gap-2 font-semibold mb-1" style={{color:'var(--text-primary)'}}>
+ <UserPlusIcon className="h-4 w-4" style={{color:'var(--info-text)'}} />
  게스트 관리
  </div>
- <p className="text-xs text-gray-500 leading-5">협력사/게스트 계정을 만들고 현장을 배정합니다.</p>
+ <p className="text-xs leading-5" style={{color:'var(--text-muted)'}}>게스트 계정을 만들고 현장을 배정합니다.</p>
  </Link>
- <Link href="/worklogs" className="rounded-xl border p-4  transition">
- <div className="flex items-center gap-2 font-semibold mb-1">
- <PencilSquareIcon className="h-4 w-4 text-blue-400" />
+ <Link href="/worklogs" className="rounded-xl p-4 transition" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+ <div className="flex items-center gap-2 font-semibold mb-1" style={{color:'var(--text-primary)'}}>
+ <PencilSquareIcon className="h-4 w-4" style={{color:'var(--info-text)'}} />
  업무일지 열람
  </div>
- <p className="text-xs text-gray-500 leading-5">같은 회사 직원의 업무일지를 열람합니다.</p>
+ <p className="text-xs leading-5" style={{color:'var(--text-muted)'}}>같은 회사 직원의 업무일지를 열람합니다.</p>
  </Link>
  </div>
+ )}
  </div>
  );
 };

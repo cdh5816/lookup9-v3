@@ -1,0 +1,24 @@
+{
+  "name": "LOOKUP9 - 우수제품 현장관리",
+  "short_name": "LOOKUP9",
+  "description": "우수제품 패널 업체를 위한 현장관리 플랫폼",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#09090B",
+  "theme_color": "#2563EB",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

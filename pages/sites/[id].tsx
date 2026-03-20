@@ -6,6 +6,9 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
+import ProgressDashboard from '@/components/sites/ProgressDashboard';
+import InspectionPanel from '@/components/sites/InspectionPanel';
+import CalendarPanel from '@/components/sites/CalendarPanel';
 import {
  PlusIcon, TrashIcon, MagnifyingGlassIcon,
  ExclamationTriangleIcon, PencilIcon, CheckIcon,
@@ -76,14 +79,17 @@ const calcProgress = (site: any) => {
 };
 
 // ── 탭 정의 ──────────────────────────────────────────
-type TabKey = 'overview' | 'sales' | 'production' | 'settlement' | 'documents' | 'defect' | 'comments';
+type TabKey = 'overview' | 'sales' | 'production' | 'settlement' | 'documents' | 'defect' | 'comments' | 'progress' | 'inspection' | 'calendar';
 interface TabDef { key: TabKey; label: string; badge?: (site: any) => number }
 
 const ALL_TABS: TabDef[] = [
  { key: 'overview', label: '기본정보' },
+ { key: 'progress', label: '공정현황' },
  { key: 'sales', label: '영업이력' },
  { key: 'production', label: '생산' },
+ { key: 'inspection', label: '검수' },
  { key: 'settlement', label: '정산', badge: (s) => s.issues?.filter((i: any) => i.status !== '완료').length ?? 0 },
+ { key: 'calendar', label: '일정' },
  { key: 'documents', label: '서류' },
  { key: 'defect', label: '하자' },
  { key: 'comments', label: '코멘트' },
@@ -91,8 +97,8 @@ const ALL_TABS: TabDef[] = [
 
 const getVisibleTabs = (role: string): TabKey[] => {
  if (['PARTNER', 'GUEST', 'VIEWER'].includes(role))
- return ['overview', 'production', 'documents', 'comments'];
- return ['overview', 'sales', 'production', 'settlement', 'documents', 'defect', 'comments'];
+ return ['overview', 'progress', 'inspection', 'calendar', 'documents', 'comments'];
+ return ['overview', 'progress', 'sales', 'production', 'inspection', 'settlement', 'calendar', 'documents', 'defect', 'comments'];
 };
 
 // ── 메인 ──────────────────────────────────────────────
@@ -233,9 +239,12 @@ const SiteDetail = () => {
  {/* ── 탭 콘텐츠 ── */}
  <div className="pt-3">
  {activeKey === 'overview' && <OverviewPanel site={site} siteId={id as string} canManage={canManage} isExternal={isExternal} onMutate={mutate} role={role} />}
+ {activeKey === 'progress' && <ProgressDashboard site={site} />}
  {activeKey === 'sales' && <SalesPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />}
  {activeKey === 'production' && <ProductionPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />}
+ {activeKey === 'inspection' && <InspectionPanel siteId={id as string} canManage={canManage} role={role} />}
  {activeKey === 'settlement' && <SettlementPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />}
+ {activeKey === 'calendar' && <CalendarPanel siteId={id as string} canManage={canManage} />}
  {activeKey === 'documents' && <DocumentPanel siteId={id as string} canManage={canManage} />}
  {activeKey === 'defect' && <DefectPanel site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />}
  {activeKey === 'comments' && <CommentsPanel site={site} siteId={id as string} onMutate={mutate} />}

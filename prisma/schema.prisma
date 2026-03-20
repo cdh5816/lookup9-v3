@@ -108,6 +108,9 @@ model User {
   leaveAdmined     LeaveRequest[] @relation("LeaveAdmin")
   productionOrders ProductionOrder[] @relation("ProductionOrderCreator")
   partnerMemberships PartnerMember[]
+  inspectionsRequested Inspection[] @relation("InspectionRequester")
+  calendarEventsCreated CalendarEvent[] @relation("CalendarEventCreator")
+  sitePhotosUploaded SitePhoto[] @relation("SitePhotoUploader")
 }
 
 model Team {
@@ -355,6 +358,10 @@ model Site {
   changeLogs    ChangeLog[]
   schedules     Schedule[]
   productionOrders ProductionOrder[]
+  inspections      Inspection[]
+  calendarEvents   CalendarEvent[]
+  qrVisits         QRVisit[]
+  photos           SitePhoto[]
 
   @@index([teamId])
   @@index([clientId])
@@ -835,4 +842,100 @@ model PartnerSiteAssign {
   @@unique([partnerCompanyId, siteId])
   @@index([partnerCompanyId])
   @@index([siteId])
+}
+
+// ══════════════════════════════════════════════════════
+// Phase 2 신규 모델
+// ══════════════════════════════════════════════════════
+
+model Inspection {
+  id              String    @id @default(uuid())
+  siteId          String
+  teamId          String
+  title           String
+  description     String?
+  inspectionType  String    @default("DELIVERY") // DELIVERY, INSTALLATION, COMPLETION, DEFECT
+  status          String    @default("REQUESTED") // REQUESTED, SCHEDULED, IN_PROGRESS, PASSED, FAILED, CANCELLED
+  requestedById   String
+  assignedToId    String?
+  requestedAt     DateTime  @default(now())
+  scheduledDate   DateTime?
+  completedAt     DateTime?
+  result          String?   // PASS, FAIL, CONDITIONAL
+  resultNote      String?
+  signatureData   String?   // base64 서명 데이터
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  site        Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  requestedBy User @relation("InspectionRequester", fields: [requestedById], references: [id])
+
+  @@index([siteId])
+  @@index([teamId])
+  @@index([status])
+}
+
+model CalendarEvent {
+  id          String    @id @default(uuid())
+  siteId      String?
+  teamId      String    
+  title       String
+  description String?
+  eventType   String    @default("GENERAL") // GENERAL, DELIVERY, INSPECTION, MEETING, INSTALLATION, MILESTONE
+  startDate   DateTime
+  endDate     DateTime?
+  allDay      Boolean   @default(false)
+  location    String?
+  createdById String
+  isShared    Boolean   @default(true)
+  color       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  site      Site? @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("CalendarEventCreator", fields: [createdById], references: [id])
+
+  @@index([siteId])
+  @@index([teamId])
+  @@index([startDate])
+}
+
+model QRVisit {
+  id              String    @id @default(uuid())
+  siteId          String
+  teamId          String
+  visitorName     String
+  visitorCompany  String?
+  visitorPhone    String?
+  visitPurpose    String?
+  checkInAt       DateTime  @default(now())
+  checkOutAt      DateTime?
+  qrToken         String?
+  createdAt       DateTime  @default(now())
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@index([teamId])
+  @@index([qrToken])
+}
+
+model SitePhoto {
+  id           String    @id @default(uuid())
+  siteId       String
+  teamId       String
+  uploadedById String
+  caption      String?
+  category     String    @default("PROGRESS") // PROGRESS, BEFORE, AFTER, DEFECT, DELIVERY, OTHER
+  fileUrl      String
+  fileName     String?
+  fileSize     Int?
+  takenAt      DateTime?
+  createdAt    DateTime  @default(now())
+
+  site       Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  uploadedBy User @relation("SitePhotoUploader", fields: [uploadedById], references: [id])
+
+  @@index([siteId])
+  @@index([category])
 }

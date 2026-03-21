@@ -3,25 +3,15 @@ import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Head from 'next/head';
-import Link from 'next/link';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 import {
   BuildingOffice2Icon, CurrencyDollarIcon,
   ExclamationTriangleIcon, CheckCircleIcon,
-  ChevronRightIcon, CalculatorIcon,
-  WrenchScrewdriverIcon,
+  CalculatorIcon,
 } from '@heroicons/react/24/outline';
 import PullToRefresh from '@/components/shared/PullToRefresh';
 
-const STATUS_DOT: Record<string, string> = {
-  SALES_CONFIRMED: 'bg-yellow-400', CONTRACT_ACTIVE: 'bg-green-500',
-  COMPLETED: 'bg-blue-400', WARRANTY: 'bg-purple-400',
-};
-const STATUS_LABEL: Record<string, string> = {
-  SALES_CONFIRMED: '대기', CONTRACT_ACTIVE: '진행중',
-  COMPLETED: '준공완료', WARRANTY: '하자기간',
-};
 const fmtNum = (v: any) => {
   if (v === null || v === undefined) return '-';
   return Number(v).toLocaleString('ko-KR');
@@ -47,7 +37,6 @@ const PartnerDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showCalc, setShowCalc] = useState(false);
   const [costPerUnit, setCostPerUnit] = useState('');
-  const [tab, setTab] = useState<'active' | 'pending' | 'completed'>('active');
 
   const fetchSites = useCallback(async () => {
     setLoading(true);
@@ -71,7 +60,6 @@ const PartnerDashboard = () => {
   const pendingSites = useMemo(() => sitesWithProgress.filter(s => s.status === 'SALES_CONFIRMED'), [sitesWithProgress]);
   const activeSites = useMemo(() => sitesWithProgress.filter(s => s.status === 'CONTRACT_ACTIVE'), [sitesWithProgress]);
   const completedSites = useMemo(() => sitesWithProgress.filter(s => ['COMPLETED', 'WARRANTY'].includes(s.status)), [sitesWithProgress]);
-  const displaySites = tab === 'active' ? activeSites : tab === 'pending' ? pendingSites : completedSites;
 
   const stats = useMemo(() => {
     const totalAmount = sitesWithProgress.reduce((s, site) => s + Number(site.contractAmount || 0), 0);
@@ -163,26 +151,48 @@ const PartnerDashboard = () => {
           {/* ── 담당자별 현장금액 ── */}
           <ManagerSummary sites={sitesWithProgress} />
 
-          {/* 탭 */}
-          <div className="flex gap-1" style={{borderBottom:"1px solid var(--border-base)"}}>
-            {([['active','진행중',stats.active],['pending','진행대기',stats.pending],['completed','완료',stats.completed]] as const).map(([k,l,c]) => (
-              <button key={k} onClick={() => setTab(k)} className="px-4 py-2 text-sm font-medium -mb-px" style={{color: tab===k?'var(--brand)':'var(--text-muted)', borderBottom: tab===k?'2px solid var(--brand)':'2px solid transparent'}}>
-                {l} <span className="text-[10px] opacity-60">({c})</span>
-              </button>
-            ))}
+          {/* ── 현장별 공정률 그래프 ── */}
+          <div className="rounded-xl p-4" style={{border:"1px solid var(--border-base)",backgroundColor:"var(--bg-card)"}}>
+            <p className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{color:"var(--text-muted)"}}>현장별 공정률</p>
+            {activeSites.length === 0 ? (
+              <p className="text-sm py-4 text-center" style={{color:"var(--text-muted)"}}>진행중인 현장이 없습니다.</p>
+            ) : (
+              <div className="space-y-2.5">
+                {[...activeSites].sort((a,b) => b.progress - a.progress).map(site => (
+                  <div key={site.id}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium truncate flex-1 mr-2" style={{color:"var(--text-primary)"}}>{site.name}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {site.siteManager && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{backgroundColor:'var(--bg-hover)',color:'var(--text-muted)'}}>{site.siteManager}</span>}
+                        <span className="text-xs font-bold tabular-nums" style={{color:"var(--brand)"}}>{site.progress}%</span>
+                      </div>
+                    </div>
+                    <div className="h-2 rounded-full overflow-hidden" style={{backgroundColor:"var(--border-base)"}}>
+                      <div className={`h-full rounded-full transition-all ${site.progress>=100?'bg-blue-500':site.progress>=60?'bg-green-500':site.progress>=30?'bg-yellow-500':'bg-gray-500'}`} style={{width:`${site.progress}%`}} />
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px]" style={{color:"var(--text-muted)"}}>{fmtNum(site.delivered)}/{fmtNum(site.qty)} m²</span>
+                      {site.contractAmount && <span className="text-[10px]" style={{color:"var(--info-text)"}}>{fmtMoney(site.contractAmount)}원</span>}
+                      {site.settlementAmount && Number(site.settlementAmount) > 0 && <span className="text-[10px]" style={{color:"var(--warning-text)"}}>실정 {fmtMoney(site.settlementAmount)}원</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* 현장 목록 */}
-          {loading ? (
-            <div className="py-8 text-center"><span className="loading loading-spinner loading-sm" /></div>
-          ) : displaySites.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed py-10 text-center" style={{borderColor:"var(--border-base)"}}>
-              <WrenchScrewdriverIcon className="h-8 w-8 mx-auto mb-2" style={{color:"var(--text-muted)"}} />
-              <p className="text-sm" style={{color:"var(--text-muted)"}}>{tab==='active'?'진행중인 현장이 없습니다.':'완료된 현장이 없습니다.'}</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {displaySites.map(site => <SiteRow key={site.id} site={site} costPerUnit={costPerUnit ? Number(costPerUnit) : 0} />)}
+          {/* ── 진행대기 현장 ── */}
+          {pendingSites.length > 0 && (
+            <div className="rounded-xl p-4" style={{border:"1px solid var(--warning-border)",backgroundColor:"var(--warning-bg)"}}>
+              <p className="text-xs font-semibold mb-2" style={{color:"var(--warning-text)"}}>진행대기 ({pendingSites.length}건)</p>
+              <div className="space-y-1.5">
+                {pendingSites.map(site => (
+                  <div key={site.id} className="flex items-center justify-between">
+                    <span className="text-xs" style={{color:"var(--text-primary)"}}>{site.name}</span>
+                    <span className="text-xs font-medium" style={{color:"var(--warning-text)"}}>{fmtMoney(site.contractAmount)}원</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -212,50 +222,6 @@ const CalcBox = ({ label, value, sub, colorVar }: { label: string; value: string
     {sub && <p className="text-[8px] mt-0.5" style={{color:"var(--text-muted)"}}>{sub}</p>}
   </div>
 );
-
-const SiteRow = ({ site, costPerUnit }: { site: any; costPerUnit: number }) => {
-  const ddayLabel = site.dday !== null ? (site.dday < 0 ? `D+${Math.abs(site.dday)}` : site.dday === 0 ? 'D-Day' : `D-${site.dday}`) : null;
-  const ddayOverdue = site.dday !== null && site.dday < 0;
-  const ddayUrgent = site.dday !== null && site.dday <= 14 && site.dday >= 0;
-  const siteCost = costPerUnit > 0 && site.qty > 0 ? site.qty * costPerUnit : null;
-
-  return (
-    <Link href={`/sites/${site.id}`}>
-      <div className="rounded-xl p-3.5 transition-all cursor-pointer active:scale-[0.99]" style={{border: site.issues > 0 ? '1px solid var(--danger-border)' : '1px solid var(--border-base)', backgroundColor:'var(--bg-card)'}}>
-        <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[site.status]||'bg-gray-400'}`} />
-          <p className="text-sm font-semibold truncate flex-1" style={{color:"var(--text-primary)"}}>{site.name}</p>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{backgroundColor: site.status==='CONTRACT_ACTIVE'?'var(--success-bg)':'var(--bg-hover)', color: site.status==='CONTRACT_ACTIVE'?'var(--success-text)':'var(--text-muted)', border:`1px solid ${site.status==='CONTRACT_ACTIVE'?'var(--success-border)':'var(--border-base)'}`}}>
-            {STATUS_LABEL[site.status]||site.status}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 mt-2 pl-4 flex-wrap">
-          {site.contractAmount && <span className="text-xs font-medium" style={{color:"var(--info-text)"}}>{fmtMoney(site.contractAmount)}원</span>}
-          {site.qty > 0 && <span className="text-xs" style={{color:"var(--text-muted)"}}>{fmtNum(site.qty)}m²</span>}
-          {siteCost && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{backgroundColor:"var(--info-bg)",color:"var(--info-text)",border:"1px solid var(--info-border)"}}>시공비 {fmtMoney(siteCost)}원</span>}
-          {site.siteManager && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{backgroundColor:'var(--bg-hover)',color:'var(--text-secondary)',border:'1px solid var(--border-base)'}}>담당: {site.siteManager}</span>}
-          {site.settlementAmount && Number(site.settlementAmount) > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{backgroundColor:'var(--warning-bg)',color:'var(--warning-text)',border:'1px solid var(--warning-border)'}}>실정 {fmtMoney(site.settlementAmount)}원</span>}
-        </div>
-        <div className="flex items-center gap-2 mt-2 pl-4">
-          {site.qty > 0 && (
-            <div className="flex items-center gap-1.5 flex-1">
-              <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{backgroundColor:"var(--border-base)", maxWidth:'120px'}}>
-                <div className={`h-full rounded-full ${site.progress>=100?'bg-blue-500':site.progress>=50?'bg-green-500':'bg-yellow-500'}`} style={{width:`${site.progress}%`}} />
-              </div>
-              <span className="text-[11px] font-bold" style={{color:"var(--brand)"}}>{site.progress}%</span>
-              <span className="text-[10px]" style={{color:"var(--text-muted)"}}>({fmtNum(site.delivered)}/{fmtNum(site.qty)})</span>
-            </div>
-          )}
-          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-            {ddayLabel && <span className="text-[10px] px-1.5 py-0.5 rounded font-bold" style={{color: ddayOverdue?'var(--danger-text)':ddayUrgent?'var(--warning-text)':'var(--text-muted)', backgroundColor: ddayOverdue?'var(--danger-bg)':ddayUrgent?'var(--warning-bg)':'transparent'}}>{ddayLabel}</span>}
-            {site.issues > 0 && <span className="text-[10px] font-medium status-danger px-1.5 py-0.5 rounded-full">이슈 {site.issues}</span>}
-            <ChevronRightIcon className="h-3.5 w-3.5" style={{color:"var(--text-muted)"}} />
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-};
 
 // ── 연도별 계약금액 요약 ──
 const YearlySummary = ({ sites }: { sites: any[] }) => {

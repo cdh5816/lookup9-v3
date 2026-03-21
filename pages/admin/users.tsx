@@ -145,7 +145,7 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
 
  // 파트너 유저들 + 회사 목록 추출
  const partnerUsers = useMemo(() => users.filter(u => {
- const role = u.teamMembers?.[0]?.role || 'USER';
+ const role = u.role || u.teamMembers?.[0]?.role || 'USER';
  return role === 'PARTNER';
  }), [users]);
 
@@ -162,7 +162,7 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  }, [partnerUsers]);
 
  const visibleUsers = useMemo(() => users.filter(u => {
- const role = u.teamMembers?.[0]?.role || 'USER';
+ const role = u.role || u.teamMembers?.[0]?.role || 'USER';
  if (filter === 'internal') return !['PARTNER', 'GUEST', 'VIEWER'].includes(role);
  if (filter === 'partner') {
  if (role !== 'PARTNER') return false;
@@ -261,7 +261,7 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  {f === 'internal' ? '내부 직원' : '협력사 직원'}
  <span className="ml-1.5 text-[10px] opacity-60">
  {users.filter(u => {
- const r = u.teamMembers?.[0]?.role || 'USER';
+ const r = u.role || u.teamMembers?.[0]?.role || 'USER';
  if (f === 'internal') return !['PARTNER','GUEST','VIEWER'].includes(r);
  return r === 'PARTNER';
  }).length}

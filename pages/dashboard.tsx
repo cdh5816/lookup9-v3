@@ -375,19 +375,6 @@ const PartnerQuickDashboard = ({ profile, onRefresh }: { profile: any; onRefresh
             </Link>
           </div>
 
-          {/* 시공내역 바로가기 */}
-          <Link href="/partner/dashboard">
-            <div className="rounded-xl p-4 cursor-pointer transition-all active:scale-[0.98]" style={{border:"1px solid var(--brand)",backgroundColor:"var(--brand-light)"}}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold" style={{color:"var(--brand)"}}>시공내역 상세보기</p>
-                  <p className="text-xs mt-1" style={{color:"var(--text-muted)"}}>물량현황, 시공비 계산, 현장별 진행률 확인</p>
-                </div>
-                <ChevronRightIcon className="h-5 w-5" style={{color:"var(--brand)"}} />
-              </div>
-            </div>
-          </Link>
-
           {/* 배정 현장 목록 */}
           <div>
             <p className="text-sm font-semibold mb-2" style={{color:"var(--text-primary)"}}>배정 현장</p>

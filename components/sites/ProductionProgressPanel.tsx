@@ -2,7 +2,7 @@
 import { useState, useMemo } from 'react';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
-import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XMarkIcon, TruckIcon, TableCellsIcon, ListBulletIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XMarkIcon, TruckIcon, TableCellsIcon, ListBulletIcon, CameraIcon } from '@heroicons/react/24/outline';
 
 const fmt = (v: any) => {
   const n = Number(String(v ?? '').replace(/[^0-9.-]/g, ''));
@@ -50,6 +50,64 @@ export default function ProductionProgressPanel({
   }, [shipments]);
 
   const [viewMode, setViewMode] = useState<'list' | 'table'>('list');
+  const [uploadParsing, setUploadParsing] = useState(false);
+  const [parsedPreview, setParsedPreview] = useState<any>(null);
+  const [confirmingSave, setConfirmingSave] = useState(false);
+
+  const canUploadPhoto = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER'].includes(userRole || '');
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { alert('파일 크기가 10MB를 초과합니다.'); return; }
+    setUploadParsing(true);
+    try {
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`/api/sites/${siteId}/production-upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileData: base64, fileName: file.name }),
+      });
+      const json = await res.json();
+      if (res.ok && json.data?.orders?.length > 0) {
+        setParsedPreview(json.data);
+      } else {
+        alert(json.data?.message || json.error?.message || '파싱 실패. 이미지가 선명한지 확인해주세요.');
+      }
+    } catch (err) {
+      alert('업로드 중 오류가 발생했습니다.');
+    }
+    setUploadParsing(false);
+    e.target.value = '';
+  };
+
+  const handleConfirmParsed = async () => {
+    if (!parsedPreview?.orders) return;
+    setConfirmingSave(true);
+    let saved = 0;
+    for (const order of parsedPreview.orders) {
+      const res = await fetch(`/api/sites/${siteId}/production`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quantity: Number(order.quantity),
+          orderDate: order.orderDate || null,
+          supplyDate: order.supplyDate || null,
+          notes: `${order.sequence || ''}${order.notes ? ' ' + order.notes : ''}`.trim(),
+        }),
+      });
+      if (res.ok) saved++;
+    }
+    alert(`${saved}건 등록 완료`);
+    setParsedPreview(null);
+    setConfirmingSave(false);
+    mutateOrders();
+    onMutate();
+  };
 
   return (
     <div className="space-y-4">
@@ -90,6 +148,13 @@ export default function ProductionProgressPanel({
             <p className="text-[10px] mt-0.5" style={{color:'var(--text-muted)'}}>공급일 입력 시 출하탭에서 출하 정보를 등록해주세요</p>
           </div>
           <div className="flex items-center gap-1">
+            {canUploadPhoto && (
+              <label className={`btn btn-ghost btn-xs gap-1 cursor-pointer ${uploadParsing ? 'loading' : ''}`} title="사진/PDF 파싱 업로드">
+                <CameraIcon className="h-3.5 w-3.5" style={{color:'var(--brand)'}} />
+                <span className="text-[10px]" style={{color:'var(--brand)'}}>{uploadParsing ? 'AI 파싱 중...' : '사진파싱'}</span>
+                <input type="file" accept="image/*,.pdf" className="hidden" onChange={handlePhotoUpload} disabled={uploadParsing} />
+              </label>
+            )}
             <button className={`btn btn-ghost btn-xs ${viewMode === 'list' ? '' : 'opacity-40'}`} onClick={() => setViewMode('list')} title="리스트"><ListBulletIcon className="h-4 w-4" /></button>
             <button className={`btn btn-ghost btn-xs ${viewMode === 'table' ? '' : 'opacity-40'}`} onClick={() => setViewMode('table')} title="엑셀"><TableCellsIcon className="h-4 w-4" /></button>
           </div>
@@ -101,6 +166,59 @@ export default function ProductionProgressPanel({
           <ListViewOrders siteId={siteId} orders={orders} shipBySeq={shipBySeq} canManage={canManage} onMutate={() => { mutateOrders(); onMutate(); }} />
         )}
       </div>
+
+      {/* 사진/PDF 파싱 결과 미리보기 모달 */}
+      {parsedPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
+          <div className="w-full max-w-lg max-h-[80vh] overflow-hidden rounded-xl flex flex-col" style={{backgroundColor:'var(--bg-elevated)',border:'1px solid var(--border-base)'}}>
+            <div className="px-4 py-3 flex items-center justify-between" style={{borderBottom:'1px solid var(--border-base)'}}>
+              <div>
+                <p className="text-sm font-bold" style={{color:'var(--text-primary)'}}>AI 파싱 결과 ({parsedPreview.count}건)</p>
+                {parsedPreview.summary && (
+                  <p className="text-[10px] mt-0.5" style={{color:'var(--text-muted)'}}>
+                    합계: {Number(parsedPreview.summary.totalQuantity || 0).toLocaleString()}m²
+                    {parsedPreview.summary.contractQuantity && ` / 계약: ${Number(parsedPreview.summary.contractQuantity).toLocaleString()}m²`}
+                  </p>
+                )}
+              </div>
+              <button className="btn btn-ghost btn-xs" onClick={() => setParsedPreview(null)}><XMarkIcon className="h-4 w-4" /></button>
+            </div>
+            <div className="overflow-auto flex-1 p-2">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{borderBottom:'1px solid var(--border-base)'}}>
+                    <th className="px-2 py-1.5 text-left" style={{color:'var(--text-muted)'}}>차수</th>
+                    <th className="px-2 py-1.5 text-right" style={{color:'var(--text-muted)'}}>물량</th>
+                    <th className="px-2 py-1.5 text-center" style={{color:'var(--text-muted)'}}>발주일</th>
+                    <th className="px-2 py-1.5 text-center" style={{color:'var(--text-muted)'}}>공급일</th>
+                    <th className="px-2 py-1.5 text-left" style={{color:'var(--text-muted)'}}>비고</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsedPreview.orders.map((o: any, i: number) => (
+                    <tr key={i} style={{borderBottom:'1px solid var(--border-base)'}}>
+                      <td className="px-2 py-1.5 font-medium" style={{color:'var(--text-primary)'}}>{o.sequence}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums" style={{color:'var(--info-text)'}}>{Number(o.quantity).toLocaleString()}</td>
+                      <td className="px-2 py-1.5 text-center" style={{color:'var(--text-secondary)'}}>{o.orderDate || '-'}</td>
+                      <td className="px-2 py-1.5 text-center" style={{color:'var(--text-secondary)'}}>{o.supplyDate || '-'}</td>
+                      <td className="px-2 py-1.5 truncate max-w-[100px]" style={{color:'var(--text-muted)'}}>{o.notes || ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 py-3 flex items-center justify-between" style={{borderTop:'1px solid var(--border-base)'}}>
+              <p className="text-[10px]" style={{color:'var(--warning-text)'}}>확인 후 등록하면 기존 데이터에 추가됩니다.</p>
+              <div className="flex gap-2">
+                <button className="btn btn-ghost btn-sm" onClick={() => setParsedPreview(null)}>취소</button>
+                <button className={`btn btn-primary btn-sm ${confirmingSave ? 'loading' : ''}`} disabled={confirmingSave} onClick={handleConfirmParsed}>
+                  {confirmingSave ? '등록 중...' : `${parsedPreview.count}건 등록`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -49,6 +49,7 @@ const MainNavigation = ({ activePathname, onNavigate }: NavigationProps) => {
         { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: exact('/dashboard') },
         { name: '시공내역', href: '/partner/dashboard', icon: ChartBarIcon, active: active('/partner/dashboard') },
         { name: t('nav-sites'), href: '/sites', icon: BuildingOffice2Icon, active: active('/sites') },
+        { name: '게스트 관리', href: '/guests', icon: UserPlusIcon, active: active('/guests') },
         { name: t('my-page-title'), href: '/my', icon: UserCircleIcon, active: exact('/my') },
         { name: t('security'), href: '/settings/security', icon: ShieldCheckIcon, active: exact('/settings/security') },
       ]} />

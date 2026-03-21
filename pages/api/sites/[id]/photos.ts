@@ -63,9 +63,9 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, siteId: str
     return res.status(400).json({ error: { message: '이미지 파일만 업로드 가능합니다.' } });
   }
 
-  // 파일 크기 제한 (약 5MB base64)
-  if (fileData.length > 7 * 1024 * 1024) {
-    return res.status(400).json({ error: { message: '파일 크기가 5MB를 초과합니다.' } });
+  // 파일 크기 제한 (약 8MB base64)
+  if (fileData.length > 11 * 1024 * 1024) {
+    return res.status(400).json({ error: { message: '파일 크기가 8MB를 초과합니다.' } });
   }
 
   const photo = await prisma.sitePhoto.create({

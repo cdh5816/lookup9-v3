@@ -202,14 +202,14 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
           </button>
         )}
 
-        {/* 내 정보 */}
+        {/* 내 정보 — 데스크탑만 (모바일은 BottomNav 더보기에서 접근) */}
         <Link href="/my" className="rounded-lg p-2.5 transition-colors hidden sm:block" style={{color:"var(--header-icon)"}} aria-label="내 정보">
           <UserCircleIcon className="h-5 w-5" />
         </Link>
 
-        {/* 로그아웃 */}
+        {/* 로그아웃 — 모바일에서도 항상 표시 */}
         <button
-          className="rounded-lg p-2.5 transition-colors hidden sm:block" style={{color:"var(--header-icon)"}}
+          className="rounded-lg p-2.5 transition-colors" style={{color:"var(--header-icon)"}}
           onClick={handleLogout}
           aria-label="로그아웃"
         >

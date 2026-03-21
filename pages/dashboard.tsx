@@ -92,7 +92,7 @@ const Dashboard = () => {
   }, [mutateProfile, mutateStats]);
 
   if (isGuest) return <GuestDashboard profile={profile} onRefresh={handleRefresh} />;
-  if (isPartner) return <PartnerQuickDashboard profile={profile} onRefresh={handleRefresh} />;
+  if (isPartner) return <PartnerQuickDashboard profile={profile} stats={stats} onRefresh={handleRefresh} />;
 
   const summaryCards = [
     {
@@ -335,10 +335,11 @@ const GuestDashboard = ({ profile, onRefresh }: { profile: any; onRefresh: () =>
 };
 
 // ── 협력사 전용 대시보드 ──
-const PartnerQuickDashboard = ({ profile, onRefresh }: { profile: any; onRefresh: () => Promise<void> }) => {
+const PartnerQuickDashboard = ({ profile, stats, onRefresh }: { profile: any; stats: any; onRefresh: () => Promise<void> }) => {
   const mySites = profile.mySites || [];
   const activeSites = mySites.filter((s: any) => ['CONTRACT_ACTIVE', 'SALES_CONFIRMED'].includes(s.status));
   const companyName = profile.company || '';
+  const [selectedNotice, setSelectedNotice] = useState<any>(null);
 
   // 간단 집계
   const totalQty = activeSites.reduce((s: number, site: any) => s + Number(site.contractQuantity || 0), 0);
@@ -352,6 +353,27 @@ const PartnerQuickDashboard = ({ profile, onRefresh }: { profile: any; onRefresh
             {companyName && <p className="text-xs" style={{color:"var(--text-muted)"}}>{companyName}</p>}
             <h2 className="text-lg font-bold" style={{color:"var(--text-primary)"}}>안녕하세요, {profile.name}님</h2>
           </div>
+
+          {/* 공지사항 */}
+          {stats?.notices?.length > 0 && (
+            <div className="rounded-xl p-4" style={{border:"1px solid var(--border-base)",backgroundColor:"var(--bg-card)"}}>
+              <p className="text-xs font-semibold mb-2" style={{color:"var(--text-primary)"}}>공지사항</p>
+              <div className="space-y-1.5">
+                {stats.notices.slice(0, 5).map((n: any) => (
+                  <div key={n.id} className="flex items-center gap-2 cursor-pointer rounded-lg px-2 py-2 transition-colors"
+                    style={{backgroundColor:'transparent'}}
+                    onClick={() => setSelectedNotice(n)}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    {n.isPinned && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
+                    <span className="text-sm truncate flex-1" style={{color:"var(--text-primary)"}}>{n.title}</span>
+                    <span className="text-[10px] shrink-0" style={{color:"var(--text-muted)"}}>{new Date(n.createdAt).toLocaleDateString('ko-KR')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 요약 카드 */}
           <div className="grid grid-cols-3 gap-2.5">
@@ -407,6 +429,7 @@ const PartnerQuickDashboard = ({ profile, onRefresh }: { profile: any; onRefresh
           </div>
         </div>
       </PullToRefresh>
+      {selectedNotice && <NoticeModal notice={selectedNotice} onClose={() => setSelectedNotice(null)} />}
     </>
   );
 };

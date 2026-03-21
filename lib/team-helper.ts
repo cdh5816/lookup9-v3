@@ -118,16 +118,16 @@ export async function verifySiteAccess(userId: string, siteId: string) {
     });
     if (assignment) return tm;
 
-    // 협력사 회사 단위 배정 확인
+    // 협력사 회사 단위 배정 확인 (relation name = "company")
     const partnerAssign = await prisma.partnerMember.findFirst({
       where: { userId },
       include: {
-        partnerCompany: {
+        company: {
           include: { sites: { where: { siteId } } },
         },
       },
     });
-    if (partnerAssign?.partnerCompany?.sites?.length > 0) return tm;
+    if (partnerAssign?.company?.sites?.length > 0) return tm;
 
     return null;
   }

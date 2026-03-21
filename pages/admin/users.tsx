@@ -202,8 +202,20 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  setCreating(false);
  };
 
+ const [deletePasswordModal, setDeletePasswordModal] = useState<{user: any} | null>(null);
+ const [deletePassword, setDeletePassword] = useState('');
+ const [deletingAdmin, setDeletingAdmin] = useState(false);
+
  const handleDelete = async (user: UserData) => {
  if (user.id === currentUserId) { alert('자기 자신은 삭제할 수 없습니다.'); return; }
+
+ // COMPANY_ADMIN 삭제: 비밀번호 확인 모달
+ if (user.role === 'ADMIN_HR' || user.role === 'ADMIN') {
+ setDeletePasswordModal({ user });
+ setDeletePassword('');
+ return;
+ }
+
  if (!confirm(`"${user.name}" 계정을 삭제하시겠습니까?`)) return;
  const res = await fetch('/api/admin/users', {
  method: 'DELETE', headers: { 'Content-Type': 'application/json' },
@@ -212,6 +224,21 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  const json = await res.json();
  if (!res.ok) setError(json?.error?.message || '삭제 실패');
  else { setSuccess('삭제되었습니다.'); fetchData(); }
+ };
+
+ const handleDeleteAdmin = async () => {
+ if (!deletePasswordModal) return;
+ if (!deletePassword.trim()) { setError('비밀번호를 입력하세요.'); return; }
+ setDeletingAdmin(true);
+ setError('');
+ const res = await fetch('/api/admin/users', {
+ method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ userId: deletePasswordModal.user.id, confirmPassword: deletePassword }),
+ });
+ const json = await res.json();
+ if (!res.ok) { setError(json?.error?.message || '삭제 실패'); }
+ else { setSuccess(`"${deletePasswordModal.user.name}" 회사 및 하위 데이터가 삭제되었습니다.`); setDeletePasswordModal(null); fetchData(); }
+ setDeletingAdmin(false);
  };
 
  const canShowCreate = filter === 'internal' ? canCreateInternal : canCreateExternal;
@@ -292,17 +319,23 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  </thead>
  <tbody>
  {visibleUsers.map(user => {
- const role = user.teamMembers?.[0]?.role || 'USER';
+ const role = user.role || user.teamMembers?.[0]?.role || 'USER';
  const isSelf = user.id === currentUserId;
  const isProtected = ['ADMIN_HR','ADMIN','SUPER_ADMIN','OWNER'].includes(role);
- const canDelete = isAdminHR && !isSelf && (!isProtected || myRole === 'SUPER_ADMIN');
+ const isOtherTeamAdmin = (user as any).isOtherTeam;
+ const canDeleteThis = isAdminHR && !isSelf && (!isProtected || myRole === 'SUPER_ADMIN');
 
  return (
  <tr key={user.id} className="border-t /30 /20 transition-colors">
  <td className="px-4 py-3 font-semibold">
  {user.name}
  {isSelf && <span className="ml-1.5 text-[10px] bg-blue-900/40 text-blue-300 px-1.5 py-0.5 rounded">나</span>}
- {user.phone && <div className="text-xs text-gray-500 font-normal">{user.phone}</div>}
+ {isOtherTeamAdmin && user.teamName && (
+ <div className="text-[10px] font-normal mt-0.5" style={{color:'var(--warning-text)'}}>
+ {user.teamName}
+ </div>
+ )}
+ {user.phone && <div className="text-xs font-normal" style={{color:'var(--text-muted)'}}>{user.phone}</div>}
  </td>
  <td className="px-4 py-3 text-gray-400 font-mono text-xs">{user.username || user.email}</td>
  {filter === 'internal' ? (
@@ -341,7 +374,7 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  ) : <span className="text-gray-600 text-xs">-</span>}
  </td>
  <td className="px-4 py-3 text-right">
- {canDelete ? (
+ {canDeleteThis ? (
  <button onClick={() => handleDelete(user)}
  className="inline-flex items-center gap-1 rounded border border-red-500/30 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 transition">
  <TrashIcon className="h-3.5 w-3.5" />삭제
@@ -406,6 +439,17 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} />
  </Field>
 
+ {/* COMPANY_ADMIN 선택 시 회사명 필수 */}
+ {(form.role === 'ADMIN_HR' || form.role === 'ADMIN') && (
+ <Field label="회사명 *" className="col-span-2">
+ <input className="input input-bordered w-full" placeholder="회사명 (새 팀이 자동 생성됩니다)"
+ value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} />
+ <p className="text-[10px] mt-1" style={{color:'var(--warning-text)'}}>
+ COMPANY_ADMIN 생성 시 별도의 회사(팀)가 자동으로 만들어집니다.
+ </p>
+ </Field>
+ )}
+
  {filter === 'internal' && (
  <Field label="부서" className="col-span-2">
  <select className="select select-bordered w-full" value={form.department}
@@ -446,11 +490,40 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  </div>
  )}
  </div>
+
+ {/* COMPANY_ADMIN 삭제 비밀번호 확인 모달 */}
+ {deletePasswordModal && (
+ <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{background:'rgba(0,0,0,0.6)'}}>
+ <div className="w-full max-w-sm rounded-xl p-5" style={{backgroundColor:'var(--bg-elevated)',border:'1px solid var(--border-base)',boxShadow:'var(--shadow-elevated)'}}>
+ <h3 className="text-base font-bold mb-1" style={{color:'var(--danger-text)'}}>회사 삭제 확인</h3>
+ <p className="text-xs mb-4" style={{color:'var(--text-muted)'}}>
+ &quot;{deletePasswordModal.user.company || deletePasswordModal.user.name}&quot; 회사와 소속 직원, 협력사, 현장 데이터가 모두 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
+ </p>
+ <div className="mb-4">
+ <label className="block text-xs mb-1.5 font-medium" style={{color:'var(--text-secondary)'}}>시스템 관리자 비밀번호</label>
+ <input
+ type="password"
+ className="input input-bordered w-full"
+ placeholder="비밀번호를 입력하세요"
+ value={deletePassword}
+ onChange={e => setDeletePassword(e.target.value)}
+ onKeyDown={e => e.key === 'Enter' && handleDeleteAdmin()}
+ autoFocus
+ />
+ </div>
+ {error && <p className="text-xs mb-3" style={{color:'var(--danger-text)'}}>{error}</p>}
+ <div className="flex justify-end gap-2">
+ <button className="btn btn-ghost btn-sm" onClick={() => { setDeletePasswordModal(null); setError(''); }}>취소</button>
+ <button className={`btn btn-error btn-sm ${deletingAdmin ? 'loading' : ''}`} disabled={deletingAdmin} onClick={handleDeleteAdmin}>
+ 삭제 실행
+ </button>
+ </div>
+ </div>
+ </div>
+ )}
+ </div>
  );
 };
-
-// ══════════════════════════════════════════════════════
-// 협력업체 패널
 // ══════════════════════════════════════════════════════
 const PartnerPanel = () => {
  const [companies, setCompanies] = useState<any[]>([]);

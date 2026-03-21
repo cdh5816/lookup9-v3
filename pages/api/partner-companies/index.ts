@@ -136,17 +136,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
       data: { partnerCompanyId: companyId, userId },
     });
 
-    // 회사에 배정된 현장들에도 자동 배정
-    const assigns = await prisma.partnerSiteAssign.findMany({
-      where: { partnerCompanyId: companyId },
-      select: { siteId: true },
-    });
-    if (assigns.length > 0) {
-      await prisma.siteAssignment.createMany({
-        data: assigns.map(a => ({ siteId: a.siteId, userId, assignedRole: 'PARTNER' })),
-        skipDuplicates: true,
-      });
-    }
+    // 현장 배정은 수동으로 — 자동 배정 안함
 
     return res.status(200).json({ data: { ok: true } });
   }
@@ -176,14 +166,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, session: an
       });
       await tx.teamMember.create({ data: { teamId: tm.teamId, userId: user.id, role: 'PARTNER' } });
       await tx.partnerMember.create({ data: { partnerCompanyId: companyId, userId: user.id, position: position || null } });
-
-      const assigns = await tx.partnerSiteAssign.findMany({ where: { partnerCompanyId: companyId }, select: { siteId: true } });
-      if (assigns.length > 0) {
-        await tx.siteAssignment.createMany({
-          data: assigns.map(a => ({ siteId: a.siteId, userId: user.id, assignedRole: 'PARTNER' })),
-          skipDuplicates: true,
-        });
-      }
+      // 현장 배정은 수동으로 — 자동 배정 안함
       return user;
     });
 

@@ -274,8 +274,9 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
     },
   });
 
-  // ── 시공업체 자동 배정 ──
-  // installerName이 변경되었으면, 해당 이름의 PartnerCompany를 찾아서 자동 배정
+  // ── 시공업체 연결 (직원 자동 배정 안함 — 수동 배정) ──
+  // installerName 변경 시 PartnerSiteAssign만 생성 (업체↔현장 연결)
+  // 소속 직원 배정은 배정인원에서 수동으로 지정
   if (installerName !== undefined && installerName) {
     try {
       const partnerCompany = await prisma.partnerCompany.findFirst({
@@ -283,13 +284,9 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
           teamId: tm.teamId,
           name: { equals: installerName, mode: 'insensitive' },
         },
-        include: {
-          members: { select: { userId: true } },
-        },
       });
 
       if (partnerCompany) {
-        // 1) PartnerSiteAssign 생성 (이미 있으면 무시)
         await prisma.partnerSiteAssign.upsert({
           where: {
             partnerCompanyId_siteId: {
@@ -303,28 +300,9 @@ const handlePUT = async (id: string, req: NextApiRequest, res: NextApiResponse, 
             siteId: id,
           },
         });
-
-        // 2) 협력사의 모든 멤버에게 SiteAssignment 생성 (이미 있으면 무시)
-        for (const member of partnerCompany.members) {
-          await prisma.siteAssignment.upsert({
-            where: {
-              siteId_userId: {
-                siteId: id,
-                userId: member.userId,
-              },
-            },
-            update: {},
-            create: {
-              siteId: id,
-              userId: member.userId,
-              assignedRole: 'PARTNER',
-            },
-          });
-        }
       }
     } catch (autoAssignErr) {
-      // 자동 배정 실패해도 현장 저장은 성공 처리
-      console.error('Auto partner assign error:', autoAssignErr);
+      console.error('Partner site assign error:', autoAssignErr);
     }
   }
 

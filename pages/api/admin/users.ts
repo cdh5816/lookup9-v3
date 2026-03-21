@@ -229,7 +229,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
       });
     }
 
-    // ── PARTNER 계정: 소속 협력사 자동 연결 ──
+    // ── PARTNER 계정: 소속 협력사 연결 (현장 배정은 수동) ──
     if (targetRole === 'PARTNER' && company) {
       const partnerCompany = await tx.partnerCompany.findFirst({
         where: { teamId: actorTm.teamId, name: { equals: company, mode: 'insensitive' } },
@@ -240,16 +240,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
           create: { partnerCompanyId: partnerCompany.id, userId: created.id, position: position || null },
           update: {},
         });
-        const companyAssigns = await tx.partnerSiteAssign.findMany({
-          where: { partnerCompanyId: partnerCompany.id },
-          select: { siteId: true },
-        });
-        if (companyAssigns.length > 0) {
-          await tx.siteAssignment.createMany({
-            data: companyAssigns.map(a => ({ siteId: a.siteId, userId: created.id, assignedRole: 'PARTNER' })),
-            skipDuplicates: true,
-          });
-        }
       }
     }
 

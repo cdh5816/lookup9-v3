@@ -240,7 +240,7 @@ function SiteHeader({ site, canDelete, onDelete, onTabChange }: any) {
  {/* 담당자 + 실정보고 */}
  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
  <div className="rounded-lg px-3 py-2.5" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
- <p className="text-[10px] mb-1" style={{color:'var(--text-muted)'}}>담당자 (PM)</p>
+ <p className="text-[10px] mb-1" style={{color:'var(--text-muted)'}}>내부 담당자</p>
  <p className="text-sm font-medium truncate" style={{color:'var(--text-primary)'}}>{site.siteManager || '-'}</p>
  </div>
  <div className="rounded-lg px-3 py-2.5" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
@@ -449,7 +449,7 @@ function OverviewTab({ site, siteId, canManage, userRole, onMutate }: any) {
  onChange={e => setForm({ ...form, deliveryDeadline: e.target.value })} />
  </div>
  <div>
- <label className="block text-[10px] mb-1" style={{color:'var(--text-muted)'}}>담당자 (PM)</label>
+ <label className="block text-[10px] mb-1" style={{color:'var(--text-muted)'}}>내부 담당자</label>
  <input className="input input-bordered input-sm w-full" placeholder="홍길동"
  value={form.siteManager}
  onChange={e => setForm({ ...form, siteManager: e.target.value })} />
@@ -1339,7 +1339,7 @@ function ContractorPanel({ site, siteId, canManage, userRole, onMutate }: any) {
 
  {assigned > 0 && (
  <div className="mb-2 rounded-lg px-3 py-1.5 text-xs" style={{backgroundColor:'var(--info-bg)',border:'1px solid var(--info-border)',color:'var(--info-text)'}}>
- ✓ {form.installerName} 소속 계정 {assigned}명이 현장 열람/수정 가능하도록 연동되었습니다.
+ ✓ {form.installerName} 업체가 현장에 연결되었습니다. 소속 직원 배정은 배정인원에서 지정하세요.
  </div>
  )}
 
@@ -1397,7 +1397,7 @@ function ContractorPanel({ site, siteId, canManage, userRole, onMutate }: any) {
  </div>
  </div>
  <p className="text-[10px]" style={{color:'var(--text-muted)'}}>
- ※ 등록된 협력업체를 선택하면 대표이사·연락처가 자동으로 채워지고, 소속 계정이 이 현장을 열람/수정할 수 있게 됩니다.
+ ※ 등록된 협력업체를 선택하면 대표이사·연락처가 자동으로 채워집니다. 소속 직원 배정은 위 배정인원에서 수동으로 지정하세요.
  </p>
  <div className="flex justify-end gap-2">
  <button className="btn btn-ghost btn-xs" onClick={() => { setEditing(false); setShowDropdown(false); }}>취소</button>

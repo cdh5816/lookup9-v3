@@ -489,7 +489,6 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  </div>
  </div>
  )}
- </div>
 
  {/* COMPANY_ADMIN 삭제 비밀번호 확인 모달 */}
  {deletePasswordModal && (

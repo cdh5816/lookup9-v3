@@ -47,6 +47,7 @@ const MainNavigation = ({ activePathname, onNavigate }: NavigationProps) => {
     return (
       <NavigationItems onNavigate={onNavigate} menus={[
         { name: t('nav-dashboard'), href: '/dashboard', icon: HomeIcon, active: exact('/dashboard') },
+        { name: '시공내역', href: '/partner/dashboard', icon: ChartBarIcon, active: active('/partner/dashboard') },
         { name: t('nav-sites'), href: '/sites', icon: BuildingOffice2Icon, active: active('/sites') },
         { name: t('my-page-title'), href: '/my', icon: UserCircleIcon, active: exact('/my') },
         { name: t('security'), href: '/settings/security', icon: ShieldCheckIcon, active: exact('/settings/security') },

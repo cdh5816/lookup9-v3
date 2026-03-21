@@ -80,6 +80,7 @@ const Dashboard = () => {
   const profile = profileData?.data || {};
   const userRole = profile.role || profile.teamMembers?.[0]?.role || 'USER';
   const isGuest = userRole === 'GUEST' || userRole === 'VIEWER';
+  const isPartner = userRole === 'PARTNER';
 
   const { data, mutate: mutateStats } = useSWR('/api/dashboard/stats', fetcher, { refreshInterval: 30000 });
   const stats = data?.data;
@@ -91,6 +92,7 @@ const Dashboard = () => {
   }, [mutateProfile, mutateStats]);
 
   if (isGuest) return <GuestDashboard profile={profile} onRefresh={handleRefresh} />;
+  if (isPartner) return <PartnerQuickDashboard profile={profile} onRefresh={handleRefresh} />;
 
   const summaryCards = [
     {
@@ -326,6 +328,96 @@ const GuestDashboard = ({ profile, onRefresh }: { profile: any; onRefresh: () =>
               ))}
             </div>
           )}
+        </div>
+      </PullToRefresh>
+    </>
+  );
+};
+
+// ── 협력사 전용 대시보드 ──
+const PartnerQuickDashboard = ({ profile, onRefresh }: { profile: any; onRefresh: () => Promise<void> }) => {
+  const mySites = profile.mySites || [];
+  const activeSites = mySites.filter((s: any) => ['CONTRACT_ACTIVE', 'SALES_CONFIRMED'].includes(s.status));
+  const companyName = profile.company || '';
+
+  // 간단 집계
+  const totalQty = activeSites.reduce((s: number, site: any) => s + Number(site.contractQuantity || 0), 0);
+
+  return (
+    <>
+      <Head><title>대시보드 | LOOKUP9</title></Head>
+      <PullToRefresh onRefresh={onRefresh}>
+        <div className="space-y-4">
+          <div>
+            {companyName && <p className="text-xs" style={{color:"var(--text-muted)"}}>{companyName}</p>}
+            <h2 className="text-lg font-bold" style={{color:"var(--text-primary)"}}>안녕하세요, {profile.name}님</h2>
+          </div>
+
+          {/* 요약 카드 */}
+          <div className="grid grid-cols-3 gap-2.5">
+            <Link href="/partner/dashboard">
+              <div className="rounded-xl p-4 text-center cursor-pointer transition-all active:scale-[0.98]" style={{border:"1px solid var(--info-border)",backgroundColor:"var(--info-bg)"}}>
+                <p className="text-2xl font-bold" style={{color:"var(--info-text)"}}>{activeSites.length}</p>
+                <p className="text-[11px] mt-1" style={{color:"var(--text-muted)"}}>진행중 현장</p>
+              </div>
+            </Link>
+            <Link href="/partner/dashboard">
+              <div className="rounded-xl p-4 text-center cursor-pointer transition-all active:scale-[0.98]" style={{border:"1px solid var(--success-border)",backgroundColor:"var(--success-bg)"}}>
+                <p className="text-2xl font-bold" style={{color:"var(--success-text)"}}>{totalQty > 0 ? totalQty.toLocaleString() : '-'}</p>
+                <p className="text-[11px] mt-1" style={{color:"var(--text-muted)"}}>계약물량(m²)</p>
+              </div>
+            </Link>
+            <Link href="/sites">
+              <div className="rounded-xl p-4 text-center cursor-pointer transition-all active:scale-[0.98]" style={{border:"1px solid var(--border-base)",backgroundColor:"var(--bg-card)"}}>
+                <p className="text-2xl font-bold" style={{color:"var(--text-primary)"}}>{mySites.length}</p>
+                <p className="text-[11px] mt-1" style={{color:"var(--text-muted)"}}>전체 현장</p>
+              </div>
+            </Link>
+          </div>
+
+          {/* 시공내역 바로가기 */}
+          <Link href="/partner/dashboard">
+            <div className="rounded-xl p-4 cursor-pointer transition-all active:scale-[0.98]" style={{border:"1px solid var(--brand)",backgroundColor:"var(--brand-light)"}}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold" style={{color:"var(--brand)"}}>시공내역 상세보기</p>
+                  <p className="text-xs mt-1" style={{color:"var(--text-muted)"}}>물량현황, 시공비 계산, 현장별 진행률 확인</p>
+                </div>
+                <ChevronRightIcon className="h-5 w-5" style={{color:"var(--brand)"}} />
+              </div>
+            </div>
+          </Link>
+
+          {/* 배정 현장 목록 */}
+          <div>
+            <p className="text-sm font-semibold mb-2" style={{color:"var(--text-primary)"}}>배정 현장</p>
+            {mySites.length === 0 ? (
+              <div className="rounded-xl py-10 text-center" style={{border:"2px dashed var(--border-base)",color:"var(--text-muted)"}}>
+                <p className="text-sm">배정된 현장이 없습니다.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {mySites.map((site: any) => (
+                  <Link key={site.id} href={`/sites/${site.id}`}>
+                    <div className="rounded-xl p-3.5 cursor-pointer transition-all active:scale-[0.99]" style={{border:"1px solid var(--border-base)",backgroundColor:"var(--bg-card)"}}>
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2 w-2 rounded-full shrink-0 ${STATUS_DOT[site.status] || 'bg-gray-400'}`} />
+                        <p className="text-sm font-medium truncate flex-1" style={{color:"var(--text-primary)"}}>{site.name}</p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{
+                          backgroundColor: site.status === 'CONTRACT_ACTIVE' ? 'var(--success-bg)' : 'var(--bg-hover)',
+                          color: site.status === 'CONTRACT_ACTIVE' ? 'var(--success-text)' : 'var(--text-muted)',
+                          border: `1px solid ${site.status === 'CONTRACT_ACTIVE' ? 'var(--success-border)' : 'var(--border-base)'}`,
+                        }}>
+                          {site.status === 'CONTRACT_ACTIVE' ? '진행중' : site.status === 'COMPLETED' ? '준공완료' : site.status}
+                        </span>
+                        <ChevronRightIcon className="h-3.5 w-3.5 shrink-0" style={{color:"var(--text-muted)"}} />
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </PullToRefresh>
     </>

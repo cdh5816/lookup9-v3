@@ -659,6 +659,19 @@ a { color: inherit; text-decoration: none; }
   box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
 }
 
+/* 공통 카드/모달 보정 — bg-gray-900, bg-black 단독 사용 */
+[data-theme="corporate"] .bg-gray-900 { background-color: var(--bg-card) !important; }
+[data-theme="corporate"] .dark\:bg-black { background-color: var(--bg-card) !important; }
+[data-theme="corporate"] .dark\:bg-gray-800 { background-color: var(--bg-surface) !important; }
+[data-theme="corporate"] .dark\:border-gray-600 { border-color: var(--border-base) !important; }
+[data-theme="corporate"] .dark\:border-gray-700 { border-color: var(--border-base) !important; }
+[data-theme="corporate"] .dark\:border-white { border-color: var(--border-base) !important; }
+[data-theme="corporate"] .hover\:bg-gray-800:hover { background-color: var(--bg-hover) !important; }
+
+/* 공통 EmptyState / Card 보정 */
+[data-theme="corporate"] .bg-gray-50 { background-color: #F8FAFC !important; }
+[data-theme="corporate"] .border-slate-300 { border-color: #E2E8F0 !important; }
+
 /* 라이트 ring/focus */
 [data-theme="corporate"] .input,
 [data-theme="corporate"] .select,

@@ -47,7 +47,7 @@ const PartnerDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showCalc, setShowCalc] = useState(false);
   const [costPerUnit, setCostPerUnit] = useState('');
-  const [tab, setTab] = useState<'active' | 'completed'>('active');
+  const [tab, setTab] = useState<'active' | 'pending' | 'completed'>('active');
 
   const fetchSites = useCallback(async () => {
     setLoading(true);
@@ -68,21 +68,23 @@ const PartnerDashboard = () => {
     return { ...s, qty, delivered, ordered, progress, dday, issues };
   }), [sites]);
 
-  const activeSites = useMemo(() => sitesWithProgress.filter(s => ['CONTRACT_ACTIVE', 'SALES_CONFIRMED'].includes(s.status)), [sitesWithProgress]);
+  const pendingSites = useMemo(() => sitesWithProgress.filter(s => s.status === 'SALES_CONFIRMED'), [sitesWithProgress]);
+  const activeSites = useMemo(() => sitesWithProgress.filter(s => s.status === 'CONTRACT_ACTIVE'), [sitesWithProgress]);
   const completedSites = useMemo(() => sitesWithProgress.filter(s => ['COMPLETED', 'WARRANTY'].includes(s.status)), [sitesWithProgress]);
-  const displaySites = tab === 'active' ? activeSites : completedSites;
+  const displaySites = tab === 'active' ? activeSites : tab === 'pending' ? pendingSites : completedSites;
 
   const stats = useMemo(() => {
     const totalAmount = sitesWithProgress.reduce((s, site) => s + Number(site.contractAmount || 0), 0);
     const activeAmount = activeSites.reduce((s, site) => s + Number(site.contractAmount || 0), 0);
+    const pendingAmount = pendingSites.reduce((s, site) => s + Number(site.contractAmount || 0), 0);
     const totalQty = activeSites.reduce((s, site) => s + site.qty, 0);
     const totalDelivered = activeSites.reduce((s, site) => s + site.delivered, 0);
     const pendingQty = totalQty - totalDelivered;
     const issueCount = sitesWithProgress.filter(s => s.issues > 0).length;
     const avgProgress = activeSites.length > 0
       ? Math.round(activeSites.reduce((s, site) => s + site.progress, 0) / activeSites.length) : 0;
-    return { total: sitesWithProgress.length, active: activeSites.length, completed: completedSites.length, totalAmount, activeAmount, totalQty, totalDelivered, pendingQty, issueCount, avgProgress };
-  }, [sitesWithProgress, activeSites, completedSites]);
+    return { total: sitesWithProgress.length, active: activeSites.length, pending: pendingSites.length, completed: completedSites.length, totalAmount, activeAmount, pendingAmount, totalQty, totalDelivered, pendingQty, issueCount, avgProgress };
+  }, [sitesWithProgress, activeSites, pendingSites, completedSites]);
 
   const costCalcResult = useMemo(() => {
     const unitCost = Number(costPerUnit.replace(/,/g, ''));
@@ -163,7 +165,7 @@ const PartnerDashboard = () => {
 
           {/* 탭 */}
           <div className="flex gap-1" style={{borderBottom:"1px solid var(--border-base)"}}>
-            {([['active','진행중',stats.active],['completed','완료',stats.completed]] as const).map(([k,l,c]) => (
+            {([['active','진행중',stats.active],['pending','진행대기',stats.pending],['completed','완료',stats.completed]] as const).map(([k,l,c]) => (
               <button key={k} onClick={() => setTab(k)} className="px-4 py-2 text-sm font-medium -mb-px" style={{color: tab===k?'var(--brand)':'var(--text-muted)', borderBottom: tab===k?'2px solid var(--brand)':'2px solid transparent'}}>
                 {l} <span className="text-[10px] opacity-60">({c})</span>
               </button>

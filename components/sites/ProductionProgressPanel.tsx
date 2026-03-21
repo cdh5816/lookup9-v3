@@ -29,7 +29,6 @@ const elapsedDays = (date: string | null) => {
 export default function ProductionProgressPanel({
   site, canManage, onMutate, userRole,
 }: { site: any; canManage: boolean; onMutate: () => void; userRole?: string }) {
-  const isSystemAdmin = userRole === 'SUPER_ADMIN' || userRole === 'OWNER';
   const siteId = site?.id;
   const { data: ordersData, mutate: mutateOrders } = useSWR(
     siteId ? `/api/sites/${siteId}/production` : null, fetcher, { refreshInterval: 30000 }
@@ -91,37 +90,6 @@ export default function ProductionProgressPanel({
             <p className="text-[10px] mt-0.5" style={{color:'var(--text-muted)'}}>공급일 입력 시 출하탭에서 출하 정보를 등록해주세요</p>
           </div>
           <div className="flex items-center gap-1">
-            {isSystemAdmin && (
-            <label className="btn btn-ghost btn-xs gap-1 cursor-pointer" title="엑셀 일괄 업로드 (시스템관리자)">
-              <TableCellsIcon className="h-3.5 w-3.5" style={{color:'var(--warning-text)'}} />
-              <span className="text-[10px]" style={{color:'var(--warning-text)'}}>엑셀업로드</span>
-              <input type="file" accept=".csv,.tsv,.txt" className="hidden" onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const text = await file.text();
-                const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-                if (lines.length < 2) { alert('데이터가 없습니다.'); return; }
-                let imported = 0;
-                for (let i = 1; i < lines.length; i++) {
-                  const cols = lines[i].split(/\t|,/);
-                  const qty = cols[0]?.replace(/[^0-9.-]/g, '');
-                  if (!qty) continue;
-                  const orderDate = cols[1]?.trim() || null;
-                  const supplyDate = cols[2]?.trim() || null;
-                  const note = cols[3]?.trim() || '';
-                  await fetch(`/api/sites/${siteId}/production`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ quantity: Number(qty), orderDate, supplyDate, notes: note }),
-                  });
-                  imported++;
-                }
-                alert(`${imported}건 등록 완료`);
-                mutateOrders(); onMutate();
-                e.target.value = '';
-              }} />
-            </label>
-            )}
             <button className={`btn btn-ghost btn-xs ${viewMode === 'list' ? '' : 'opacity-40'}`} onClick={() => setViewMode('list')} title="리스트"><ListBulletIcon className="h-4 w-4" /></button>
             <button className={`btn btn-ghost btn-xs ${viewMode === 'table' ? '' : 'opacity-40'}`} onClick={() => setViewMode('table')} title="엑셀"><TableCellsIcon className="h-4 w-4" /></button>
           </div>

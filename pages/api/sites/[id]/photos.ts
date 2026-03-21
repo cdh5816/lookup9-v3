@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { getTeamMemberByUserId } from '@/lib/team-helper';
-import { verifySiteAccess } from '@/lib/server-common';
+import { verifySiteAccess } from '@/lib/team-helper';
 
 export const config = {
   api: {
@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { id } = req.query;
   if (!id || typeof id !== 'string') return res.status(400).json({ error: { message: 'Site ID required' } });
 
-  const access = await verifySiteAccess(tm, id);
+  const access = await verifySiteAccess(session.user.id, id as string);
   if (!access) return res.status(403).json({ error: { message: 'Site access denied' } });
 
   try {

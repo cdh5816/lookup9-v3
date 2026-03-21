@@ -7,29 +7,32 @@ import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 import {
   BuildingOffice2Icon, CurrencyDollarIcon,
-  ExclamationTriangleIcon, CheckCircleIcon,
-  CalculatorIcon,
+  CheckCircleIcon, CalculatorIcon, ChartBarIcon,
+  ClockIcon, TruckIcon, ArrowTrendingUpIcon,
 } from '@heroicons/react/24/outline';
 import PullToRefresh from '@/components/shared/PullToRefresh';
 
-const fmtNum = (v: any) => {
-  if (v === null || v === undefined) return '-';
-  return Number(v).toLocaleString('ko-KR');
-};
-const fmtMoney = (v: any) => {
-  if (!v) return '-';
-  const n = Number(v);
-  if (n >= 100000000) return `${(n / 100000000).toFixed(1)}억`;
-  if (n >= 10000) return `${Math.round(n / 10000).toLocaleString()}만`;
-  return n.toLocaleString();
-};
-const getDday = (dateVal: any) => {
-  if (!dateVal) return null;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const d = new Date(dateVal); d.setHours(0, 0, 0, 0);
-  return Math.ceil((d.getTime() - today.getTime()) / 86400000);
+const fmtNum = (v: any) => { if (v === null || v === undefined) return '-'; return Number(v).toLocaleString('ko-KR'); };
+const fmtMoney = (v: any) => { if (!v) return '-'; const n = Number(v); if (n >= 100000000) return `${(n / 100000000).toFixed(1)}억`; if (n >= 10000) return `${Math.round(n / 10000).toLocaleString()}만`; return n.toLocaleString(); };
+const getDday = (dateVal: any) => { if (!dateVal) return null; const today = new Date(); today.setHours(0,0,0,0); const d = new Date(dateVal); d.setHours(0,0,0,0); return Math.ceil((d.getTime() - today.getTime()) / 86400000); };
+
+// ── 링 차트 (SVG) ──
+const RingChart = ({ percent, size = 88, stroke = 8 }: { percent: number; size?: number; stroke?: number }) => {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (percent / 100) * circ;
+  const color = percent >= 80 ? '#22c55e' : percent >= 50 ? '#3b82f6' : '#eab308';
+  return (
+    <svg width={size} height={size} className="transform -rotate-90">
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--border-base)" strokeWidth={stroke} />
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+        style={{transition:'stroke-dashoffset 0.8s ease'}} />
+    </svg>
+  );
 };
 
+// ── 메인 ──
 const PartnerDashboard = () => {
   const { data: profileData, mutate: mutateProfile } = useSWR('/api/my/profile', fetcher, { refreshInterval: 30000 });
   const profile = profileData?.data || {};
@@ -64,14 +67,11 @@ const PartnerDashboard = () => {
   const stats = useMemo(() => {
     const totalAmount = sitesWithProgress.reduce((s, site) => s + Number(site.contractAmount || 0), 0);
     const activeAmount = activeSites.reduce((s, site) => s + Number(site.contractAmount || 0), 0);
-    const pendingAmount = pendingSites.reduce((s, site) => s + Number(site.contractAmount || 0), 0);
     const totalQty = activeSites.reduce((s, site) => s + site.qty, 0);
     const totalDelivered = activeSites.reduce((s, site) => s + site.delivered, 0);
     const pendingQty = totalQty - totalDelivered;
-    const issueCount = sitesWithProgress.filter(s => s.issues > 0).length;
-    const avgProgress = activeSites.length > 0
-      ? Math.round(activeSites.reduce((s, site) => s + site.progress, 0) / activeSites.length) : 0;
-    return { total: sitesWithProgress.length, active: activeSites.length, pending: pendingSites.length, completed: completedSites.length, totalAmount, activeAmount, pendingAmount, totalQty, totalDelivered, pendingQty, issueCount, avgProgress };
+    const avgProgress = activeSites.length > 0 ? Math.round(activeSites.reduce((s, site) => s + site.progress, 0) / activeSites.length) : 0;
+    return { total: sitesWithProgress.length, active: activeSites.length, pending: pendingSites.length, completed: completedSites.length, totalAmount, activeAmount, totalQty, totalDelivered, pendingQty, avgProgress };
   }, [sitesWithProgress, activeSites, pendingSites, completedSites]);
 
   const costCalcResult = useMemo(() => {
@@ -82,116 +82,163 @@ const PartnerDashboard = () => {
 
   const companyName = profile.company || '';
 
+  if (loading) return <div className="flex items-center justify-center py-20"><span className="loading loading-spinner loading-lg" style={{color:'var(--brand)'}} /></div>;
+
   return (
     <>
       <Head><title>시공내역 | LOOKUP9</title></Head>
       <PullToRefresh onRefresh={handleRefresh}>
-        <div className="space-y-4">
+        <div className="space-y-5">
+
+          {/* 헤더 */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs" style={{color:"var(--text-muted)"}}>{companyName}</p>
-              <h2 className="text-xl font-bold" style={{color:"var(--text-primary)"}}>시공내역</h2>
+              {companyName && <p className="text-[11px] font-medium" style={{color:'var(--brand)'}}>{companyName}</p>}
+              <h2 className="text-xl font-extrabold tracking-tight" style={{color:'var(--text-primary)'}}>시공내역</h2>
             </div>
-            <button className="btn btn-sm gap-1" style={{border:"1px solid var(--brand)",color:"var(--brand)"}} onClick={() => setShowCalc(v => !v)}>
-              <CalculatorIcon className="h-4 w-4" />{showCalc ? '닫기' : '시공비 계산'}
+            <button className="btn btn-sm gap-1.5 rounded-lg" style={{border:'1px solid var(--brand)',color:'var(--brand)',backgroundColor:'transparent'}} onClick={() => setShowCalc(v => !v)}>
+              <CalculatorIcon className="h-4 w-4" /><span className="text-xs">{showCalc ? '닫기' : '시공비'}</span>
             </button>
           </div>
 
-          {/* 핵심 지표 */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <StatCard icon={BuildingOffice2Icon} label="총 현장" value={`${stats.total}건`} sub={`진행 ${stats.active} · 완료 ${stats.completed}`} colorVar="--info-text" />
-            <StatCard icon={CurrencyDollarIcon} label="총 수주금액" value={`${fmtMoney(stats.totalAmount)}원`} sub={`진행중 ${fmtMoney(stats.activeAmount)}원`} colorVar="--success-text" />
-            <StatCard icon={ExclamationTriangleIcon} label="이슈 현장" value={`${stats.issueCount}건`} colorVar={stats.issueCount > 0 ? '--danger-text' : '--success-text'} danger={stats.issueCount > 0} />
-            <StatCard icon={CheckCircleIcon} label="평균 공정률" value={`${stats.avgProgress}%`} colorVar="--brand" progress={stats.avgProgress} />
-          </div>
-
-          {/* 물량 현황 */}
-          <div className="rounded-xl p-4" style={{border:"1px solid var(--border-base)",backgroundColor:"var(--bg-card)"}}>
-            <p className="text-xs font-semibold mb-3" style={{color:"var(--text-secondary)"}}>진행중 물량 현황</p>
-            <div className="grid grid-cols-3 gap-3 mb-3">
-              <QtyBox label="전체 계약" value={fmtNum(stats.totalQty)} unit="m²" />
-              <QtyBox label="납품 완료" value={fmtNum(stats.totalDelivered)} unit="m²" colorVar="--success-text" />
-              <QtyBox label="잔여 물량" value={fmtNum(stats.pendingQty)} unit="m²" colorVar="--warning-text" />
-            </div>
-            <div>
-              <div className="flex justify-between text-[11px] mb-1">
-                <span style={{color:"var(--text-muted)"}}>전체 진행률</span>
-                <span className="font-bold" style={{color:"var(--brand)"}}>{stats.avgProgress}%</span>
+          {/* 공정률 + 핵심 지표 */}
+          <div className="rounded-2xl p-5" style={{background:'linear-gradient(135deg, var(--bg-card), var(--bg-surface))',border:'1px solid var(--border-base)',boxShadow:'0 1px 3px rgba(0,0,0,0.06)'}}>
+            <div className="flex items-center gap-5">
+              <div className="relative shrink-0">
+                <RingChart percent={stats.avgProgress} />
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-xl font-black tabular-nums" style={{color:'var(--text-primary)'}}>{stats.avgProgress}</span>
+                  <span className="text-[9px] -mt-0.5" style={{color:'var(--text-muted)'}}>%</span>
+                </div>
               </div>
-              <div className="h-2.5 rounded-full overflow-hidden" style={{backgroundColor:"var(--border-base)"}}>
-                <div className="h-full rounded-full bg-blue-500 transition-all" style={{width:`${stats.avgProgress}%`}} />
+              <div className="flex-1 grid grid-cols-2 gap-x-4 gap-y-2.5">
+                <MiniStat icon={BuildingOffice2Icon} label="진행중" value={`${stats.active}건`} color="var(--info-text)" />
+                <MiniStat icon={CurrencyDollarIcon} label="수주금액" value={`${fmtMoney(stats.activeAmount)}원`} color="var(--success-text)" />
+                <MiniStat icon={TruckIcon} label="납품완료" value={`${fmtNum(stats.totalDelivered)}m²`} color="var(--brand)" />
+                <MiniStat icon={ClockIcon} label="잔여물량" value={`${fmtNum(stats.pendingQty)}m²`} color="var(--warning-text)" />
+              </div>
+            </div>
+            <div className="mt-4 pt-3" style={{borderTop:'1px solid var(--border-base)'}}>
+              <div className="flex justify-between text-[10px] mb-1.5">
+                <span style={{color:'var(--text-muted)'}}>납품 {fmtNum(stats.totalDelivered)} / 계약 {fmtNum(stats.totalQty)} m²</span>
+                <span className="font-bold" style={{color:'var(--brand)'}}>{stats.totalQty > 0 ? Math.round((stats.totalDelivered / stats.totalQty) * 100) : 0}%</span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{backgroundColor:'var(--border-base)'}}>
+                <div className="h-full rounded-full transition-all" style={{width:`${stats.totalQty > 0 ? Math.min(100, (stats.totalDelivered / stats.totalQty) * 100) : 0}%`, background:'linear-gradient(90deg, #3b82f6, #22c55e)'}} />
               </div>
             </div>
           </div>
 
           {/* 시공비 계산기 */}
           {showCalc && (
-            <div className="rounded-xl p-4 slide-up" style={{border:"1px solid var(--info-border)",backgroundColor:"var(--info-bg)"}}>
-              <p className="text-xs font-semibold mb-3" style={{color:"var(--info-text)"}}>
-                <CalculatorIcon className="h-3.5 w-3.5 inline mr-1" />시공비 계산기
+            <div className="rounded-2xl p-4" style={{border:'1px solid var(--info-border)',backgroundColor:'var(--info-bg)'}}>
+              <p className="text-xs font-bold mb-3" style={{color:'var(--info-text)'}}>
+                <CalculatorIcon className="h-3.5 w-3.5 inline mr-1 -mt-0.5" />시공비 계산기
               </p>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-sm shrink-0" style={{color:"var(--text-secondary)"}}>m² 당 시공비</span>
-                <input type="text" className="input input-bordered input-sm flex-1" placeholder="예) 15000" value={costPerUnit} onChange={e => setCostPerUnit(e.target.value.replace(/[^0-9]/g, ''))} inputMode="numeric" />
-                <span className="text-sm shrink-0" style={{color:"var(--text-muted)"}}>원</span>
+                <span className="text-xs shrink-0" style={{color:'var(--text-secondary)'}}>m²당</span>
+                <input type="text" className="input input-bordered input-sm flex-1 rounded-lg" placeholder="15,000" value={costPerUnit} onChange={e => setCostPerUnit(e.target.value.replace(/[^0-9]/g, ''))} inputMode="numeric" />
+                <span className="text-xs shrink-0" style={{color:'var(--text-muted)'}}>원</span>
               </div>
               {costCalcResult && (
                 <div className="grid grid-cols-3 gap-2">
-                  <CalcBox label="전체 시공비" value={`${fmtMoney(costCalcResult.totalCost)}원`} sub={`${fmtNum(stats.totalQty)}m² × ${fmtNum(Number(costPerUnit))}원`} />
-                  <CalcBox label="시공 완료분" value={`${fmtMoney(costCalcResult.deliveredCost)}원`} colorVar="--success-text" />
-                  <CalcBox label="잔여분" value={`${fmtMoney(costCalcResult.pendingCost)}원`} colorVar="--warning-text" />
+                  {[
+                    { l: '전체', v: costCalcResult.totalCost, c: 'var(--text-primary)' },
+                    { l: '완료분', v: costCalcResult.deliveredCost, c: 'var(--success-text)' },
+                    { l: '잔여분', v: costCalcResult.pendingCost, c: 'var(--warning-text)' },
+                  ].map(item => (
+                    <div key={item.l} className="rounded-lg py-2 px-2 text-center" style={{backgroundColor:'var(--bg-card)',border:'1px solid var(--border-base)'}}>
+                      <p className="text-sm font-bold" style={{color:item.c}}>{fmtMoney(item.v)}원</p>
+                      <p className="text-[9px] mt-0.5" style={{color:'var(--text-muted)'}}>{item.l}</p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           )}
 
-          {/* ── 연도별 계약금액 ── */}
-          <YearlySummary sites={sitesWithProgress} />
-
-          {/* ── 직원별 진행중 현장 금액 ── */}
-          <ManagerSummary sites={sitesWithProgress} />
-
-          {/* ── 현장별 공정률 그래프 ── */}
-          <div className="rounded-xl p-4" style={{border:"1px solid var(--border-base)",backgroundColor:"var(--bg-card)"}}>
-            <p className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{color:"var(--text-muted)"}}>현장별 공정률</p>
-            {activeSites.length === 0 ? (
-              <p className="text-sm py-4 text-center" style={{color:"var(--text-muted)"}}>진행중인 현장이 없습니다.</p>
-            ) : (
-              <div className="space-y-2.5">
-                {[...activeSites].sort((a,b) => b.progress - a.progress).map(site => (
-                  <div key={site.id}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium truncate flex-1 mr-2" style={{color:"var(--text-primary)"}}>{site.name}</span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {site.siteManager && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{backgroundColor:'var(--bg-hover)',color:'var(--text-muted)'}}>{site.siteManager}</span>}
-                        <span className="text-xs font-bold tabular-nums" style={{color:"var(--brand)"}}>{site.progress}%</span>
+          {/* 현장별 공정률 바 차트 */}
+          {activeSites.length > 0 && (
+            <div className="rounded-2xl p-5" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <ChartBarIcon className="h-4 w-4" style={{color:'var(--brand)'}} />
+                  <p className="text-xs font-bold" style={{color:'var(--text-primary)'}}>현장별 공정률</p>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{backgroundColor:'var(--info-bg)',color:'var(--info-text)',border:'1px solid var(--info-border)'}}>{activeSites.length}건 진행중</span>
+              </div>
+              <div className="space-y-3">
+                {[...activeSites].sort((a,b) => b.progress - a.progress).map((site, idx) => {
+                  const barColor = site.progress >= 80 ? '#22c55e' : site.progress >= 50 ? '#3b82f6' : site.progress >= 20 ? '#eab308' : '#94a3b8';
+                  const ddayLabel = site.dday !== null ? (site.dday < 0 ? `D+${Math.abs(site.dday)}` : site.dday === 0 ? 'D-Day' : `D-${site.dday}`) : null;
+                  return (
+                    <div key={site.id}>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <span className="text-[10px] font-bold w-4 text-center shrink-0" style={{color:'var(--text-muted)'}}>{idx + 1}</span>
+                          <span className="text-xs font-semibold truncate" style={{color:'var(--text-primary)'}}>{site.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          {ddayLabel && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{
+                              color: site.dday !== null && site.dday < 0 ? 'var(--danger-text)' : site.dday !== null && site.dday <= 14 ? 'var(--warning-text)' : 'var(--text-muted)',
+                              backgroundColor: site.dday !== null && site.dday < 0 ? 'var(--danger-bg)' : site.dday !== null && site.dday <= 14 ? 'var(--warning-bg)' : 'transparent',
+                            }}>{ddayLabel}</span>
+                          )}
+                          <span className="text-xs font-black tabular-nums w-10 text-right" style={{color:barColor}}>{site.progress}%</span>
+                        </div>
+                      </div>
+                      <div className="h-2.5 rounded-full overflow-hidden" style={{backgroundColor:'var(--border-base)'}}>
+                        <div className="h-full rounded-full transition-all" style={{width:`${site.progress}%`,backgroundColor:barColor}} />
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5 pl-5">
+                        <span className="text-[10px] tabular-nums" style={{color:'var(--text-muted)'}}>{fmtNum(site.delivered)}/{fmtNum(site.qty)}m²</span>
+                        {site.contractAmount > 0 && <span className="text-[10px]" style={{color:'var(--info-text)'}}>{fmtMoney(site.contractAmount)}원</span>}
                       </div>
                     </div>
-                    <div className="h-2 rounded-full overflow-hidden" style={{backgroundColor:"var(--border-base)"}}>
-                      <div className={`h-full rounded-full transition-all ${site.progress>=100?'bg-blue-500':site.progress>=60?'bg-green-500':site.progress>=30?'bg-yellow-500':'bg-gray-500'}`} style={{width:`${site.progress}%`}} />
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px]" style={{color:"var(--text-muted)"}}>{fmtNum(site.delivered)}/{fmtNum(site.qty)} m²</span>
-                      {site.contractAmount && <span className="text-[10px]" style={{color:"var(--info-text)"}}>{fmtMoney(site.contractAmount)}원</span>}
-                      {site.settlementAmount && Number(site.settlementAmount) > 0 && <span className="text-[10px]" style={{color:"var(--warning-text)"}}>실정 {fmtMoney(site.settlementAmount)}원</span>}
-                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 직원별 진행중 현장 금액 */}
+          <ManagerSummary sites={sitesWithProgress} />
+
+          {/* 연도별 계약금액 */}
+          <YearlySummary sites={sitesWithProgress} />
+
+          {/* 진행대기 */}
+          {pendingSites.length > 0 && (
+            <div className="rounded-2xl p-4" style={{border:'1px solid var(--warning-border)',backgroundColor:'var(--warning-bg)'}}>
+              <div className="flex items-center gap-2 mb-3">
+                <ClockIcon className="h-4 w-4" style={{color:'var(--warning-text)'}} />
+                <p className="text-xs font-bold" style={{color:'var(--warning-text)'}}>진행대기</p>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{backgroundColor:'var(--warning-text)',color:'#fff'}}>{pendingSites.length}</span>
+              </div>
+              <div className="space-y-2">
+                {pendingSites.map(site => (
+                  <div key={site.id} className="flex items-center justify-between rounded-lg px-3 py-2" style={{backgroundColor:'rgba(255,255,255,0.5)',border:'1px solid var(--warning-border)'}}>
+                    <span className="text-xs font-medium truncate flex-1" style={{color:'var(--text-primary)'}}>{site.name}</span>
+                    <span className="text-xs font-bold shrink-0 ml-2" style={{color:'var(--warning-text)'}}>{fmtMoney(site.contractAmount)}원</span>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* ── 진행대기 현장 ── */}
-          {pendingSites.length > 0 && (
-            <div className="rounded-xl p-4" style={{border:"1px solid var(--warning-border)",backgroundColor:"var(--warning-bg)"}}>
-              <p className="text-xs font-semibold mb-2" style={{color:"var(--warning-text)"}}>진행대기 ({pendingSites.length}건)</p>
-              <div className="space-y-1.5">
-                {pendingSites.map(site => (
-                  <div key={site.id} className="flex items-center justify-between">
-                    <span className="text-xs" style={{color:"var(--text-primary)"}}>{site.name}</span>
-                    <span className="text-xs font-medium" style={{color:"var(--warning-text)"}}>{fmtMoney(site.contractAmount)}원</span>
-                  </div>
-                ))}
+          {/* 완료 요약 */}
+          {completedSites.length > 0 && (
+            <div className="rounded-2xl p-4" style={{border:'1px solid var(--success-border)',backgroundColor:'var(--success-bg)'}}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircleIcon className="h-4 w-4" style={{color:'var(--success-text)'}} />
+                  <p className="text-xs font-bold" style={{color:'var(--success-text)'}}>완료 현장</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-sm font-black" style={{color:'var(--success-text)'}}>{completedSites.length}건</span>
+                  <span className="text-[10px] ml-2" style={{color:'var(--text-muted)'}}>{fmtMoney(completedSites.reduce((s, site) => s + Number(site.contractAmount || 0), 0))}원</span>
+                </div>
               </div>
             </div>
           )}
@@ -201,79 +248,69 @@ const PartnerDashboard = () => {
   );
 };
 
-const StatCard = ({ icon: Icon, label, value, sub, colorVar, danger, progress }: any) => (
-  <div className="rounded-xl p-3.5" style={{border: danger?'1px solid var(--danger-border)':'1px solid var(--border-base)', backgroundColor: danger?'var(--danger-bg)':'var(--bg-card)'}}>
-    <div className="flex items-center gap-1.5 mb-1.5"><Icon className="h-3.5 w-3.5" style={{color:`var(${colorVar})`}} /><span className="text-[10px] font-medium" style={{color:"var(--text-muted)"}}>{label}</span></div>
-    <p className="text-lg font-bold leading-tight" style={{color:`var(${colorVar})`}}>{value}</p>
-    {sub && <p className="text-[10px] mt-0.5" style={{color:"var(--text-muted)"}}>{sub}</p>}
-    {progress !== undefined && <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{backgroundColor:"var(--border-base)"}}><div className="h-full rounded-full bg-blue-500" style={{width:`${progress}%`}} /></div>}
-  </div>
-);
-const QtyBox = ({ label, value, unit, colorVar }: { label: string; value: string; unit: string; colorVar?: string }) => (
-  <div className="text-center">
-    <p className="text-lg font-bold" style={{color: colorVar ? `var(${colorVar})` : 'var(--text-primary)'}}>{value}</p>
-    <p className="text-[10px]" style={{color:"var(--text-muted)"}}>{label} ({unit})</p>
-  </div>
-);
-const CalcBox = ({ label, value, sub, colorVar }: { label: string; value: string; sub?: string; colorVar?: string }) => (
-  <div className="rounded-lg px-2 py-2 text-center" style={{backgroundColor:"var(--bg-card)",border:"1px solid var(--border-base)"}}>
-    <p className="text-sm font-bold" style={{color: colorVar ? `var(${colorVar})` : 'var(--text-primary)'}}>{value}</p>
-    <p className="text-[9px]" style={{color:"var(--text-muted)"}}>{label}</p>
-    {sub && <p className="text-[8px] mt-0.5" style={{color:"var(--text-muted)"}}>{sub}</p>}
+const MiniStat = ({ icon: Icon, label, value, color }: any) => (
+  <div className="flex items-center gap-2">
+    <Icon className="h-3.5 w-3.5 shrink-0" style={{color}} />
+    <div className="min-w-0">
+      <p className="text-[10px] leading-tight" style={{color:'var(--text-muted)'}}>{label}</p>
+      <p className="text-sm font-bold leading-tight truncate" style={{color}}>{value}</p>
+    </div>
   </div>
 );
 
-// ── 연도별 계약금액 요약 ──
+// ── 연도별 실적 ──
 const YearlySummary = ({ sites }: { sites: any[] }) => {
   const yearData = useMemo(() => {
-    const map: Record<string, { count: number; amount: number; qty: number; settlement: number }> = {};
+    const map: Record<string, { count: number; amount: number; qty: number }> = {};
     sites.forEach(s => {
       const year = s.contractDate ? new Date(s.contractDate).getFullYear().toString() : (s.createdAt ? new Date(s.createdAt).getFullYear().toString() : '미분류');
-      if (!map[year]) map[year] = { count: 0, amount: 0, qty: 0, settlement: 0 };
+      if (!map[year]) map[year] = { count: 0, amount: 0, qty: 0 };
       map[year].count++;
       map[year].amount += Number(s.contractAmount || 0);
       map[year].qty += Number(s.contractQuantity || 0);
-      map[year].settlement += Number(s.settlementAmount || 0);
     });
     return Object.entries(map).sort((a, b) => b[0].localeCompare(a[0]));
   }, [sites]);
-
   if (yearData.length === 0) return null;
+  const maxAmt = Math.max(...yearData.map(([, d]) => d.amount));
   return (
-    <div className="rounded-xl p-4" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
-      <p className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{color:'var(--text-muted)'}}>연도별 계약 현황</p>
-      <div className="space-y-2">
-        {yearData.map(([year, d]) => (
-          <div key={year} className="flex items-center justify-between rounded-lg px-3 py-2.5" style={{border:'1px solid var(--border-base)'}}>
-            <div>
-              <span className="text-sm font-bold" style={{color:'var(--text-primary)'}}>{year}년</span>
-              <span className="text-[10px] ml-2" style={{color:'var(--text-muted)'}}>{d.count}건</span>
-            </div>
-            <div className="text-right">
-              <p className="text-sm font-bold" style={{color:'var(--success-text)'}}>{fmtMoney(d.amount)}원</p>
-              <div className="flex gap-3 text-[10px]" style={{color:'var(--text-muted)'}}>
-                <span>{fmtNum(d.qty)}m²</span>
-                {d.settlement > 0 && <span style={{color:'var(--warning-text)'}}>실정 {fmtMoney(d.settlement)}원</span>}
+    <div className="rounded-2xl p-5" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+      <div className="flex items-center gap-2 mb-4">
+        <ArrowTrendingUpIcon className="h-4 w-4" style={{color:'var(--success-text)'}} />
+        <p className="text-xs font-bold" style={{color:'var(--text-primary)'}}>연도별 실적</p>
+      </div>
+      <div className="space-y-3">
+        {yearData.map(([year, d]) => {
+          const pct = maxAmt > 0 ? Math.round((d.amount / maxAmt) * 100) : 0;
+          return (
+            <div key={year}>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-sm font-black" style={{color:'var(--text-primary)'}}>{year}</span>
+                  <span className="text-[10px]" style={{color:'var(--text-muted)'}}>{d.count}건 · {fmtNum(d.qty)}m²</span>
+                </div>
+                <span className="text-sm font-bold tabular-nums" style={{color:'var(--success-text)'}}>{fmtMoney(d.amount)}원</span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{backgroundColor:'var(--border-base)'}}>
+                <div className="h-full rounded-full transition-all" style={{width:`${pct}%`,background:'linear-gradient(90deg, #22c55e, #16a34a)'}} />
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 };
 
-// ── 협력사 직원별 현장 금액 (진행중만) ──
+// ── 직원별 진행중 현장 금액 ──
+const MEMBER_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6', '#6366f1'];
 const ManagerSummary = ({ sites }: { sites: any[] }) => {
   const memberData = useMemo(() => {
-    // 진행중 현장만
     const activeSites = sites.filter(s => s.status === 'CONTRACT_ACTIVE');
     const map: Record<string, { name: string; position: string; count: number; amount: number; qty: number; sites: string[] }> = {};
-
     activeSites.forEach(s => {
       const partnerAssigns = (s.assignments || []).filter((a: any) => a.assignedRole === 'PARTNER');
       if (partnerAssigns.length === 0) return;
-
       partnerAssigns.forEach((a: any) => {
         const uid = a.userId;
         const name = a.user?.name || '이름없음';
@@ -285,39 +322,42 @@ const ManagerSummary = ({ sites }: { sites: any[] }) => {
         map[uid].sites.push(s.name);
       });
     });
-
     return Object.entries(map).sort((a, b) => b[1].amount - a[1].amount);
   }, [sites]);
-
   if (memberData.length === 0) return null;
   const totalAmt = memberData.reduce((s, [, d]) => s + d.amount, 0);
-
   return (
-    <div className="rounded-xl p-4" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
-      <p className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{color:'var(--text-muted)'}}>직원별 진행중 현장 금액</p>
-      <div className="space-y-2">
-        {memberData.map(([uid, d]) => {
+    <div className="rounded-2xl p-5" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+      <div className="flex items-center gap-2 mb-4">
+        <CurrencyDollarIcon className="h-4 w-4" style={{color:'var(--brand)'}} />
+        <p className="text-xs font-bold" style={{color:'var(--text-primary)'}}>직원별 진행중 현장</p>
+      </div>
+      <div className="space-y-2.5">
+        {memberData.map(([uid, d], idx) => {
           const pct = totalAmt > 0 ? Math.round((d.amount / totalAmt) * 100) : 0;
+          const color = MEMBER_COLORS[idx % MEMBER_COLORS.length];
           return (
-            <div key={uid} className="rounded-lg px-3 py-2.5" style={{border:'1px solid var(--border-base)'}}>
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-2">
-                  <div className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{backgroundColor:'var(--info-bg)',color:'var(--info-text)'}}>{d.name.charAt(0)}</div>
+            <div key={uid} className="rounded-xl px-3.5 py-3" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-surface)'}}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0" style={{backgroundColor:color}}>{d.name.charAt(0)}</div>
                   <div>
-                    <span className="text-sm font-semibold" style={{color:'var(--text-primary)'}}>{d.name}</span>
-                    {d.position && <span className="text-[10px] ml-1" style={{color:'var(--text-muted)'}}>{d.position}</span>}
-                    <span className="text-[10px] ml-1.5" style={{color:'var(--text-muted)'}}>{d.count}건</span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-sm font-bold" style={{color:'var(--text-primary)'}}>{d.name}</span>
+                      {d.position && <span className="text-[10px]" style={{color:'var(--text-muted)'}}>{d.position}</span>}
+                    </div>
+                    <p className="text-[10px]" style={{color:'var(--text-muted)'}}>{d.count}건 · {fmtNum(d.qty)}m²</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold" style={{color:'var(--success-text)'}}>{fmtMoney(d.amount)}원</p>
-                  {d.qty > 0 && <p className="text-[10px]" style={{color:'var(--text-muted)'}}>{fmtNum(d.qty)}m²</p>}
+                  <p className="text-base font-black tabular-nums" style={{color}}>{fmtMoney(d.amount)}원</p>
+                  <p className="text-[10px] font-bold" style={{color:'var(--text-muted)'}}>{pct}%</p>
                 </div>
               </div>
               <div className="h-1.5 rounded-full overflow-hidden" style={{backgroundColor:'var(--border-base)'}}>
-                <div className="h-full rounded-full transition-all" style={{width:`${pct}%`,backgroundColor:'var(--brand)'}} />
+                <div className="h-full rounded-full transition-all" style={{width:`${pct}%`,backgroundColor:color}} />
               </div>
-              <p className="text-[9px] mt-1 truncate" style={{color:'var(--text-muted)'}}>{d.sites.join(' · ')}</p>
+              <p className="text-[9px] mt-1.5 truncate" style={{color:'var(--text-muted)'}}>{d.sites.join(' · ')}</p>
             </div>
           );
         })}

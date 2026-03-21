@@ -137,7 +137,7 @@ const Login: NextPageWithLayout<
               type="text"
               label="아이디"
               name="username"
-              placeholder="아이디를 입력하세요"
+              placeholder="아이디 입력"
               value={formik.values.username}
               error={formik.touched.username ? formik.errors.username : undefined}
               onChange={formik.handleChange}
@@ -146,7 +146,7 @@ const Login: NextPageWithLayout<
               <InputWithLabel
                 type={isPasswordVisible ? 'text' : 'password'}
                 name="password"
-                placeholder={t('password')}
+                placeholder="비밀번호 입력"
                 value={formik.values.password}
                 label={
                   <label className="label">
@@ -154,8 +154,8 @@ const Login: NextPageWithLayout<
                     <span className="label-text-alt">
                       <Link
                         href="/auth/forgot-password"
-                        className="text-xs hover:opacity-80"
-                        style={{color:'#60A5FA'}}
+                        className="hover:opacity-80"
+                        style={{color:'#3b82f6', fontSize:'10px', fontWeight: 500}}
                       >
                         {t('forgot-password')}
                       </Link>
@@ -173,16 +173,15 @@ const Login: NextPageWithLayout<
               />
             </div>
 
-            {/* 자동 로그인 체크박스 */}
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            {/* 자동 로그인 */}
+            <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
                 className="checkbox checkbox-sm checkbox-primary"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
               />
-              <span className="text-sm" style={{color:'#A1A1AA'}}>자동 로그인</span>
-              <span className="text-xs" style={{color:'#52525B'}}>(체크 해제 시 브라우저 종료 후 자동 로그아웃)</span>
+              <span style={{fontSize:'11px', color:'#52525b'}}>자동 로그인</span>
             </label>
 
             <GoogleReCAPTCHA
@@ -191,7 +190,7 @@ const Login: NextPageWithLayout<
               siteKey={recaptchaSiteKey}
             />
           </div>
-          <div className="mt-6">
+          <div className="mt-5">
             <Button
               type="submit"
               color="primary"

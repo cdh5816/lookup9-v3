@@ -255,21 +255,22 @@ const SitesList = () => {
           ) : tab === 'all' ? (
             /* ── 전체 탭: 그룹별로 묶어서 표시 ── */
             <div className="space-y-3">
-              {/* 진행중 (기본 펼침) */}
+              {/* 진행중 — 기본 펼침 */}
               {activeSites.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 px-1 mb-1.5">
-                    <span className="w-2 h-2 rounded-full bg-green-500" />
-                    <span className="text-xs font-semibold" style={{color:"var(--success-text)"}}>진행중</span>
-                    <span className="text-[10px]" style={{color:"var(--text-muted)"}}>({activeSites.length}건)</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {activeSites
-                      .filter(s => !alertOnly || ['critical','warning'].includes(getAlertLevel(s)))
-                      .sort((a,b) => LEVEL_ORDER[getAlertLevel(a)] - LEVEL_ORDER[getAlertLevel(b)])
-                      .map(site => <SiteCard key={site.id} site={site} />)}
-                  </div>
-                </div>
+                <CollapsibleSection
+                  label="진행중"
+                  count={activeSites.length}
+                  dotColor="bg-green-500"
+                  bgVar="--success-bg"
+                  borderVar="--success-border"
+                  textVar="--success-text"
+                  defaultOpen={true}
+                >
+                  {activeSites
+                    .filter(s => !alertOnly || ['critical','warning'].includes(getAlertLevel(s)))
+                    .sort((a,b) => LEVEL_ORDER[getAlertLevel(a)] - LEVEL_ORDER[getAlertLevel(b)])
+                    .map(site => <SiteCard key={site.id} site={site} />)}
+                </CollapsibleSection>
               )}
 
               {/* 영업중 — 접이식 */}

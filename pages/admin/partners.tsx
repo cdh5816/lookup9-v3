@@ -254,15 +254,6 @@ const PartnerCompaniesPage = () => {
  ) : (
  <>
  <button
- className="btn btn-ghost btn-xs gap-1 text-blue-400"
- onClick={() => {
- setShowSiteAssign(showSiteAssign === company.id ? null : company.id);
- setExpandedId(company.id);
- }}
- >
- 현장배정
- </button>
- <button
  className="btn btn-ghost btn-xs gap-1"
  onClick={() => {
  setShowMemberForm(company.id);
@@ -286,40 +277,7 @@ const PartnerCompaniesPage = () => {
  </div>
  </div>
 
- {/* 현장 배정 패널 */}
- {showSiteAssign === company.id && (
- <div className="border-t bg-blue-950/10 px-4 py-3">
- <p className="text-xs font-bold text-blue-300 uppercase tracking-wide mb-2">현장 배정</p>
- <p className="text-xs text-gray-400 mb-3">
- 체크한 현장에 이 업체의 모든 계정이 자동으로 접근할 수 있습니다.
- </p>
- {sites.length === 0 ? (
- <p className="text-xs text-gray-500">진행중인 현장이 없습니다.</p>
- ) : (
- <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
- {sites.map((site: any) => {
- const assigned = assignedSiteIds.includes(site.id);
- return (
- <label key={site.id} className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${assigned ? 'border-blue-700/50 bg-blue-950/20' : ' '}`}>
- <input
- type="checkbox"
- className="checkbox checkbox-sm checkbox-primary"
- checked={assigned}
- disabled={assigningSite}
- onChange={() => handleAssignSite(company.id, site.id, assigned)}
- />
- <div className="min-w-0">
- <p className="font-medium truncate text-xs">{site.name}</p>
- <p className="text-[10px] text-gray-500">{STATUS_LABEL[site.status] || site.status}</p>
- </div>
- </label>
- );
- })}
- </div>
- )}
- <button className="btn btn-ghost btn-xs mt-3" onClick={() => setShowSiteAssign(null)}>닫기</button>
- </div>
- )}
+ {/* 현장 배정은 현장상세에서 시공업체 지정으로 처리됩니다 */}
 
  {/* 소속 계정 목록 (펼침) */}
  {isExpanded && (

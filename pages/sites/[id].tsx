@@ -1746,7 +1746,7 @@ const PdfParseModal = ({ siteId, siteName, isOverwrite, convertToActive, onClose
 
  return (
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
- <div className="w-full max-w-xl rounded-2xl border shadow-2xl">
+ <div className="w-full max-w-xl rounded-2xl" style={{backgroundColor:'var(--bg-elevated)',border:'1px solid var(--border-base)',boxShadow:'var(--shadow-elevated)'}}>
 
  {/* 헤더 */}
  <div className="flex items-center justify-between border-b px-5 py-4">

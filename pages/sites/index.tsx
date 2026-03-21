@@ -215,7 +215,7 @@ const SitesList = () => {
                 type="text"
                 className="input input-bordered input-sm w-full pl-9"
                 style={{backgroundColor:"var(--input-bg)"}}
-                placeholder="현장명, 수요기관, 시공업체, 규격, 담당자..."
+                placeholder="현장명, 수요기관 검색..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
@@ -400,7 +400,7 @@ const SiteCard = ({ site, dimmed = false }: { site: any; dimmed?: boolean }) => 
   const subParts = [
     site.client?.name,
     site.specification || site.productName,
-    site.installerName || site.salesOwner || site.salesPm,
+    site.salesOwner || site.salesPm || site.createdBy?.name,
   ].filter(Boolean);
 
   return (

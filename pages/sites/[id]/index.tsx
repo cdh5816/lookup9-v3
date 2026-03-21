@@ -53,8 +53,8 @@ const HIDDEN_BY_SITE_TYPE: Record<string, string[]> = {
 };
 const HIDDEN_BY_ROLE: Record<string, string[]> = {
  PARTNER: ['settlement'],
- GUEST: ['production', 'painting', 'shipping', 'settlement', 'timeline'],
- VIEWER: ['production', 'painting', 'shipping', 'settlement', 'timeline'],
+ GUEST: ['production', 'painting', 'shipping', 'settlement', 'requests', 'timeline'],
+ VIEWER: ['production', 'painting', 'shipping', 'settlement', 'requests', 'timeline'],
 };
 
 // ── 메인 ──────────────────────────────────────────────
@@ -135,7 +135,7 @@ export default function SiteDetail() {
 
  {/* ── 탭 콘텐츠 ── */}
  <div className="pt-4 space-y-4">
- {activeTab === 'overview' && <OverviewTab site={site} siteId={id as string} canManage={canManage} userRole={userRole} onMutate={mutate} />}
+ {activeTab === 'overview' && <OverviewTab site={site} siteId={id as string} canManage={canManage} onMutate={mutate} />}
  {activeTab === 'production' && <ProductionProgressPanel site={site} canManage={canManage} onMutate={mutate} />}
  {activeTab === 'painting' && <PaintTab siteId={id as string} specs={site.paintSpecs || []} canManage={canManage} onMutate={mutate} />}
  {activeTab === 'shipping' && <ShippingTab siteId={id as string} shipments={site.shipments || []} canManage={canManage} onMutate={mutate} />}
@@ -324,8 +324,7 @@ const siteStatuses = [
 ];
 const siteTypes = ['납품설치도', '납품하차도'];
 
-function OverviewTab({ site, siteId, canManage, userRole, onMutate }: any) {
- const isGuestOrViewer = userRole === 'GUEST' || userRole === 'VIEWER';
+function OverviewTab({ site, siteId, canManage, onMutate }: any) {
  const [editing, setEditing] = useState(false);
  const [showHistory, setShowHistory] = useState(false);
  const [form, setForm] = useState({
@@ -596,12 +595,10 @@ function OverviewTab({ site, siteId, canManage, userRole, onMutate }: any) {
  )}
 
  {/* 배정 인원 (관리 가능) */}
- <AssignmentPanel siteId={siteId} assignments={site.assignments} canManage={canManage} userRole={userRole} onMutate={onMutate} />
+ <AssignmentPanel siteId={siteId} assignments={site.assignments} canManage={canManage} onMutate={onMutate} />
 
- {/* 시공업체 — 게스트/뷰어에게 숨김 */}
- {!isGuestOrViewer && (
- <ContractorPanel site={site} siteId={siteId} canManage={canManage} userRole={userRole} onMutate={onMutate} />
- )}
+ {/* 시공업체 */}
+ <ContractorPanel site={site} siteId={siteId} canManage={canManage} onMutate={onMutate} />
  </div>
  );
 }
@@ -1147,7 +1144,7 @@ function TimelineTab({ siteId, canManage }: any) {
 // ══════════════════════════════════════════════════════
 // 배정 패널 (협력사 생성 버튼 없음)
 // ══════════════════════════════════════════════════════
-function AssignmentPanel({ siteId, assignments, canManage, userRole, onMutate }: any) {
+function AssignmentPanel({ siteId, assignments, canManage, onMutate }: any) {
  const [showSearch, setShowSearch] = useState(false);
  const [sq, setSq] = useState('');
  const [sr, setSr] = useState<any[]>([]);
@@ -1207,18 +1204,11 @@ function AssignmentPanel({ siteId, assignments, canManage, userRole, onMutate }:
  ) : (
  <div className="space-y-1">
  {assignments.map((a: any) => (
- <div key={a.id} className="flex items-center justify-between py-1.5">
- <div className="flex-1 min-w-0">
+ <div key={a.id} className="flex items-center justify-between py-1">
  <p className="text-sm" style={{color:'var(--text-primary)'}}>
  {a.user.position ? `${a.user.position} ` : ''}{a.user.name}
  <span className="ml-2 text-xs" style={{color:'var(--text-muted)'}}>{a.user.department || ''}</span>
  </p>
- {a.user.phone && (
- <a href={`tel:${a.user.phone}`} className="text-xs mt-0.5 block" style={{color:'var(--info-text)'}}>
- {a.user.phone}
- </a>
- )}
- </div>
  {canManage && (
  <button className="btn btn-ghost btn-xs text-error" onClick={() => handleRemove(a.user.id)}>
  <TrashIcon className="h-3.5 w-3.5" />
@@ -1235,9 +1225,7 @@ function AssignmentPanel({ siteId, assignments, canManage, userRole, onMutate }:
 // ══════════════════════════════════════════════════════
 // 시공업체 패널
 // ══════════════════════════════════════════════════════
-function ContractorPanel({ site, siteId, canManage, userRole, onMutate }: any) {
- const isPartner = userRole === 'PARTNER';
- const canEditContractor = canManage && !isPartner;
+function ContractorPanel({ site, siteId, canManage, onMutate }: any) {
  const [editing, setEditing] = useState(false);
  const [form, setForm] = useState({
  installerName: site.installerName || '',
@@ -1289,7 +1277,7 @@ function ContractorPanel({ site, siteId, canManage, userRole, onMutate }: any) {
  <div className="rounded-xl p-4" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
  <div className="flex items-center justify-between mb-3">
  <p className="text-xs font-medium" style={{color:'var(--text-muted)'}}>시공업체</p>
- {canEditContractor && !editing && (
+ {canManage && !editing && (
  <button className="btn btn-ghost btn-xs" onClick={() => { setEditing(true); setShowDropdown(false); }}>수정</button>
  )}
  </div>

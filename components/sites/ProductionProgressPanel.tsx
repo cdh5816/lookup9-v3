@@ -192,25 +192,77 @@ function ExcelEditTable({ siteId, orders, shipBySeq, contractQty, canManage, onM
   const addNewRow = () => setNewRows(prev => [...prev, { quantity: '', orderDate: '', supplyDate: '', notes: '' }]);
   const removeNewRow = (idx: number) => setNewRows(prev => prev.filter((_, i) => i !== idx));
 
-  // 엑셀 붙여넣기 핸들러 — 탭 구분 (물량\t발주일\t공급일\t비고)
+  // 엑셀 붙여넣기 — 자동 컬럼 감지
+  // 지원 형식:
+  // A) 물량\t발주일\t공급일\t비고 (4열)
+  // B) 차수\t물량\t발주일\t공급일\t경과일\t비고 (6열 — 실제 엑셀 캡처 형식)
+  // C) 차수\t물량\t물량업\t발주일\t공급일\t경과일\t비고 (7열)
   const handlePaste = (e: React.ClipboardEvent) => {
     const text = e.clipboardData.getData('text/plain').trim();
     if (!text) return;
     const lines = text.split('\n').filter(l => l.trim());
     if (lines.length < 1) return;
-    // 탭 구분이 있는 경우에만 처리 (일반 텍스트 입력은 무시)
     const hasTabs = lines.some(l => l.includes('\t'));
-    if (!hasTabs && lines.length === 1) return; // 단일 값은 기본 동작 유지
+    if (!hasTabs && lines.length === 1) return;
     e.preventDefault();
+
+    const isDate = (s: string) => /^\d{4}[-./]\d{1,2}[-./]\d{1,2}$/.test(s.trim());
+    const isNum = (s: string) => /^[\d,.]+$/.test(s.replace(/\s/g, ''));
+    const hasSeq = (s: string) => /차|샘플|실물/.test(s);
+
     const parsed = lines.map(line => {
       const cols = line.split('\t').map(c => c.trim());
+      // 헤더행/합계행/공제행 스킵
+      if (cols[0] === '차수' || cols[0] === '합계' || cols[0] === '공제') return null;
+      // 빈 행 스킵
+      if (cols.every(c => !c || c === '-')) return null;
+
+      let seq = '', qty = '', orderDate = '', supplyDate = '', notes = '';
+
+      if (cols.length >= 6 && hasSeq(cols[0])) {
+        // B/C 형식: 차수\t물량\t[물량업]\t발주일\t공급일\t경과일\t비고
+        seq = cols[0];
+        qty = cols[1] || '';
+        // cols[2]가 날짜면 발주일, 아니면 물량업(스킵)
+        let dateStart = 2;
+        if (!isDate(cols[2]) && cols.length >= 7) dateStart = 3; // 물량업 컬럼 있음
+        orderDate = cols[dateStart] || '';
+        supplyDate = cols[dateStart + 1] || '';
+        // 경과일 스킵 — 비고는 마지막 비숫자 컬럼에서 찾기
+        notes = '';
+        for (let i = cols.length - 1; i >= dateStart + 2; i--) {
+          const v = cols[i];
+          if (v && v !== '-' && !/^[\d,.]+$/.test(v) && !isDate(v)) { notes = v; break; }
+        }
+      } else if (cols.length >= 4 && isNum(cols[0])) {
+        // A 형식: 물량\t발주일\t공급일\t비고
+        qty = cols[0];
+        orderDate = cols[1] || '';
+        supplyDate = cols[2] || '';
+        notes = cols[3] || '';
+      } else if (cols.length >= 2) {
+        // 기타: 첫 번째 숫자를 물량으로, 날짜 찾기
+        for (const c of cols) {
+          if (!qty && isNum(c)) { qty = c; continue; }
+          if (!orderDate && isDate(c)) { orderDate = c; continue; }
+          if (orderDate && !supplyDate && isDate(c)) { supplyDate = c; continue; }
+          if (!notes && c && !isNum(c) && !isDate(c) && !hasSeq(c)) notes = c;
+        }
+        if (!qty && hasSeq(cols[0])) seq = cols[0];
+      }
+
+      // 물량 정리
+      qty = qty.replace(/[^0-9.]/g, '');
+      if (!qty || Number(qty) <= 0) return null;
+
       return {
-        quantity: (cols[0] || '').replace(/[^0-9.]/g, ''),
-        orderDate: parseKorDate(cols[1] || ''),
-        supplyDate: parseKorDate(cols[2] || ''),
-        notes: cols[3] || '',
+        quantity: qty,
+        orderDate: parseKorDate(orderDate),
+        supplyDate: parseKorDate(supplyDate),
+        notes: (seq ? seq + ' ' : '') + notes,
       };
-    }).filter(r => r.quantity || r.orderDate);
+    }).filter(Boolean) as any[];
+
     if (parsed.length > 0) {
       setNewRows(prev => [...prev, ...parsed]);
     }

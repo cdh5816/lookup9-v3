@@ -108,6 +108,13 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
         orderBy: { createdAt: 'desc' }, take: 1,
         select: { status: true, estimateAmount: true, meetingNotes: true, createdAt: true },
       },
+      assignments: {
+        select: {
+          userId: true,
+          assignedRole: true,
+          user: { select: { id: true, name: true, position: true } },
+        },
+      },
       _count: { select: { issues: true, documents: true, requests: true } },
     },
     orderBy: { updatedAt: 'desc' },

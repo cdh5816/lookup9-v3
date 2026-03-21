@@ -57,7 +57,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const role = user?.teamMembers?.[0]?.role || 'USER';
   const teamName = user?.teamMembers?.[0]?.team?.name || null;
-  const companyDisplayName = user?.company || teamName || 'LOOKUP9';
+
+  // 좌측 상단 회사명 결정:
+  // PARTNER/GUEST → user.company (협력사/게스트 소속 회사명)
+  // COMPANY_ADMIN/내부직원 → team.name (본사명)
+  const isExtRole = ['PARTNER', 'GUEST', 'VIEWER'].includes(role);
+  const companyDisplayName = isExtRole
+    ? (user?.company || teamName || 'LOOKUP9')
+    : (teamName || user?.company || 'LOOKUP9');
+
   const permissions = getPermissionFlags(role, user?.department);
 
   return res.status(200).json({

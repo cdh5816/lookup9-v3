@@ -136,7 +136,7 @@ export default function SiteDetail() {
  {/* ── 탭 콘텐츠 ── */}
  <div className="pt-4 space-y-4">
  {activeTab === 'overview' && <OverviewTab site={site} siteId={id as string} canManage={canManage} userRole={userRole} onMutate={mutate} />}
- {activeTab === 'production' && <ProductionProgressPanel site={site} canManage={canManage} onMutate={mutate} />}
+ {activeTab === 'production' && <ProductionProgressPanel site={site} canManage={canManage} onMutate={mutate} userRole={userRole} />}
  {activeTab === 'painting' && <PaintTab siteId={id as string} specs={site.paintSpecs || []} canManage={canManage} onMutate={mutate} />}
  {activeTab === 'shipping' && <ShippingTab siteId={id as string} shipments={site.shipments || []} canManage={canManage} onMutate={mutate} />}
  {activeTab === 'settlement' && <SettlementTab siteId={id as string} canManage={canManage} onMutate={mutate} />}
@@ -222,7 +222,7 @@ function SiteHeader({ site, canDelete, onDelete, onTabChange }: any) {
  </div>
  </div>
 
- {/* 핵심 지표 4칸 */}
+ {/* 핵심 지표 */}
  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
  {[
  { label: '계약금액', value: fmtMoney(contractAmt), colorVar: '--success-text' },
@@ -235,6 +235,26 @@ function SiteHeader({ site, canDelete, onDelete, onTabChange }: any) {
  <p className="text-sm font-bold truncate" style={{color:`var(${item.colorVar})`}}>{item.value}</p>
  </div>
  ))}
+ </div>
+
+ {/* 담당자 + 실정보고 */}
+ <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+ <div className="rounded-lg px-3 py-2.5" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+ <p className="text-[10px] mb-1" style={{color:'var(--text-muted)'}}>담당자 (PM)</p>
+ <p className="text-sm font-medium truncate" style={{color:'var(--text-primary)'}}>{site.siteManager || '-'}</p>
+ </div>
+ <div className="rounded-lg px-3 py-2.5" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+ <p className="text-[10px] mb-1" style={{color:'var(--text-muted)'}}>실정보고 금액</p>
+ <p className="text-sm font-bold truncate" style={{color: site.settlementAmount ? 'var(--warning-text)' : 'var(--text-muted)'}}>{fmtMoney(site.settlementAmount) || '-'}</p>
+ </div>
+ <div className="rounded-lg px-3 py-2.5" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+ <p className="text-[10px] mb-1" style={{color:'var(--text-muted)'}}>영업담당</p>
+ <p className="text-sm font-medium truncate" style={{color:'var(--text-primary)'}}>{site.salesOwner || '-'}</p>
+ </div>
+ <div className="rounded-lg px-3 py-2.5" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+ <p className="text-[10px] mb-1" style={{color:'var(--text-muted)'}}>시공업체</p>
+ <p className="text-sm font-medium truncate" style={{color:'var(--text-primary)'}}>{site.installerName || '-'}</p>
+ </div>
  </div>
 
  {/* 공정률 바 */}
@@ -336,6 +356,9 @@ function OverviewTab({ site, siteId, canManage, userRole, onMutate }: any) {
  description: site.description || '',
  deliveryDeadline: site.deliveryDeadline ? site.deliveryDeadline.split('T')[0] : '',
  contractAmount: site.contractAmount ? String(Number(site.contractAmount)) : '',
+ siteManager: site.siteManager || '',
+ settlementAmount: site.settlementAmount ? String(Number(site.settlementAmount)) : '',
+ settlementNote: site.settlementNote || '',
  startDocsDone: site.startDocsDone || false,
  completionDocsDone: site.completionDocsDone || false,
  changeReason: '',
@@ -361,6 +384,7 @@ function OverviewTab({ site, siteId, canManage, userRole, onMutate }: any) {
  body: JSON.stringify({
  ...form,
  contractAmount: form.contractAmount ? Number(form.contractAmount.replace(/,/g, '')) : null,
+ settlementAmount: form.settlementAmount ? Number(form.settlementAmount.replace(/,/g, '')) : null,
  deliveryDeadline: form.deliveryDeadline || null,
  }),
  });
@@ -412,27 +436,39 @@ function OverviewTab({ site, siteId, canManage, userRole, onMutate }: any) {
  <div className="space-y-3">
  <div className="grid grid-cols-2 gap-3">
  <div>
- <label className="block text-[10px] text-gray-500 mb-1">계약금액 (원)</label>
+ <label className="block text-[10px] mb-1" style={{color:'var(--text-muted)'}}>계약금액 (원)</label>
  <input className="input input-bordered input-sm w-full"
  placeholder="50,000,000"
  value={form.contractAmount ? Number(form.contractAmount.replace(/,/g, '')).toLocaleString() : ''}
  onChange={e => setForm({ ...form, contractAmount: e.target.value.replace(/,/g, '') })} />
  </div>
  <div>
- <label className="block text-[10px] text-gray-500 mb-1">납품기한</label>
+ <label className="block text-[10px] mb-1" style={{color:'var(--text-muted)'}}>납품기한</label>
  <input type="date" className="input input-bordered input-sm w-full"
  value={form.deliveryDeadline}
  onChange={e => setForm({ ...form, deliveryDeadline: e.target.value })} />
  </div>
  <div>
- <label className="block text-[10px] text-gray-500 mb-1">현장 상태</label>
+ <label className="block text-[10px] mb-1" style={{color:'var(--text-muted)'}}>담당자 (PM)</label>
+ <input className="input input-bordered input-sm w-full" placeholder="홍길동"
+ value={form.siteManager}
+ onChange={e => setForm({ ...form, siteManager: e.target.value })} />
+ </div>
+ <div>
+ <label className="block text-[10px] mb-1" style={{color:'var(--warning-text)'}}>실정보고 금액 (원)</label>
+ <input className="input input-bordered input-sm w-full" placeholder="0"
+ value={form.settlementAmount ? Number(form.settlementAmount.replace(/,/g, '')).toLocaleString() : ''}
+ onChange={e => setForm({ ...form, settlementAmount: e.target.value.replace(/,/g, '') })} />
+ </div>
+ <div>
+ <label className="block text-[10px] mb-1" style={{color:'var(--text-muted)'}}>현장 상태</label>
  <select className="select select-bordered select-sm w-full" value={form.status}
  onChange={e => setForm({ ...form, status: e.target.value })}>
  {siteStatuses.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
  </select>
  </div>
  <div>
- <label className="block text-[10px] text-gray-500 mb-1">납품유형</label>
+ <label className="block text-[10px] mb-1" style={{color:'var(--text-muted)'}}>납품유형</label>
  <select className="select select-bordered select-sm w-full" value={form.siteType}
  onChange={e => setForm({ ...form, siteType: e.target.value })}>
  {siteTypes.map(t => <option key={t} value={t}>{t}</option>)}
@@ -440,7 +476,13 @@ function OverviewTab({ site, siteId, canManage, userRole, onMutate }: any) {
  </div>
  </div>
  <div>
- <label className="block text-[10px] text-gray-500 mb-1">변경 사유 (납기일 연장 등)</label>
+ <label className="block text-[10px] mb-1" style={{color:'var(--text-muted)'}}>실정보고 비고</label>
+ <input className="input input-bordered input-sm w-full" placeholder="실정보고 관련 메모"
+ value={form.settlementNote}
+ onChange={e => setForm({ ...form, settlementNote: e.target.value })} />
+ </div>
+ <div>
+ <label className="block text-[10px] mb-1" style={{color:'var(--text-muted)'}}>변경 사유 (납기일 연장 등)</label>
  <input className="input input-bordered input-sm w-full" placeholder="사유 입력"
  value={form.changeReason} onChange={e => setForm({ ...form, changeReason: e.target.value })} />
  </div>

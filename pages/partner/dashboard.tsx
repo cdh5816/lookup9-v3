@@ -155,6 +155,12 @@ const PartnerDashboard = () => {
             </div>
           )}
 
+          {/* ── 연도별 계약금액 ── */}
+          <YearlySummary sites={sitesWithProgress} />
+
+          {/* ── 담당자별 현장금액 ── */}
+          <ManagerSummary sites={sitesWithProgress} />
+
           {/* 탭 */}
           <div className="flex gap-1" style={{borderBottom:"1px solid var(--border-base)"}}>
             {([['active','진행중',stats.active],['completed','완료',stats.completed]] as const).map(([k,l,c]) => (
@@ -225,6 +231,8 @@ const SiteRow = ({ site, costPerUnit }: { site: any; costPerUnit: number }) => {
           {site.contractAmount && <span className="text-xs font-medium" style={{color:"var(--info-text)"}}>{fmtMoney(site.contractAmount)}원</span>}
           {site.qty > 0 && <span className="text-xs" style={{color:"var(--text-muted)"}}>{fmtNum(site.qty)}m²</span>}
           {siteCost && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{backgroundColor:"var(--info-bg)",color:"var(--info-text)",border:"1px solid var(--info-border)"}}>시공비 {fmtMoney(siteCost)}원</span>}
+          {site.siteManager && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{backgroundColor:'var(--bg-hover)',color:'var(--text-secondary)',border:'1px solid var(--border-base)'}}>담당: {site.siteManager}</span>}
+          {site.settlementAmount && Number(site.settlementAmount) > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{backgroundColor:'var(--warning-bg)',color:'var(--warning-text)',border:'1px solid var(--warning-border)'}}>실정 {fmtMoney(site.settlementAmount)}원</span>}
         </div>
         <div className="flex items-center gap-2 mt-2 pl-4">
           {site.qty > 0 && (
@@ -244,6 +252,98 @@ const SiteRow = ({ site, costPerUnit }: { site: any; costPerUnit: number }) => {
         </div>
       </div>
     </Link>
+  );
+};
+
+// ── 연도별 계약금액 요약 ──
+const YearlySummary = ({ sites }: { sites: any[] }) => {
+  const yearData = useMemo(() => {
+    const map: Record<string, { count: number; amount: number; qty: number; settlement: number }> = {};
+    sites.forEach(s => {
+      const year = s.contractDate ? new Date(s.contractDate).getFullYear().toString() : (s.createdAt ? new Date(s.createdAt).getFullYear().toString() : '미분류');
+      if (!map[year]) map[year] = { count: 0, amount: 0, qty: 0, settlement: 0 };
+      map[year].count++;
+      map[year].amount += Number(s.contractAmount || 0);
+      map[year].qty += Number(s.contractQuantity || 0);
+      map[year].settlement += Number(s.settlementAmount || 0);
+    });
+    return Object.entries(map).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [sites]);
+
+  if (yearData.length === 0) return null;
+  return (
+    <div className="rounded-xl p-4" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+      <p className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{color:'var(--text-muted)'}}>연도별 계약 현황</p>
+      <div className="space-y-2">
+        {yearData.map(([year, d]) => (
+          <div key={year} className="flex items-center justify-between rounded-lg px-3 py-2.5" style={{border:'1px solid var(--border-base)'}}>
+            <div>
+              <span className="text-sm font-bold" style={{color:'var(--text-primary)'}}>{year}년</span>
+              <span className="text-[10px] ml-2" style={{color:'var(--text-muted)'}}>{d.count}건</span>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold" style={{color:'var(--success-text)'}}>{fmtMoney(d.amount)}원</p>
+              <div className="flex gap-3 text-[10px]" style={{color:'var(--text-muted)'}}>
+                <span>{fmtNum(d.qty)}m²</span>
+                {d.settlement > 0 && <span style={{color:'var(--warning-text)'}}>실정 {fmtMoney(d.settlement)}원</span>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ── 담당자별 현장금액 요약 ──
+const ManagerSummary = ({ sites }: { sites: any[] }) => {
+  const managerData = useMemo(() => {
+    const map: Record<string, { count: number; amount: number; qty: number; settlement: number; sites: string[] }> = {};
+    sites.forEach(s => {
+      const mgr = s.siteManager || '미지정';
+      if (!map[mgr]) map[mgr] = { count: 0, amount: 0, qty: 0, settlement: 0, sites: [] };
+      map[mgr].count++;
+      map[mgr].amount += Number(s.contractAmount || 0);
+      map[mgr].qty += Number(s.contractQuantity || 0);
+      map[mgr].settlement += Number(s.settlementAmount || 0);
+      map[mgr].sites.push(s.name);
+    });
+    return Object.entries(map).sort((a, b) => b[1].amount - a[1].amount);
+  }, [sites]);
+
+  if (managerData.length === 0) return null;
+  const totalAmt = managerData.reduce((s, [, d]) => s + d.amount, 0);
+
+  return (
+    <div className="rounded-xl p-4" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+      <p className="text-xs font-semibold mb-3 uppercase tracking-wider" style={{color:'var(--text-muted)'}}>담당자별 현장 금액</p>
+      <div className="space-y-2">
+        {managerData.map(([name, d]) => {
+          const pct = totalAmt > 0 ? Math.round((d.amount / totalAmt) * 100) : 0;
+          return (
+            <div key={name} className="rounded-lg px-3 py-2.5" style={{border:'1px solid var(--border-base)'}}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{backgroundColor:'var(--info-bg)',color:'var(--info-text)'}}>{name.charAt(0)}</div>
+                  <div>
+                    <span className="text-sm font-semibold" style={{color: name === '미지정' ? 'var(--text-muted)' : 'var(--text-primary)'}}>{name}</span>
+                    <span className="text-[10px] ml-1.5" style={{color:'var(--text-muted)'}}>{d.count}건</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold" style={{color:'var(--success-text)'}}>{fmtMoney(d.amount)}원</p>
+                  {d.settlement > 0 && <p className="text-[10px]" style={{color:'var(--warning-text)'}}>실정 {fmtMoney(d.settlement)}원</p>}
+                </div>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{backgroundColor:'var(--border-base)'}}>
+                <div className="h-full rounded-full transition-all" style={{width:`${pct}%`,backgroundColor:'var(--brand)'}} />
+              </div>
+              <p className="text-[9px] mt-1 truncate" style={{color:'var(--text-muted)'}}>{d.sites.join(' · ')}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 };
 

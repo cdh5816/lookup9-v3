@@ -330,6 +330,13 @@ model Site {
   installerContact  String?                      // 협력사 담당자
   installerPhone    String?                      // 협력사 연락처
 
+  // ── 현장 담당자 (내부 PM) ──
+  siteManager       String?                      // 담당자명 (내부 직원)
+
+  // ── 실정보고 ──
+  settlementAmount  Decimal? @db.Decimal(15, 0)  // 실정보고 금액
+  settlementNote    String?  @db.Text            // 실정보고 비고
+
   // ── 착수/준공 서류 ──
   startDocsDone     Boolean  @default(false)     // 착수계 제출 여부
   startDocsDate     DateTime?                    // 착수계 제출일

@@ -3,17 +3,22 @@ import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 const TogglePasswordVisibility = ({
   isPasswordVisible,
   handlePasswordVisibility,
+}: {
+  isPasswordVisible: boolean;
+  handlePasswordVisibility: () => void;
 }) => {
   return (
     <button
       onClick={handlePasswordVisibility}
-      className="flex pointer items-center text-white absolute right-3 top-[50px]"
+      className="flex items-center absolute right-3"
+      style={{ bottom: '12px', color: '#52525b' }}
       type="button"
+      tabIndex={-1}
     >
       {!isPasswordVisible ? (
-        <EyeIcon className="h-6 w-4 text-primary" />
+        <EyeIcon style={{ width: '18px', height: '18px' }} />
       ) : (
-        <EyeSlashIcon className="h-6 w-4 text-primary" />
+        <EyeSlashIcon style={{ width: '18px', height: '18px' }} />
       )}
     </button>
   );

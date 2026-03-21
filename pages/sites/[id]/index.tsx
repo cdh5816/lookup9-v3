@@ -42,11 +42,11 @@ const getDday = (deadline: any) => {
 };
 
 // ── 탭 정의 (이슈/변경/이력 제거, 댓글→타임라인) ──
-const ALL_TABS = ['overview', 'production', 'painting', 'shipping', 'settlement', 'documents', 'requests', 'timeline'];
+const ALL_TABS = ['overview', 'production', 'painting', 'shipping', 'settlement', 'documents', 'photos', 'requests', 'timeline'];
 const TAB_LABELS: Record<string, string> = {
  overview: '개요', production: '생산', painting: '도장',
  shipping: '출하', settlement: '실정/정산', documents: '서류',
- requests: '요청', timeline: '업무일지',
+ photos: '사진', requests: '요청', timeline: '업무일지',
 };
 const HIDDEN_BY_SITE_TYPE: Record<string, string[]> = {
  '납품하차도': ['painting'],
@@ -141,6 +141,7 @@ export default function SiteDetail() {
  {activeTab === 'shipping' && <ShippingTab siteId={id as string} shipments={site.shipments || []} canManage={canManage} onMutate={mutate} />}
  {activeTab === 'settlement' && <SettlementTab siteId={id as string} canManage={canManage} onMutate={mutate} />}
  {activeTab === 'documents' && <DocumentTab siteId={id as string} canManage={canManage} />}
+ {activeTab === 'photos' && <PhotoGalleryTab siteId={id as string} canManage={canManage} userRole={userRole} />}
  {activeTab === 'requests' && <RequestTab siteId={id as string} requests={site.requests || []} canManage={canManage} onMutate={mutate} />}
  {activeTab === 'timeline' && <TimelineTab siteId={id as string} canManage={canManage} />}
  </div>
@@ -1385,6 +1386,181 @@ function ContractorPanel({ site, siteId, canManage, userRole, onMutate }: any) {
  ) : (
  <p className="text-sm" style={{color:'var(--text-muted)'}}>등록된 시공업체가 없습니다.</p>
  )
+ )}
+ </div>
+ );
+}
+
+
+// ══════════════════════════════════════════════════════
+// 사진 갤러리 탭
+// ══════════════════════════════════════════════════════
+const PHOTO_CATEGORIES = [
+ { value: 'PROGRESS', label: '공정사진' },
+ { value: 'BEFORE', label: '시공 전' },
+ { value: 'AFTER', label: '시공 후' },
+ { value: 'DEFECT', label: '하자' },
+ { value: 'DELIVERY', label: '납품/출하' },
+ { value: 'OTHER', label: '기타' },
+];
+
+function PhotoGalleryTab({ siteId, canManage, userRole }: { siteId: string; canManage: boolean; userRole: string }) {
+ const { data, mutate } = useSWR(`/api/sites/${siteId}/photos`, fetcher);
+ const photos: any[] = data?.data || [];
+ const [uploading, setUploading] = useState(false);
+ const [filter, setFilter] = useState('ALL');
+ const [lightbox, setLightbox] = useState<any>(null);
+ const [caption, setCaption] = useState('');
+ const [category, setCategory] = useState('PROGRESS');
+
+ const canUpload = canManage || userRole === 'GUEST';
+
+ const filtered = filter === 'ALL' ? photos : photos.filter(p => p.category === filter);
+
+ const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+ const files = e.target.files;
+ if (!files || files.length === 0) return;
+ setUploading(true);
+
+ for (let i = 0; i < files.length; i++) {
+ const file = files[i];
+ if (!file.type.startsWith('image/')) continue;
+ if (file.size > 5 * 1024 * 1024) { alert(`${file.name}: 5MB 초과`); continue; }
+
+ const base64 = await new Promise<string>((resolve) => {
+ const reader = new FileReader();
+ reader.onload = () => resolve(reader.result as string);
+ reader.readAsDataURL(file);
+ });
+
+ await fetch(`/api/sites/${siteId}/photos`, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({
+ fileData: base64,
+ fileName: file.name,
+ fileSize: file.size,
+ caption,
+ category,
+ }),
+ });
+ }
+
+ setCaption('');
+ setUploading(false);
+ mutate();
+ e.target.value = '';
+ };
+
+ const handleDelete = async (photoId: string) => {
+ if (!confirm('사진을 삭제하시겠습니까?')) return;
+ await fetch(`/api/sites/${siteId}/photos`, {
+ method: 'DELETE',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ photoId }),
+ });
+ setLightbox(null);
+ mutate();
+ };
+
+ return (
+ <div className="space-y-4">
+ {/* 업로드 영역 */}
+ {canUpload && (
+ <div className="rounded-xl p-4" style={{border:'1px solid var(--border-base)',backgroundColor:'var(--bg-card)'}}>
+ <p className="text-xs font-semibold mb-3" style={{color:'var(--text-primary)'}}>사진 업로드</p>
+ <div className="flex flex-wrap items-end gap-3">
+ <div className="flex-1 min-w-[140px]">
+ <label className="block text-[11px] mb-1" style={{color:'var(--text-muted)'}}>카테고리</label>
+ <select className="select select-bordered select-sm w-full" value={category} onChange={e => setCategory(e.target.value)}>
+ {PHOTO_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+ </select>
+ </div>
+ <div className="flex-1 min-w-[140px]">
+ <label className="block text-[11px] mb-1" style={{color:'var(--text-muted)'}}>설명 (선택)</label>
+ <input className="input input-bordered input-sm w-full" placeholder="사진 설명" value={caption} onChange={e => setCaption(e.target.value)} />
+ </div>
+ <label className={`btn btn-primary btn-sm gap-1 cursor-pointer ${uploading ? 'loading' : ''}`}>
+ <PlusIcon className="h-3.5 w-3.5" />
+ {uploading ? '업로드 중...' : '사진 선택'}
+ <input type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} disabled={uploading} />
+ </label>
+ </div>
+ <p className="text-[10px] mt-2" style={{color:'var(--text-muted)'}}>최대 5MB · JPG/PNG/HEIC · 여러 장 동시 업로드 가능</p>
+ </div>
+ )}
+
+ {/* 필터 */}
+ <div className="flex gap-1 flex-wrap">
+ <button onClick={() => setFilter('ALL')} className="px-3 py-1.5 text-xs rounded-full transition" style={{
+ backgroundColor: filter === 'ALL' ? 'var(--brand-light)' : 'transparent',
+ color: filter === 'ALL' ? 'var(--brand)' : 'var(--text-muted)',
+ border: `1px solid ${filter === 'ALL' ? 'var(--brand)' : 'var(--border-base)'}`,
+ }}>전체 ({photos.length})</button>
+ {PHOTO_CATEGORIES.map(c => {
+ const cnt = photos.filter(p => p.category === c.value).length;
+ if (cnt === 0) return null;
+ return (
+ <button key={c.value} onClick={() => setFilter(c.value)} className="px-3 py-1.5 text-xs rounded-full transition" style={{
+ backgroundColor: filter === c.value ? 'var(--brand-light)' : 'transparent',
+ color: filter === c.value ? 'var(--brand)' : 'var(--text-muted)',
+ border: `1px solid ${filter === c.value ? 'var(--brand)' : 'var(--border-base)'}`,
+ }}>{c.label} ({cnt})</button>
+ );
+ })}
+ </div>
+
+ {/* 갤러리 그리드 */}
+ {filtered.length === 0 ? (
+ <div className="rounded-xl py-12 text-center" style={{border:'2px dashed var(--border-base)'}}>
+ <p className="text-sm" style={{color:'var(--text-muted)'}}>등록된 사진이 없습니다.</p>
+ {canUpload && <p className="text-xs mt-1" style={{color:'var(--text-muted)'}}>위에서 사진을 업로드해주세요.</p>}
+ </div>
+ ) : (
+ <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+ {filtered.map(photo => (
+ <div key={photo.id} className="relative group cursor-pointer rounded-lg overflow-hidden" style={{aspectRatio:'1',border:'1px solid var(--border-base)'}} onClick={() => setLightbox(photo)}>
+ <img src={photo.fileUrl} alt={photo.caption || ''} className="w-full h-full object-cover" loading="lazy" />
+ <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-end">
+ <div className="w-full p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+ <p className="text-[10px] text-white truncate">{photo.caption || PHOTO_CATEGORIES.find(c => c.value === photo.category)?.label}</p>
+ <p className="text-[9px] text-white/60">{photo.uploadedBy?.name} · {new Date(photo.createdAt).toLocaleDateString('ko-KR')}</p>
+ </div>
+ </div>
+ {/* 카테고리 배지 */}
+ <div className="absolute top-1.5 left-1.5">
+ <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{backgroundColor:'rgba(0,0,0,0.6)',color:'#fff'}}>
+ {PHOTO_CATEGORIES.find(c => c.value === photo.category)?.label}
+ </span>
+ </div>
+ </div>
+ ))}
+ </div>
+ )}
+
+ {/* 라이트박스 */}
+ {lightbox && (
+ <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.85)'}} onClick={() => setLightbox(null)}>
+ <div className="relative max-w-3xl max-h-[85vh] w-full" onClick={e => e.stopPropagation()}>
+ <img src={lightbox.fileUrl} alt={lightbox.caption || ''} className="w-full max-h-[75vh] object-contain rounded-lg" />
+ <div className="mt-3 flex items-start justify-between gap-4">
+ <div>
+ {lightbox.caption && <p className="text-sm text-white">{lightbox.caption}</p>}
+ <p className="text-xs text-white/50 mt-1">
+ {PHOTO_CATEGORIES.find(c => c.value === lightbox.category)?.label} · {lightbox.uploadedBy?.position ? `${lightbox.uploadedBy.position} ` : ''}{lightbox.uploadedBy?.name} · {new Date(lightbox.createdAt).toLocaleDateString('ko-KR')}
+ </p>
+ </div>
+ <div className="flex gap-2 shrink-0">
+ {canManage && (
+ <button className="btn btn-error btn-xs" onClick={() => handleDelete(lightbox.id)}>
+ <TrashIcon className="h-3.5 w-3.5" />
+ </button>
+ )}
+ <button className="btn btn-ghost btn-xs text-white" onClick={() => setLightbox(null)}>닫기</button>
+ </div>
+ </div>
+ </div>
+ </div>
  )}
  </div>
  );

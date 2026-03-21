@@ -10,8 +10,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const tm = await getTeamMemberByUserId(session.user.id);
   if (!tm) return res.status(403).json({ error: { message: 'No team membership' } });
 
-  // MANAGER 이상만 삭제 가능
-  const allowedRoles = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER'];
+  // MANAGER 이상 + PARTNER도 삭제 가능
+  const allowedRoles = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER', 'PARTNER'];
   if (!allowedRoles.includes(tm.role)) {
     return res.status(403).json({ error: { message: '게스트 삭제 권한이 없습니다.' } });
   }

@@ -61,34 +61,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             contentBlock,
             {
               type: 'text',
-              text: `이 이미지/문서는 건설 현장의 생산(발주) 데이터 표입니다.
-표에서 각 행의 데이터를 추출해주세요.
+              text: `이 이미지는 건설 현장의 생산(발주) 물량 관리 표입니다.
+정확하게 모든 데이터를 추출해주세요.
 
-반드시 아래 JSON 형식으로만 응답해주세요 (다른 텍스트 없이 JSON만):
+반드시 아래 JSON 형식으로만 응답하세요 (설명 없이 JSON만):
 {
-  "orders": [
+  "siteName": "운정4초",
+  "deliveryDeadline": "2025-10-20",
+  "tables": [
     {
-      "sequence": "1차",
-      "quantity": 475.69,
-      "orderDate": "2025-09-08",
-      "supplyDate": "2025-09-23",
-      "notes": ""
+      "label": "AL 3T",
+      "orders": [
+        {
+          "sequence": "1차",
+          "quantity": 475.69,
+          "orderDate": "2025-09-08",
+          "supplyDate": "2025-09-23",
+          "notes": ""
+        }
+      ],
+      "deduction": 29.86,
+      "totalQuantity": 4036.69,
+      "contractQuantity": 4327.00,
+      "orderRate": "93.3%"
     }
-  ],
-  "summary": {
-    "totalQuantity": 4036.69,
-    "contractQuantity": 4327.00
-  }
+  ]
 }
 
-규칙:
-- sequence: "1차", "2차", "8-1차" 등 원본 그대로
-- quantity: 숫자만 (콤마 제거)
-- orderDate, supplyDate: YYYY-MM-DD 형식 (없으면 null)
-- notes: 비고란 내용 (없으면 빈 문자열)
-- "합계", "공제" 행은 orders에 포함하지 마세요
-- summary.totalQuantity: 합계 행의 물량
-- summary.contractQuantity: 계약 수량 (있으면)`
+중요 규칙:
+1. siteName: 표 왼쪽 상단의 현장명 (예: "운정4초", "울주군립병원", "축구종합센터 실내체육관")
+2. deliveryDeadline: "납기:" 옆의 날짜 (YYYY-MM-DD)
+3. tables: 이미지에 2개 표가 나란히 있으면 tables 배열에 2개 넣기 (예: AL 3T와 GI 1.6T)
+4. label: 표가 여러 개일 때 구분자 (예: "AL 3T", "GI 1.6T"). 1개면 빈 문자열
+5. sequence: "1차", "2차", "8-1차", "17-3차", "샘플 1-1차", "1-1차" 등 원본 그대로
+6. quantity: 숫자 (콤마 제거). 소수점 유지
+7. orderDate: 발주일 (YYYY-MM-DD). 없으면 null
+8. supplyDate: 공급일 (YYYY-MM-DD). 없으면 null
+9. notes: 비고란 (예: "9차 8페이지", "1.6T 앵글", "10차 삭제분", "재제작분", "일반")
+
+제외 규칙:
+- "합계" 행 → totalQuantity에만 넣고 orders에 넣지 마세요
+- "공제" 행 → deduction에만 넣고 orders에 넣지 마세요  
+- 물량이 비어있는 행(차수만 있고 숫자 없는 행) → 건너뛰세요
+- "실물1", "실물2" 행 → notes에 "실물" 표시하고 orders에 포함
+- 하단 요약(계약/발주/오차/오차율) → contractQuantity, orderRate에 넣기
+
+경과일 컬럼은 무시하세요 (자동 계산됨).`
             },
           ],
         }],
@@ -111,23 +129,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       parsed = JSON.parse(cleaned);
     } catch {
       return res.status(200).json({
-        data: { orders: [], raw: aiText, message: '파싱 결과를 인식하지 못했습니다. 이미지가 선명한지 확인해주세요.' },
+        data: { tables: [], raw: aiText, message: '파싱 결과를 인식하지 못했습니다. 이미지가 선명한지 확인해주세요.' },
       });
     }
 
-    if (!parsed.orders || !Array.isArray(parsed.orders) || parsed.orders.length === 0) {
+    // 새 포맷 (tables) 또는 구 포맷 (orders) 호환
+    let tables = parsed.tables;
+    if (!tables && parsed.orders) {
+      tables = [{ label: '', orders: parsed.orders, totalQuantity: parsed.summary?.totalQuantity, contractQuantity: parsed.summary?.contractQuantity }];
+    }
+
+    if (!tables || !Array.isArray(tables) || tables.length === 0) {
       return res.status(200).json({
-        data: { orders: [], raw: aiText, message: '추출된 데이터가 없습니다.' },
+        data: { tables: [], raw: aiText, message: '추출된 데이터가 없습니다.' },
       });
     }
 
-    // 프리뷰만 반환 (아직 DB에 저장하지 않음 — confirm 후 저장)
+    // 전체 주문 수 집계
+    const allOrders = tables.flatMap((t: any) => (t.orders || []).filter((o: any) => o.quantity > 0));
+    if (allOrders.length === 0) {
+      return res.status(200).json({
+        data: { tables: [], raw: aiText, message: '유효한 데이터가 없습니다.' },
+      });
+    }
+
+    // 프리뷰 반환 (confirm 후 저장)
     return res.status(200).json({
       data: {
-        orders: parsed.orders,
-        summary: parsed.summary || null,
-        count: parsed.orders.length,
-        message: `${parsed.orders.length}건의 생산 데이터가 인식되었습니다.`,
+        siteName: parsed.siteName || null,
+        deliveryDeadline: parsed.deliveryDeadline || null,
+        tables,
+        totalCount: allOrders.length,
+        message: `${allOrders.length}건의 생산 데이터가 인식되었습니다.${tables.length > 1 ? ` (${tables.length}개 테이블)` : ''}`,
       },
     });
   } catch (error: any) {

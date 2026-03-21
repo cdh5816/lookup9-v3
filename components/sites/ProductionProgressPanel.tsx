@@ -73,7 +73,7 @@ export default function ProductionProgressPanel({
         body: JSON.stringify({ fileData: base64, fileName: file.name }),
       });
       const json = await res.json();
-      if (res.ok && json.data?.orders?.length > 0) {
+      if (res.ok && json.data?.totalCount > 0) {
         setParsedPreview(json.data);
       } else {
         alert(json.data?.message || json.error?.message || '파싱 실패. 이미지가 선명한지 확인해주세요.');
@@ -86,21 +86,25 @@ export default function ProductionProgressPanel({
   };
 
   const handleConfirmParsed = async () => {
-    if (!parsedPreview?.orders) return;
+    if (!parsedPreview?.tables) return;
     setConfirmingSave(true);
     let saved = 0;
-    for (const order of parsedPreview.orders) {
-      const res = await fetch(`/api/sites/${siteId}/production`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          quantity: Number(order.quantity),
-          orderDate: order.orderDate || null,
-          supplyDate: order.supplyDate || null,
-          notes: `${order.sequence || ''}${order.notes ? ' ' + order.notes : ''}`.trim(),
-        }),
-      });
-      if (res.ok) saved++;
+    for (const table of parsedPreview.tables) {
+      for (const order of (table.orders || [])) {
+        if (!order.quantity || Number(order.quantity) <= 0) continue;
+        const label = table.label ? `[${table.label}] ` : '';
+        const res = await fetch(`/api/sites/${siteId}/production`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            quantity: Number(order.quantity),
+            orderDate: order.orderDate || null,
+            supplyDate: order.supplyDate || null,
+            notes: `${label}${order.sequence || ''}${order.notes ? ' ' + order.notes : ''}`.trim(),
+          }),
+        });
+        if (res.ok) saved++;
+      }
     }
     alert(`${saved}건 등록 완료`);
     setParsedPreview(null);
@@ -170,49 +174,59 @@ export default function ProductionProgressPanel({
       {/* 사진/PDF 파싱 결과 미리보기 모달 */}
       {parsedPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
-          <div className="w-full max-w-lg max-h-[80vh] overflow-hidden rounded-xl flex flex-col" style={{backgroundColor:'var(--bg-elevated)',border:'1px solid var(--border-base)'}}>
+          <div className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-xl flex flex-col" style={{backgroundColor:'var(--bg-elevated)',border:'1px solid var(--border-base)'}}>
             <div className="px-4 py-3 flex items-center justify-between" style={{borderBottom:'1px solid var(--border-base)'}}>
               <div>
-                <p className="text-sm font-bold" style={{color:'var(--text-primary)'}}>AI 파싱 결과 ({parsedPreview.count}건)</p>
-                {parsedPreview.summary && (
-                  <p className="text-[10px] mt-0.5" style={{color:'var(--text-muted)'}}>
-                    합계: {Number(parsedPreview.summary.totalQuantity || 0).toLocaleString()}m²
-                    {parsedPreview.summary.contractQuantity && ` / 계약: ${Number(parsedPreview.summary.contractQuantity).toLocaleString()}m²`}
-                  </p>
-                )}
+                <p className="text-sm font-bold" style={{color:'var(--text-primary)'}}>AI 파싱 결과 ({parsedPreview.totalCount}건)</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  {parsedPreview.siteName && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{backgroundColor:'var(--info-bg)',color:'var(--info-text)'}}>{parsedPreview.siteName}</span>}
+                  {parsedPreview.deliveryDeadline && <span className="text-[10px]" style={{color:'var(--text-muted)'}}>납기: {parsedPreview.deliveryDeadline}</span>}
+                </div>
               </div>
               <button className="btn btn-ghost btn-xs" onClick={() => setParsedPreview(null)}><XMarkIcon className="h-4 w-4" /></button>
             </div>
-            <div className="overflow-auto flex-1 p-2">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr style={{borderBottom:'1px solid var(--border-base)'}}>
-                    <th className="px-2 py-1.5 text-left" style={{color:'var(--text-muted)'}}>차수</th>
-                    <th className="px-2 py-1.5 text-right" style={{color:'var(--text-muted)'}}>물량</th>
-                    <th className="px-2 py-1.5 text-center" style={{color:'var(--text-muted)'}}>발주일</th>
-                    <th className="px-2 py-1.5 text-center" style={{color:'var(--text-muted)'}}>공급일</th>
-                    <th className="px-2 py-1.5 text-left" style={{color:'var(--text-muted)'}}>비고</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {parsedPreview.orders.map((o: any, i: number) => (
-                    <tr key={i} style={{borderBottom:'1px solid var(--border-base)'}}>
-                      <td className="px-2 py-1.5 font-medium" style={{color:'var(--text-primary)'}}>{o.sequence}</td>
-                      <td className="px-2 py-1.5 text-right tabular-nums" style={{color:'var(--info-text)'}}>{Number(o.quantity).toLocaleString()}</td>
-                      <td className="px-2 py-1.5 text-center" style={{color:'var(--text-secondary)'}}>{o.orderDate || '-'}</td>
-                      <td className="px-2 py-1.5 text-center" style={{color:'var(--text-secondary)'}}>{o.supplyDate || '-'}</td>
-                      <td className="px-2 py-1.5 truncate max-w-[100px]" style={{color:'var(--text-muted)'}}>{o.notes || ''}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="overflow-auto flex-1 p-3 space-y-3">
+              {(parsedPreview.tables || []).map((table: any, ti: number) => (
+                <div key={ti}>
+                  {table.label && <p className="text-xs font-bold mb-1.5 px-1" style={{color:'var(--brand)'}}>{table.label}</p>}
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr style={{borderBottom:'1px solid var(--border-base)'}}>
+                        <th className="px-2 py-1.5 text-left" style={{color:'var(--text-muted)'}}>차수</th>
+                        <th className="px-2 py-1.5 text-right" style={{color:'var(--text-muted)'}}>물량</th>
+                        <th className="px-2 py-1.5 text-center" style={{color:'var(--text-muted)'}}>발주일</th>
+                        <th className="px-2 py-1.5 text-center" style={{color:'var(--text-muted)'}}>공급일</th>
+                        <th className="px-2 py-1.5 text-left" style={{color:'var(--text-muted)'}}>비고</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(table.orders || []).filter((o: any) => o.quantity > 0).map((o: any, i: number) => (
+                        <tr key={i} style={{borderBottom:'1px solid var(--border-base)'}}>
+                          <td className="px-2 py-1.5 font-medium" style={{color:'var(--text-primary)'}}>{o.sequence}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums" style={{color:'var(--info-text)'}}>{Number(o.quantity).toLocaleString()}</td>
+                          <td className="px-2 py-1.5 text-center" style={{color:'var(--text-secondary)'}}>{o.orderDate || '-'}</td>
+                          <td className="px-2 py-1.5 text-center" style={{color:'var(--text-secondary)'}}>{o.supplyDate || '-'}</td>
+                          <td className="px-2 py-1.5 truncate max-w-[120px]" style={{color:'var(--text-muted)'}}>{o.notes || ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {/* 테이블 요약 */}
+                  <div className="flex gap-3 mt-1.5 px-2 text-[10px]" style={{color:'var(--text-muted)'}}>
+                    {table.totalQuantity && <span>합계: {Number(table.totalQuantity).toLocaleString()}m²</span>}
+                    {table.contractQuantity && <span>계약: {Number(table.contractQuantity).toLocaleString()}m²</span>}
+                    {table.orderRate && <span>발주율: {table.orderRate}</span>}
+                    {table.deduction && <span style={{color:'var(--warning-text)'}}>공제: {Number(table.deduction).toLocaleString()}m²</span>}
+                  </div>
+                </div>
+              ))}
             </div>
             <div className="px-4 py-3 flex items-center justify-between" style={{borderTop:'1px solid var(--border-base)'}}>
               <p className="text-[10px]" style={{color:'var(--warning-text)'}}>확인 후 등록하면 기존 데이터에 추가됩니다.</p>
               <div className="flex gap-2">
                 <button className="btn btn-ghost btn-sm" onClick={() => setParsedPreview(null)}>취소</button>
                 <button className={`btn btn-primary btn-sm ${confirmingSave ? 'loading' : ''}`} disabled={confirmingSave} onClick={handleConfirmParsed}>
-                  {confirmingSave ? '등록 중...' : `${parsedPreview.count}건 등록`}
+                  {confirmingSave ? '등록 중...' : `${parsedPreview.totalCount}건 등록`}
                 </button>
               </div>
             </div>

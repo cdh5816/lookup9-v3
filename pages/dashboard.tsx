@@ -337,11 +337,11 @@ const GuestDashboard = ({ profile, onRefresh }: { profile: any; onRefresh: () =>
 // ── 협력사 전용 대시보드 ──
 const PartnerQuickDashboard = ({ profile, stats, onRefresh }: { profile: any; stats: any; onRefresh: () => Promise<void> }) => {
   const mySites = profile.mySites || [];
-  const activeSites = mySites.filter((s: any) => ['CONTRACT_ACTIVE', 'SALES_CONFIRMED'].includes(s.status));
+  const activeSites = mySites.filter((s: any) => s.status === 'CONTRACT_ACTIVE');
   const companyName = profile.company || '';
   const [selectedNotice, setSelectedNotice] = useState<any>(null);
 
-  // 간단 집계
+  // 계약물량 — 진행중 현장 기준
   const totalQty = activeSites.reduce((s: number, site: any) => s + Number(site.contractQuantity || 0), 0);
 
   return (

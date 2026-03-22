@@ -36,11 +36,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           where: { userId, site: { teamId: tm.teamId } },
           include: {
             site: {
-              select: { id: true, name: true, status: true, address: true, updatedAt: true },
+              select: { id: true, name: true, status: true, address: true, contractQuantity: true, contractAmount: true, updatedAt: true },
             },
           },
           orderBy: { assignedAt: 'desc' },
-          take: 20,
+          take: 50,
         })
       : [],
     prisma.message.count({ where: { receiverId: userId, isRead: false } }),
@@ -68,6 +68,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const permissions = getPermissionFlags(role, user?.department);
 
+  // PARTNER: PartnerSiteAssign 경로 현장도 포함
+  let allMySites = Array.isArray(mySites) ? mySites.map((a: any) => a.site) : [];
+  if (role === 'PARTNER' && tm) {
+    try {
+      const partnerMember = await prisma.partnerMember.findFirst({
+        where: { userId },
+        select: { partnerCompanyId: true },
+      });
+      if (partnerMember) {
+        const companyAssigns = await prisma.partnerSiteAssign.findMany({
+          where: { partnerCompanyId: partnerMember.partnerCompanyId },
+          include: {
+            site: {
+              select: { id: true, name: true, status: true, address: true, contractQuantity: true, contractAmount: true, updatedAt: true },
+            },
+          },
+        });
+        const existingIds = new Set(allMySites.map((s: any) => s.id));
+        for (const ca of companyAssigns) {
+          if (ca.site && !existingIds.has(ca.site.id)) {
+            allMySites.push(ca.site);
+            existingIds.add(ca.site.id);
+          }
+        }
+      }
+    } catch {}
+  }
+
   return res.status(200).json({
     data: {
       ...user,
@@ -75,7 +103,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       isExternal: isExternalRole(role),
       companyDisplayName,
       permissions,
-      mySites: Array.isArray(mySites) ? mySites.map((a: any) => a.site) : [],
+      mySites: allMySites,
       unreadMessages,
       unreadNotifications,
       myComments,

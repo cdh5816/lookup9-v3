@@ -112,7 +112,7 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse, tm: any) => 
         select: {
           userId: true,
           assignedRole: true,
-          user: { select: { id: true, name: true, position: true } },
+          user: { select: { id: true, name: true, position: true, teamMembers: { select: { role: true }, take: 1 } } },
         },
       },
       _count: { select: { issues: true, documents: true, requests: true } },

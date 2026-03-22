@@ -309,7 +309,10 @@ const ManagerSummary = ({ sites }: { sites: any[] }) => {
     const activeSites = sites.filter(s => s.status === 'CONTRACT_ACTIVE');
     const map: Record<string, { name: string; position: string; count: number; amount: number; qty: number; sites: string[] }> = {};
     activeSites.forEach(s => {
-      const partnerAssigns = (s.assignments || []).filter((a: any) => a.assignedRole === 'PARTNER');
+      const partnerAssigns = (s.assignments || []).filter((a: any) => {
+        // assignedRole이 PARTNER이거나, 실제 사용자 역할이 PARTNER인 경우
+        return a.assignedRole === 'PARTNER' || a.user?.teamMembers?.[0]?.role === 'PARTNER';
+      });
       if (partnerAssigns.length === 0) return;
       partnerAssigns.forEach((a: any) => {
         const uid = a.userId;

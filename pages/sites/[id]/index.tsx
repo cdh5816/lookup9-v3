@@ -315,6 +315,17 @@ function SiteHeader({ site, canDelete, onDelete, onTabChange }: any) {
  </button>
  )}
 
+ {/* 이슈 현장 토글 */}
+ {canManage && (
+ <IssueToggle siteId={id as string} hasIssue={site.hasIssue || false} issueNote={site.issueNote || ''} onMutate={mutate} />
+ )}
+ {!canManage && site.hasIssue && (
+ <div className="rounded-lg px-3 py-2 flex items-center gap-2" style={{border:'1px solid var(--danger-border)',backgroundColor:'var(--danger-bg)'}}>
+ <ExclamationTriangleIcon className="w-4 h-4 shrink-0" style={{color:'var(--danger-text)'}} />
+ <span className="text-xs" style={{color:'var(--danger-text)'}}>{site.issueNote || '이슈 현장'}</span>
+ </div>
+ )}
+
  {/* 배정 인원 미니 */}
  {(site.assignments || []).length > 0 && (
  <div className="flex flex-wrap gap-1.5">
@@ -722,6 +733,62 @@ function PaintTab({ siteId, specs, canManage, onMutate }: any) {
  </div>
  ))}
  </div>
+ )}
+ </div>
+ );
+}
+
+// ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// 이슈 토글
+// ══════════════════════════════════════════════════════
+function IssueToggle({ siteId, hasIssue, issueNote, onMutate }: { siteId: string; hasIssue: boolean; issueNote: string; onMutate: () => void }) {
+ const [checked, setChecked] = useState(hasIssue);
+ const [note, setNote] = useState(issueNote);
+ const [editing, setEditing] = useState(false);
+ const [saving, setSaving] = useState(false);
+
+ const save = async (newChecked: boolean, newNote: string) => {
+ setSaving(true);
+ await fetch(`/api/sites/${siteId}`, {
+ method: 'PUT', headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ hasIssue: newChecked, issueNote: newNote }),
+ });
+ setSaving(false);
+ onMutate();
+ };
+
+ const handleToggle = async () => {
+ const next = !checked;
+ setChecked(next);
+ if (!next) { setNote(''); await save(false, ''); }
+ else { setEditing(true); }
+ };
+
+ const handleSaveNote = async () => {
+ await save(checked, note);
+ setEditing(false);
+ };
+
+ return (
+ <div className="rounded-lg px-3 py-2" style={{border: checked ? '1px solid var(--danger-border)' : '1px solid var(--border-base)', backgroundColor: checked ? 'var(--danger-bg)' : 'transparent'}}>
+ <div className="flex items-center justify-between">
+ <div className="flex items-center gap-2 cursor-pointer" onClick={handleToggle}>
+ <input type="checkbox" checked={checked} readOnly className="checkbox checkbox-xs checkbox-error" />
+ <span className="text-xs font-medium" style={{color: checked ? 'var(--danger-text)' : 'var(--text-muted)'}}>이슈 현장</span>
+ </div>
+ {checked && !editing && note && (
+ <button className="text-[10px] underline" style={{color:'var(--danger-text)'}} onClick={() => setEditing(true)}>수정</button>
+ )}
+ </div>
+ {checked && editing && (
+ <div className="flex items-center gap-2 mt-2">
+ <input type="text" className="input input-bordered input-xs flex-1" placeholder="이슈 내용 (간단 메모)" value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveNote()} autoFocus />
+ <button className={`btn btn-xs btn-error ${saving ? 'loading' : ''}`} onClick={handleSaveNote} disabled={saving}>저장</button>
+ </div>
+ )}
+ {checked && !editing && note && (
+ <p className="text-xs mt-1" style={{color:'var(--danger-text)'}}>{note}</p>
  )}
  </div>
  );

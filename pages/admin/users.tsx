@@ -374,6 +374,19 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  ) : <span className="text-gray-600 text-xs">-</span>}
  </td>
  <td className="px-4 py-3 text-right">
+ <div className="flex items-center justify-end gap-1.5">
+ {canDeleteThis && (
+ <button onClick={async () => {
+ const pw = prompt('초기화할 비밀번호 입력 (빈칸이면 1234):', '1234');
+ if (pw === null) return;
+ const res = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id, action: 'resetPassword', newPassword: pw || '1234' }) });
+ const json = await res.json();
+ if (res.ok) alert(json.data?.message || '초기화 완료');
+ else alert(json.error?.message || '실패');
+ }} className="inline-flex items-center gap-1 rounded border border-blue-500/30 px-2 py-1 text-[10px] text-blue-400 hover:bg-blue-500/10 transition" title="비밀번호 초기화">
+ PW
+ </button>
+ )}
  {canDeleteThis ? (
  <button onClick={() => handleDelete(user)}
  className="inline-flex items-center gap-1 rounded border border-red-500/30 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 transition">
@@ -382,6 +395,7 @@ const StaffPanel = ({ myRole, isAdminHR }: { myRole: string; isAdminHR: boolean 
  ) : (
  <span className="text-[10px] text-gray-700">{isSelf ? '(본인)' : isProtected ? '(보호됨)' : ''}</span>
  )}
+ </div>
  </td>
  </tr>
  );

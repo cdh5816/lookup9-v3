@@ -336,6 +336,8 @@ model Site {
   // ── 실정보고 ──
   settlementAmount  Decimal? @db.Decimal(15, 0)  // 실정보고 금액
   settlementNote    String?  @db.Text            // 실정보고 비고
+  hasIssue          Boolean  @default(false)     // 이슈 현장 여부
+  issueNote         String?  @db.Text            // 이슈 메모
 
   // ── 착수/준공 서류 ──
   startDocsDone     Boolean  @default(false)     // 착수계 제출 여부

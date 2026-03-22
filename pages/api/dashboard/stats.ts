@@ -41,7 +41,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where: { ...baseWhere, status: { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] } },
     });
     const issueSites = await prisma.site.count({
-      where: { ...baseWhere, issues: { some: { status: { not: '완료' } } } },
+      where: { ...baseWhere, hasIssue: true },
     });
     const recentSites = await prisma.site.findMany({
       where: { ...baseWhere, status: { in: ['CONTRACT_ACTIVE', 'COMPLETED', 'WARRANTY'] } },

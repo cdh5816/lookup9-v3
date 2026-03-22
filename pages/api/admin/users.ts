@@ -27,9 +27,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     switch (req.method) {
       case 'GET':    return await handleGET(tm.teamId, tm.role, session.user.id, res);
       case 'POST':   return await handlePOST(req, res, tm);
+      case 'PATCH':  return await handlePATCH(req, res, tm);
       case 'DELETE': return await handleDELETE(req, res, tm, session.user.id);
       default:
-        res.setHeader('Allow', 'GET, POST, DELETE');
+        res.setHeader('Allow', 'GET, POST, PATCH, DELETE');
         return res.status(405).json({ error: { message: `Method ${req.method} Not Allowed` } });
     }
   } catch (error: any) {
@@ -247,6 +248,24 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse, actorTm: an
   });
 
   return res.status(201).json({ data: user });
+};
+
+const handlePATCH = async (req: NextApiRequest, res: NextApiResponse, actorTm: any) => {
+  const { userId, action, newPassword } = req.body;
+  if (!userId || !action) return res.status(400).json({ error: { message: 'userId, action required' } });
+
+  // 비밀번호 초기화
+  if (action === 'resetPassword') {
+    if (!hasMinRole(actorTm.role, 'ADMIN_HR')) {
+      return res.status(403).json({ error: { message: '비밀번호 초기화 권한이 없습니다.' } });
+    }
+    const pw = newPassword || '1234';
+    const hashed = await hashPassword(pw);
+    await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
+    return res.status(200).json({ data: { message: `비밀번호가 "${pw}"로 초기화되었습니다.` } });
+  }
+
+  return res.status(400).json({ error: { message: 'Unknown action' } });
 };
 
 const handleDELETE = async (req: NextApiRequest, res: NextApiResponse, actorTm: any, actorUserId: string) => {

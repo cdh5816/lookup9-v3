@@ -62,7 +62,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // PARTNER/GUEST → user.company (협력사/게스트 소속 회사명)
   // COMPANY_ADMIN/내부직원 → team.name (본사명)
   const isExtRole = ['PARTNER', 'GUEST', 'VIEWER'].includes(role);
-  const companyDisplayName = isExtRole
+  const isSysAdmin = ['SUPER_ADMIN', 'OWNER'].includes(role);
+  const companyDisplayName = isSysAdmin
+    ? 'LOOKUP9'
+    : isExtRole
     ? (user?.company || teamName || 'LOOKUP9')
     : (teamName || user?.company || 'LOOKUP9');
 

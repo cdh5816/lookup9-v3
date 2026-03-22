@@ -54,9 +54,8 @@ const calcProgress = (site: any): number => {
 
 type AlertLevel = 'critical' | 'warning' | 'normal';
 const getAlertLevel = (site: any): AlertLevel => {
-  const issues = site._count?.issues ?? 0;
   const dday = getDday(site.deliveryDeadline);
-  if (issues > 0 || dday?.overdue) return 'critical';
+  if (site.hasIssue || dday?.overdue) return 'critical';
   if (dday?.urgent) return 'warning';
   return 'normal';
 };
@@ -382,8 +381,8 @@ const SiteCard = ({ site, dimmed = false }: { site: any; dimmed?: boolean }) => 
   const alertLevel = getAlertLevel(site);
   const dday = getDday(site.deliveryDeadline);
   const progress = calcProgress(site);
-  const issueCount = site._count?.issues ?? 0;
   const reqCount = site._count?.requests ?? 0;
+  const hasIssue = site.hasIssue || false;
 
   const ddayLabel = dday
     ? dday.overdue ? `D+${Math.abs(dday.diff)}` : dday.diff === 0 ? 'D-Day' : `D-${dday.diff}`
@@ -467,10 +466,10 @@ const SiteCard = ({ site, dimmed = false }: { site: any; dimmed?: boolean }) => 
             {subParts.join(' · ') || site.address || ''}
           </p>
           <div className="flex items-center gap-2 shrink-0">
-            {(issueCount > 0 || reqCount > 0) && (
+            {(hasIssue || reqCount > 0) && (
               <span className="flex items-center gap-0.5 text-[10px]" style={{color:"var(--danger-text)"}}>
                 <ExclamationTriangleIcon className="w-3 h-3" />
-                {issueCount + reqCount}
+                {hasIssue ? '이슈' : ''}{reqCount > 0 ? ` ${reqCount}` : ''}
               </span>
             )}
             {site.contractQuantity && meta.group !== 'sales' && (

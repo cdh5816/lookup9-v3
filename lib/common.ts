@@ -14,7 +14,7 @@ export const defaultHeaders = {
 };
 
 export const passwordPolicies = {
-  minLength: 8,
+  minLength: 4,
 };
 
 // List of events used to create webhook endpoint

@@ -2,7 +2,7 @@
 import { useState, useMemo } from 'react';
 import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
-import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XMarkIcon, TruckIcon, TableCellsIcon, ListBulletIcon, CameraIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XMarkIcon, TruckIcon, TableCellsIcon, ListBulletIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline';
 
 const fmt = (v: any) => {
   const n = Number(String(v ?? '').replace(/[^0-9.-]/g, ''));
@@ -50,36 +50,68 @@ export default function ProductionProgressPanel({
   }, [shipments]);
 
   const [viewMode, setViewMode] = useState<'list' | 'table'>('list');
-  const [uploading, setUploading] = useState(false);
-  const [refImage, setRefImage] = useState<string | null>(null);
-  const [showRefImage, setShowRefImage] = useState(true);
+  const [pdfParsing, setPdfParsing] = useState(false);
+  const [parsedPreview, setParsedPreview] = useState<any>(null);
+  const [confirmingSave, setConfirmingSave] = useState(false);
 
-  const canUploadPhoto = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER'].includes(userRole || '');
+  const canUploadPdf = ['SUPER_ADMIN', 'OWNER', 'ADMIN_HR', 'ADMIN', 'MANAGER'].includes(userRole || '');
 
-  // 사진 참고 업로드 → SitePhoto에 저장 + 접이식 패널로 표시 + 자동으로 엑셀뷰 전환
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) { alert('이미지 파일만 업로드 가능합니다.'); return; }
-    if (file.size > 8 * 1024 * 1024) { alert('파일 크기가 8MB를 초과합니다.'); return; }
-    setUploading(true);
-    const base64 = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.readAsDataURL(file);
-    });
-    // 미리보기 표시 + 엑셀뷰 자동 전환
-    setRefImage(base64);
-    setShowRefImage(true);
-    setViewMode('table');
-    // SitePhoto에 저장 (사진탭에서도 확인 가능)
-    await fetch(`/api/sites/${siteId}/photos`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileData: base64, fileName: file.name, category: 'DELIVERY', caption: '생산 데이터 참고' }),
-    }).catch(() => {});
-    setUploading(false);
+    if (!file.name.toLowerCase().endsWith('.pdf')) { alert('PDF 파일만 업로드 가능합니다.'); return; }
+    if (file.size > 10 * 1024 * 1024) { alert('파일 크기가 10MB를 초과합니다.'); return; }
+    setPdfParsing(true);
+    try {
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          const b64 = result.split(',')[1] || result;
+          resolve(b64);
+        };
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`/api/sites/${siteId}/production-upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileData: base64 }),
+      });
+      const json = await res.json();
+      if (res.ok && json.data?.totalCount > 0) {
+        setParsedPreview(json.data);
+      } else {
+        alert(json.error?.message || json.data?.message || 'PDF 파싱 실패');
+      }
+    } catch (err) {
+      alert('업로드 중 오류가 발생했습니다.');
+    }
+    setPdfParsing(false);
     e.target.value = '';
+  };
+
+  const handleConfirmParsed = async () => {
+    if (!parsedPreview?.orders) return;
+    setConfirmingSave(true);
+    try {
+      const res = await fetch(`/api/sites/${siteId}/production-upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm', orders: parsedPreview.orders }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        alert(json.data?.message || '등록 완료');
+        setParsedPreview(null);
+        mutateOrders();
+        onMutate();
+      } else {
+        alert(json.error?.message || '등록 실패');
+      }
+    } catch {
+      alert('등록 중 오류');
+    }
+    setConfirmingSave(false);
   };
 
   return (
@@ -121,11 +153,11 @@ export default function ProductionProgressPanel({
             <p className="text-[10px] mt-0.5" style={{color:'var(--text-muted)'}}>공급일 입력 시 출하탭에서 출하 정보를 등록해주세요</p>
           </div>
           <div className="flex items-center gap-1">
-            {canUploadPhoto && (
-              <label className={`btn btn-ghost btn-xs gap-1 cursor-pointer ${uploading ? 'loading' : ''}`} title="생산 데이터 참고 사진 업로드">
-                <CameraIcon className="h-3.5 w-3.5" style={{color:'var(--brand)'}} />
-                <span className="text-[10px]" style={{color:'var(--brand)'}}>{uploading ? '저장 중...' : '참고사진'}</span>
-                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploading} />
+            {canUploadPdf && (
+              <label className={`btn btn-ghost btn-xs gap-1 cursor-pointer ${pdfParsing ? 'loading' : ''}`} title="PDF 업로드 → 자동 파싱">
+                <DocumentArrowUpIcon className="h-3.5 w-3.5" style={{color:'var(--brand)'}} />
+                <span className="text-[10px]" style={{color:'var(--brand)'}}>{pdfParsing ? '파싱중...' : 'PDF파싱'}</span>
+                <input type="file" accept=".pdf" className="hidden" onChange={handlePdfUpload} disabled={pdfParsing} />
               </label>
             )}
             <button className={`btn btn-ghost btn-xs ${viewMode === 'list' ? '' : 'opacity-40'}`} onClick={() => setViewMode('list')} title="리스트"><ListBulletIcon className="h-4 w-4" /></button>
@@ -140,27 +172,58 @@ export default function ProductionProgressPanel({
         )}
       </div>
 
-      {/* 참고 사진 패널 (접이식 — 사진 보면서 아래 테이블에 입력) */}
-      {refImage && (
-        <div className="rounded-xl overflow-hidden" style={{border:'1px solid var(--info-border)',backgroundColor:'var(--info-bg)'}}>
-          <div className="px-4 py-2.5 flex items-center justify-between cursor-pointer" onClick={() => setShowRefImage(!showRefImage)}>
-            <div className="flex items-center gap-2">
-              <CameraIcon className="h-4 w-4" style={{color:'var(--info-text)'}} />
-              <p className="text-xs font-semibold" style={{color:'var(--info-text)'}}>참고 사진</p>
-              <p className="text-[10px]" style={{color:'var(--text-muted)'}}>사진을 보면서 위 엑셀뷰에서 데이터를 입력하세요</p>
+      {/* PDF 파싱 결과 미리보기 */}
+      {parsedPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
+          <div className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-xl flex flex-col" style={{backgroundColor:'var(--bg-elevated)',border:'1px solid var(--border-base)'}}>
+            <div className="px-4 py-3 flex items-center justify-between" style={{borderBottom:'1px solid var(--border-base)'}}>
+              <div>
+                <p className="text-sm font-bold" style={{color:'var(--text-primary)'}}>PDF 파싱 결과 ({parsedPreview.totalCount}건)</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  {parsedPreview.siteName && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{backgroundColor:'var(--info-bg)',color:'var(--info-text)'}}>{parsedPreview.siteName}</span>}
+                  {parsedPreview.deliveryDeadline && <span className="text-[10px]" style={{color:'var(--text-muted)'}}>납기: {parsedPreview.deliveryDeadline}</span>}
+                  {parsedPreview.summary?.contractQuantity && <span className="text-[10px]" style={{color:'var(--text-muted)'}}>계약: {Number(parsedPreview.summary.contractQuantity).toLocaleString()}m²</span>}
+                </div>
+              </div>
+              <button className="btn btn-ghost btn-xs" onClick={() => setParsedPreview(null)}><XMarkIcon className="h-4 w-4" /></button>
             </div>
-            <div className="flex items-center gap-1.5">
-              <button className="btn btn-ghost btn-xs" onClick={(e) => { e.stopPropagation(); setRefImage(null); }} title="닫기">
-                <XMarkIcon className="h-3.5 w-3.5" />
-              </button>
-              <span className="text-[10px]" style={{color:'var(--text-muted)'}}>{showRefImage ? '접기' : '펼치기'}</span>
+            <div className="overflow-auto flex-1 p-2">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{borderBottom:'2px solid var(--border-base)'}}>
+                    <th className="px-2 py-1.5 text-left" style={{color:'var(--text-muted)'}}>차수</th>
+                    <th className="px-2 py-1.5 text-right" style={{color:'var(--text-muted)'}}>물량(m²)</th>
+                    <th className="px-2 py-1.5 text-center" style={{color:'var(--text-muted)'}}>발주일</th>
+                    <th className="px-2 py-1.5 text-center" style={{color:'var(--text-muted)'}}>공급일</th>
+                    <th className="px-2 py-1.5 text-left" style={{color:'var(--text-muted)'}}>비고</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsedPreview.orders.map((o: any, i: number) => (
+                    <tr key={i} style={{borderBottom:'1px solid var(--border-base)'}}>
+                      <td className="px-2 py-1.5 font-medium" style={{color:'var(--text-primary)'}}>
+                        {o.label ? <span className="text-[9px] px-1 py-0.5 rounded mr-1" style={{backgroundColor:'var(--info-bg)',color:'var(--info-text)'}}>{o.label}</span> : null}
+                        {o.sequence}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums font-medium" style={{color:'var(--info-text)'}}>{Number(o.quantity).toLocaleString()}</td>
+                      <td className="px-2 py-1.5 text-center" style={{color:'var(--text-secondary)'}}>{o.orderDate || '-'}</td>
+                      <td className="px-2 py-1.5 text-center" style={{color:'var(--text-secondary)'}}>{o.supplyDate || '-'}</td>
+                      <td className="px-2 py-1.5 truncate max-w-[120px]" style={{color:'var(--text-muted)'}}>{o.notes || ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 py-3 flex items-center justify-between" style={{borderTop:'1px solid var(--border-base)'}}>
+              <p className="text-[10px]" style={{color:'var(--warning-text)'}}>확인 후 기존 데이터에 추가 등록됩니다</p>
+              <div className="flex gap-2">
+                <button className="btn btn-ghost btn-sm" onClick={() => setParsedPreview(null)}>취소</button>
+                <button className={`btn btn-primary btn-sm ${confirmingSave ? 'loading' : ''}`} disabled={confirmingSave} onClick={handleConfirmParsed}>
+                  {confirmingSave ? '등록 중...' : `${parsedPreview.totalCount}건 등록`}
+                </button>
+              </div>
             </div>
           </div>
-          {showRefImage && (
-            <div className="px-3 pb-3">
-              <img src={refImage} alt="참고 사진" className="w-full rounded-lg" style={{maxHeight:'50vh',objectFit:'contain',backgroundColor:'#fff'}} />
-            </div>
-          )}
         </div>
       )}
     </div>

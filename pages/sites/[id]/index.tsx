@@ -164,9 +164,11 @@ function SiteHeader({ site, canDelete, onDelete, onTabChange }: any) {
  const contractAmt = contract?.contractAmount ?? site.contractAmount;
  const contractQty = contract?.quantity ?? site.contractQuantity;
 
- // 공정률: 출하 합계 / 계약물량
- const shippedQty = (site.shipments || []).reduce((s: number, r: any) => s + Number(r.quantity ?? 0), 0);
- const progressRate = contractQty > 0 ? Math.min(100, Math.round((shippedQty / Number(contractQty)) * 100)) : 0;
+ // 공정률: 공급완료 물량(공급일 있는 발주) vs 출하 기록 중 큰 값 / 계약물량
+ const deliveredByProd = (site.productionOrders || []).filter((o: any) => o.supplyDate).reduce((s: number, o: any) => s + Number(o.quantity ?? 0), 0);
+ const deliveredByShip = (site.shipments || []).reduce((s: number, r: any) => s + Number(r.quantity ?? 0), 0);
+ const actualDelivered = Math.max(deliveredByProd, deliveredByShip);
+ const progressRate = contractQty > 0 ? Math.min(100, Math.round((actualDelivered / Number(contractQty)) * 100)) : 0;
 
  // 진행중 실정보고 건수 & 금액
  const activeSettlements = (site.changeLogs || []).filter((c: any) =>
@@ -1630,7 +1632,8 @@ function SiteReportPrint({ site }: { site: any }) {
  return { type: '일반메모', date: c.createdAt?.split('T')[0], text: c.content };
  };
 
- const shippedQty = (site.shipments || []).reduce((s: number, r: any) => s + Number(r.quantity ?? 0), 0);
+ const deliveredByProdPrint = (site.productionOrders || []).filter((o: any) => o.supplyDate).reduce((s: number, o: any) => s + Number(o.quantity ?? 0), 0);
+ const shippedQty = Math.max(deliveredByProdPrint, (site.shipments || []).reduce((s: number, r: any) => s + Number(r.quantity ?? 0), 0));
  const progressRate = Number(site.contractQuantity) > 0
  ? Math.min(100, Math.round((shippedQty / Number(site.contractQuantity)) * 100)) : 0;
 

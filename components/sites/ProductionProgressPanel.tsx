@@ -39,9 +39,14 @@ export default function ProductionProgressPanel({
   const contract = site?.contracts?.find((c: any) => !c.isAdditional);
   const contractQty = Number(contract?.quantity ?? site?.contractQuantity ?? 0);
   const orderedQty = useMemo(() => orders.reduce((s, o) => s + Number(o.quantity ?? 0), 0), [orders]);
+  // 공급완료 물량 = 공급일(supplyDate)이 있는 발주의 물량 합계
+  const deliveredQty = useMemo(() => orders.filter(o => o.supplyDate).reduce((s, o) => s + Number(o.quantity ?? 0), 0), [orders]);
+  // 출하 기록 물량 (별도 ShippingRecord)
   const shippedQty = useMemo(() => shipments.reduce((s, r) => s + Number(r.quantity ?? 0), 0), [shipments]);
+  // 공정률 = 공급완료 물량 vs 출하 기록 중 큰 값 사용
+  const actualDelivered = Math.max(deliveredQty, shippedQty);
   const remainQty = contractQty - orderedQty;
-  const progressRate = contractQty > 0 ? Math.min(100, Math.round((shippedQty / contractQty) * 100)) : 0;
+  const progressRate = contractQty > 0 ? Math.min(100, Math.round((actualDelivered / contractQty) * 100)) : 0;
 
   const shipBySeq = useMemo(() => {
     const m: Record<number, any[]> = {};
@@ -121,7 +126,7 @@ export default function ProductionProgressPanel({
         {[
           { label: '계약물량', value: contractQty > 0 ? contractQty.toLocaleString('ko-KR') : '-', unit: contractQty > 0 ? 'm²' : '', cVar: '--text-primary', bgVar: '--bg-card', bVar: '--border-base' },
           { label: '발주물량', value: orderedQty > 0 ? orderedQty.toLocaleString('ko-KR') : '-', unit: orderedQty > 0 ? 'm²' : '', cVar: '--info-text', bgVar: '--info-bg', bVar: '--info-border' },
-          { label: '출하물량', value: shippedQty > 0 ? shippedQty.toLocaleString('ko-KR') : '-', unit: shippedQty > 0 ? 'm²' : '', cVar: '--success-text', bgVar: '--success-bg', bVar: '--success-border' },
+          { label: '공급완료', value: actualDelivered > 0 ? actualDelivered.toLocaleString('ko-KR') : '-', unit: actualDelivered > 0 ? 'm²' : '', cVar: '--success-text', bgVar: '--success-bg', bVar: '--success-border' },
           { label: '잔여', value: contractQty > 0 ? remainQty.toLocaleString('ko-KR') : '-', unit: contractQty > 0 ? 'm²' : '', cVar: remainQty > 0 ? '--warning-text' : remainQty < 0 ? '--danger-text' : '--text-muted', bgVar: remainQty > 0 ? '--warning-bg' : remainQty < 0 ? '--danger-bg' : '--bg-card', bVar: remainQty > 0 ? '--warning-border' : remainQty < 0 ? '--danger-border' : '--border-base' },
         ].map(item => (
           <div key={item.label} className="rounded-xl p-3 text-center" style={{backgroundColor:`var(${item.bgVar})`,border:`1px solid var(${item.bVar})`}}>

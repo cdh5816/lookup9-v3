@@ -52,7 +52,10 @@ const PartnerDashboard = () => {
 
   const sitesWithProgress = useMemo(() => sites.map(s => {
     const qty = Number(s.contractQuantity ?? 0);
-    const delivered = (s.shipments ?? []).reduce((sum: number, r: any) => sum + Number(r.quantity ?? 0), 0);
+    // 공급완료 물량 = 공급일(supplyDate)이 있는 발주의 물량 합계
+    const deliveredByProd = (s.productionOrders ?? []).filter((o: any) => o.supplyDate).reduce((sum: number, o: any) => sum + Number(o.quantity ?? 0), 0);
+    const deliveredByShip = (s.shipments ?? []).reduce((sum: number, r: any) => sum + Number(r.quantity ?? 0), 0);
+    const delivered = Math.max(deliveredByProd, deliveredByShip);
     const ordered = (s.productionOrders ?? []).reduce((sum: number, o: any) => sum + Number(o.quantity ?? 0), 0);
     const progress = qty > 0 ? Math.min(100, Math.round((delivered / qty) * 100)) : 0;
     const dday = getDday(s.deliveryDeadline);

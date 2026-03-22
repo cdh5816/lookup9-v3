@@ -111,7 +111,7 @@ export default function SiteDetail() {
  <div className="space-y-0">
 
  {/* ── 헤더 카드 ── */}
- <SiteHeader site={site} canDelete={canDelete} canManage={canManage} onDelete={handleDeleteSite} onTabChange={setActiveTab} />
+ <SiteHeader site={site} canDelete={canDelete} canManage={canManage} onDelete={handleDeleteSite} onTabChange={setActiveTab} onMutate={mutate} />
 
  {/* ── 탭 바 ── */}
  <div className="sticky top-0 z-10 backdrop-blur" style={{borderBottom:'1px solid var(--border-base)',backgroundColor:'var(--header-bg)'}}>
@@ -158,7 +158,7 @@ const STATUS_COLOR: Record<string, string> = {
  완료: 'text-blue-400', 영업중: 'text-orange-400', 보류: 'text-gray-500',
 };
 
-function SiteHeader({ site, canDelete, canManage, onDelete, onTabChange }: any) {
+function SiteHeader({ site, canDelete, canManage, onDelete, onTabChange, onMutate }: any) {
  const dday = getDday(site.deliveryDeadline);
  const contract = site.contracts?.find((c: any) => !c.isAdditional);
  const contractAmt = contract?.contractAmount ?? site.contractAmount;
@@ -317,7 +317,7 @@ function SiteHeader({ site, canDelete, canManage, onDelete, onTabChange }: any) 
 
  {/* 이슈 현장 토글 */}
  {canManage && (
- <IssueToggle siteId={id as string} hasIssue={site.hasIssue || false} issueNote={site.issueNote || ''} onMutate={mutate} />
+ <IssueToggle siteId={site.id} hasIssue={site.hasIssue || false} issueNote={site.issueNote || ''} onMutate={onMutate} />
  )}
  {!canManage && site.hasIssue && (
  <div className="rounded-lg px-3 py-2 flex items-center gap-2" style={{border:'1px solid var(--danger-border)',backgroundColor:'var(--danger-bg)'}}>

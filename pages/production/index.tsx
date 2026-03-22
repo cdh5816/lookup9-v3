@@ -20,8 +20,10 @@ function formatNum(val: number | string | null | undefined) {
 // 공정율 계산 (새 스키마 기반: site.pipeRate, site.caulkingRate, shipments vs contracts)
 function calcSiteProgress(site: any) {
  const contract = site.contracts?.find((c: any) => !c.isAdditional);
- const contractQty = Number(contract?.quantity ?? 0);
- const shippedQty = (site.shipments ?? []).reduce((s: number, r: any) => s + Number(r.quantity ?? 0), 0);
+ const contractQty = Number(contract?.quantity ?? site?.contractQuantity ?? 0);
+ const deliveredByProd = (site.productionOrders ?? []).filter((o: any) => o.supplyDate).reduce((s: number, o: any) => s + Number(o.quantity ?? 0), 0);
+ const deliveredByShip = (site.shipments ?? []).reduce((s: number, r: any) => s + Number(r.quantity ?? 0), 0);
+ const shippedQty = Math.max(deliveredByProd, deliveredByShip);
  const panelRate = contractQty > 0 ? Math.min(100, Math.round((shippedQty / contractQty) * 100)) : 0;
  const pipeRate = site.pipeRate ?? 0;
  const caulkingRate = site.caulkingRate ?? 0;

@@ -47,8 +47,9 @@ const getDday = (dateVal: any) => {
 const calcProgress = (site: any): number => {
   const qty = Number(site.contractQuantity ?? 0);
   if (qty <= 0) return 0;
-  const shipped = (site.shipments ?? []).reduce((s: number, r: any) => s + Number(r.quantity ?? 0), 0);
-  return Math.min(100, Math.round((shipped / qty) * 100));
+  const deliveredByProd = (site.productionOrders ?? []).filter((o: any) => o.supplyDate).reduce((s: number, o: any) => s + Number(o.quantity ?? 0), 0);
+  const deliveredByShip = (site.shipments ?? []).reduce((s: number, r: any) => s + Number(r.quantity ?? 0), 0);
+  return Math.min(100, Math.round((Math.max(deliveredByProd, deliveredByShip) / qty) * 100));
 };
 
 type AlertLevel = 'critical' | 'warning' | 'normal';

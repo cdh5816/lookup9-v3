@@ -212,7 +212,7 @@ const Dashboard = () => {
               ) : (
                 <div className="divide-y" style={{borderColor:"var(--border-subtle)"}}>
                   {stats.recentSites.map((s: any) => {
-                    const hasIssue = (s._count?.issues ?? 0) > 0;
+                    const siteHasIssue = s.hasIssue || false;
                     return (
                       <Link key={s.id} href={`/sites/${s.id}`}>
                         <div
@@ -225,9 +225,9 @@ const Dashboard = () => {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-sm font-medium truncate">{s.name}</span>
-                              {hasIssue && (
+                              {siteHasIssue && (
                                 <span className="flex-shrink-0 text-[10px] rounded-full px-1.5 py-0.5 font-medium status-danger">
-                                  이슈 {s._count.issues}
+                                  이슈
                                 </span>
                               )}
                             </div>

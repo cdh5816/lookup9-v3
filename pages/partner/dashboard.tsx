@@ -59,8 +59,8 @@ const PartnerDashboard = () => {
     const ordered = (s.productionOrders ?? []).reduce((sum: number, o: any) => sum + Number(o.quantity ?? 0), 0);
     const progress = qty > 0 ? Math.min(100, Math.round((delivered / qty) * 100)) : 0;
     const dday = getDday(s.deliveryDeadline);
-    const issues = s._count?.issues ?? 0;
-    return { ...s, qty, delivered, ordered, progress, dday, issues };
+    const issues = s.hasIssue ? 1 : 0;
+    return { ...s, qty, delivered, ordered, progress, dday, issues, hasIssue: s.hasIssue || false, issueNote: s.issueNote || '' };
   }), [sites]);
 
   const pendingSites = useMemo(() => sitesWithProgress.filter(s => s.status === 'SALES_CONFIRMED'), [sitesWithProgress]);
@@ -180,6 +180,7 @@ const PartnerDashboard = () => {
                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
                           <span className="text-[10px] font-bold w-4 text-center shrink-0" style={{color:'var(--text-muted)'}}>{idx + 1}</span>
                           <span className="text-xs font-semibold truncate" style={{color:'var(--text-primary)'}}>{site.name}</span>
+                          {site.hasIssue && <span className="text-[9px] px-1 py-0.5 rounded font-bold shrink-0" style={{color:'var(--danger-text)',backgroundColor:'var(--danger-bg)'}}>이슈</span>}
                         </div>
                         <div className="flex items-center gap-2 shrink-0 ml-2">
                           {ddayLabel && (
@@ -197,6 +198,7 @@ const PartnerDashboard = () => {
                       <div className="flex items-center gap-2 mt-0.5 pl-5">
                         <span className="text-[10px] tabular-nums" style={{color:'var(--text-muted)'}}>{fmtNum(site.delivered)}/{fmtNum(site.qty)}m²</span>
                         {site.contractAmount > 0 && <span className="text-[10px]" style={{color:'var(--info-text)'}}>{fmtMoney(site.contractAmount)}원</span>}
+                        {site.issueNote && <span className="text-[9px] truncate" style={{color:'var(--danger-text)'}}>{site.issueNote}</span>}
                       </div>
                     </div>
                   );
